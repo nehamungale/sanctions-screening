@@ -4,8 +4,8 @@
 
 | | |
 |---|---|
-| **Status** | ✅ Pipeline runs Stages 1–3. ⚠️ It writes a **summary JSON**, not one decision per hit. That changes when Stage 4 lands. |
-| **Planned refactor** | [§6](#6-refactor-plan-to-be-done). Not started. |
+| **Status** | ✅ `system/run` runs Stages 1–4 and writes one decision per hit. Stats go to `run_summary.json` in the cache. |
+| **Planned refactor** | [§6](#6-refactor-plan-to-be-done) |
 
 ---
 
@@ -15,25 +15,30 @@
 flowchart LR
   classDef code fill:#dbeafe,stroke:#1d4ed8,color:#0f172a
   classDef file fill:#fef3c7,stroke:#b45309,color:#0f172a
-  classDef todo fill:#fee2e2,stroke:#b91c1c,color:#0f172a,stroke-dasharray: 5 5
+  classDef safe fill:#dcfce7,stroke:#15803d,color:#0f172a
   R["system/run<br/>sets PYTHONHASHSEED=0"]:::code --> P["pipeline.main"]:::code
-  P --> S1["run_stage1"]:::code --> W1[["working/: person_golden,<br/>record_view, 9 indexes"]]:::file
+  IO["shared/io.py<br/>tolerant reader"]:::safe --> S1 & S2 & S3 & S4
+  P --> S1["run_stage1"]:::code --> W1[["working/: person_golden,<br/>record_view, indexes"]]:::file
   P --> S2["run_stage2"]:::code --> W2[["working/hit_golden.jsonl"]]:::file
   W1 -- "read back from disk" --> S3["run_stage3"]:::code --> W3[["working/alert_resolution.jsonl"]]:::file
-  P --> OUT[["output file:<br/>summary JSON (stats)"]]:::file
-  S4["Stage 4 (not built)"]:::todo -.-> OUT
+  W1 & W2 & W3 --> S4["run_stage4"]:::code --> OUT[["output file:<br/>one line per hit"]]:::file
+  S4 --> T[["working/trace.jsonl,<br/>clearance_log.csv"]]:::file
+  P -. "any stage fails" .-> FB["write_fallback:<br/>REVIEW for every hit"]:::safe -.-> OUT
 ```
 
-- `system/run <data folder> <output file>` makes sure `PYTHONHASHSEED=0` is set (it re-launches itself once if not), then calls `pipeline.main`.
-- `pipeline.py` runs Stage 1, Stage 2 and Stage 3 in order. Each stage writes its files into the cache folder (`working/`, or `$SANCTIONS_CACHE`). Stage 3 reads Stage 1's files back from that folder.
-- The output file currently gets a stats summary (record, person, hit and alert counts, and the practice-label check). **This fails `validate.py`.** The output file must hold one line per hit once Stage 4 exists.
+- `system/run <data folder> <output file>` makes sure `PYTHONHASHSEED=0` is set (re-launching itself once if not), then calls `pipeline.main`.
+- Every stage reads the data folder through `shared/io.py` (§2), so all stages see the same cleaned rows.
+- Each stage writes its files into the cache folder (`working/`, or `$SANCTIONS_CACHE`). Stage 3 reads Stage 1's files back from there, and Stage 4 reads all three.
+- **Failure handling.** A note, hit or alert that makes a stage raise is skipped (Stage 1 treats the note as unread, which blocks clears for that person); Stage 4 then leaves the affected hits in `REVIEW`. If a whole stage still fails, `write_fallback` writes `REVIEW / INSUFFICIENT_DATA` for every hit, so the run never ends with no output. The run summary is written after the output and cannot break a finished run.
 
 ## 2. Shared modules (`system/shared/`)
 
 | File | What it does | Used by |
 |---|---|---|
+| `io.py` | Reads the data folder for every stage. `customers`, `alerts`, `hits` are required; other tables read as empty when missing. Skips lines that aren't JSON objects. Maps entity-type synonyms (`individual`, `Person`, `Organisation`, …) to `Individual` / `Company` and turns single-string hit list fields into lists. Also the cache writers | all stages |
+| `time_budget.py` | The 25-minute run deadline and the shared 20-minute LLM clock | pipeline, LLM client |
 | `names.py` | `agree_parts`: the SOP name-agreement rule. Tries every one-to-one pairing of parts (not greedy), handles written-together/apart joins on both sides, fixed tie-break, symmetric since PR #10 | `NameTools.names_agree` in Stage 1, so all stages |
-| `contracts.py` | Checks Stage 4 must call before clearing: `name_mismatch_verified_allowed`, `location_mismatch_allowed`, `dob_mismatch_allowed`; `customer_record_id_for_output` (never a `P-` ID); `hit_field_evidence` (`H-XXXXXX#field`) | Stage 4 (not built yet) |
+| `contracts.py` | Helper checks for the Stage 1 contracts (`name_mismatch_verified_allowed`, …). Stage 4's gate reads the same flags directly (`stage4/gate.py`), so these helpers are only used by tests today | tests |
 | `llm_client.py` | The optional OpenRouter client (§3) | `stage1/llm.py`, `stage2/llm.py` |
 
 The rest of the shared toolkit (text folding, date parsing, phone/email/document normalisers, edit distance, `NameTools`, the country table) **lives in `system/stage1/`** today, and Stages 2 and 3 import it from there. Moving it here is refactor step R1.1 in the Stage 1 doc.
@@ -44,7 +49,7 @@ The rest of the shared toolkit (text folding, date parsing, phone/email/document
 
 | Setting | Value on main |
 |---|---|
-| Switches | `SANCTIONS_LLM=0` turns every stage off. `USE_LLM_NOTES=1` (Stage 1) and `USE_LLM_HITS=1` (Stage 2) turn each one on |
+| Switches | `SANCTIONS_LLM=0` turns every stage off. `USE_LLM_NOTES=1` (Stage 1) and `USE_LLM_HITS=1` (Stage 2) turn each one on. Stage 4 has no model step (the planned veto was never wired to a model and was removed) |
 | Key | `OPENROUTER_API_KEY` from the environment, never committed |
 | Model | `google/gemma-4-31b-it:free`, pinned. Any slug not ending in `:free` is refused with no network call |
 | Provider | `Google AI Studio` only, `allow_fallbacks: false` |
@@ -64,16 +69,19 @@ The rest of the shared toolkit (text folding, date parsing, phone/email/document
 
 ## 4. Reproducibility tool (`tools/repro/`)
 
-Compares repeated runs and writes one `repro.json` for the UI: the judges' metric (same decision and reason code in all runs), decision and code flips, strict changes, LLM sensitivity, config hashes, and a per-hit five-run strip. Field guide in [tools/repro/README.md](../tools/repro/README.md) and the root README. It needs per-hit output and traces, so it becomes useful once Stage 4 writes them. The design behind it is in [explainability-and-reproducibility.md](explainability-and-reproducibility.md).
+Compares repeated runs and writes one `repro.json` for the UI: the judges' metric (same decision and reason code in all runs), decision and code flips, strict changes, LLM sensitivity, config hashes, and a per-hit five-run strip. Field guide in [tools/repro/README.md](../tools/repro/README.md) and the root README.
+
+`tools/eval/` grades an output file against the practice labels (cost-based score, false clears, reason codes, evidence recall and precision). See [tools/eval/README.md](../tools/eval/README.md). The design behind it is in [explainability-and-reproducibility.md](explainability-and-reproducibility.md).
 
 ## 5. Tests
 
 ```bash
-cd system && python3 -m unittest discover -s tests      # 122 tests, 5 skip without dev/
+cd system && python3 -m unittest discover -s tests      # 5 skip without dev/
 python3 -m unittest discover -s tools/repro/tests        # from the repo root
+python3 -m unittest discover -s tools/eval/tests
 ```
 
-All fixtures are synthetic. The `test_repro.py` and `test_stage2_repro.py` suites run against a local `dev/` folder and skip when it is absent.
+All fixtures are synthetic. The `test_repro.py` and `test_stage2_repro.py` suites run against a local `dev/` folder and skip when it is absent. `test_resilience.py` covers missing files, malformed rows and the fallback.
 
 ---
 
@@ -83,11 +91,15 @@ Cross-stage steps. Stage-specific steps are in each stage doc (R1.x, R2.x, R3.x)
 
 | ID | Change | Why | Status |
 |---|---|---|---|
-| RS.1 | `system/shared/` becomes the one home for common helpers: `text.py`, `normalise.py` (dates, ids, edit distance), `names.py` (`NameTools` + `agree_parts`), `countries.py`, `io.py`, `llm_client.py`, `contracts.py`. Detailed in Stage 1 R1.1 | Every stage imports from `shared`, never from another stage | To do |
-| RS.2 | One JSON/JSONL reader and writer in `shared/io.py`, replacing `DataStore.read_jsonl`, `stage3/cli._read_json(l)`, the readers in `stage1_adapter.py`, and the writers in `stage1/build.py` | Four copies of the same loop | To do |
-| RS.3 | One LLM switch helper in `shared/llm_client.py` (`llm_enabled("notes" or "hits")`) and one quote check. `stage1/llm.py` and `stage2/llm.py` keep only their prompt, schema and slot logic | The switch logic and quote checks are duplicated | To do |
-| RS.4 | One entry point. `system/run` → `pipeline.main`, with an optional `--stage N` for debugging. Remove the per-stage `cli.py` and `__main__.py` once nothing imports them (`test_stage3.py` uses `stage3.cli` today, so update it) | Three CLIs plus the pipeline, for one program | To do |
-| RS.5 | Move evaluation out of the pipeline into `tools/eval/`: Stage 2 `practice.py`, Stage 3 `cli._practice` and `recall.py`, and the practice numbers in the pipeline summary. `system/run` then only produces answers | Keeps the judged program small and focused | To do |
-| RS.6 | Stages hand data to each other **in memory**. Cache files are written only when asked (`SANCTIONS_CACHE` set, or a `--keep-cache` flag), for debugging and the UI | Removes the disk round trip and the 260-line adapter's file path | To do |
-| RS.7 | The run summary goes to stderr or the trace run header, never the output file, which is kept for Stage 4's per-hit lines. **Agree with the Stage 4 owner first** | The output file must pass `validate.py` | To do |
-| RS.8 | Docs: one doc per stage plus this one. Review notes and the changelog folded in and deleted | Done in this pass | **Done** |
+| RS.1 | `system/shared/` becomes the one home for common helpers: move `text`, dates/ids/edit distance, `NameTools` and the country table out of `stage1/`. Detailed in Stage 1 R1.1 | Every stage imports from `shared`, never from another stage | To do. Pure moves, no score impact, and they touch every stage's imports. Best done when no other agent is editing `system/` |
+| RS.2 | One JSON/JSONL reader and writer (`shared/io.py`) | Four copies of the same loop | **Done** (`881953b`) |
+| RS.3 | One LLM switch helper and one quote check in `shared/llm_client.py` | Duplicated switch logic and quote checks | To do |
+| RS.4 | One entry point; drop per-stage `cli.py` / `__main__.py` once nothing imports them | Four CLIs plus the pipeline | To do |
+| RS.5 | One evaluation tool. Practice-label scoring exists in five places: `validate.py` (organisers', keep), `tools/eval/`, `stage4/build._practice`, `stage2/practice.py`, `stage3/cli._practice`. Keep `tools/eval` and drop the three in-pipeline copies (the clearance log would then get its label columns from `tools/eval`) | The judged program should only produce answers | To do. Agree with the `tools/eval` owner |
+| RS.6 | Stages pass data in memory; cache files only on request | Removes the disk round trip and the adapter's file path | To do |
+| RS.7 | Run summary out of the output file | The output file must pass `validate.py` | **Done** (Stage 4 PR: `run_summary.json` in the cache) |
+| RS.8 | One doc per stage plus this one | | **Done** |
+| RS.9 | Tolerate malformed unseen data: optional files, bad lines, entity-type synonyms, list fields, per-item failures, whole-run fallback | A crash means no output: every hit counts as `REVIEW` and the run scores 0 | **Done** (`881953b`, `6050a6d`) |
+| RS.10 | Remove dead code: Stage 4 veto (never wired to a model), Stage 3 name wrapper, Stage 4 reverse name call | | **Done** (`3a18af6`) |
+
+**How refactors are checked.** `system/tests` plus a synthetic end-to-end run on three generated data folders (all reason codes are exercised). The output file, the trace and every cache file must be byte-identical before and after. Steps that intentionally change behaviour say so in their commit, and `output/dev.jsonl` must then be regenerated on the real data room.

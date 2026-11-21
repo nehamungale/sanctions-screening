@@ -137,7 +137,7 @@ flowchart LR
   F0 --> F1 --> F2 --> F3 --> F4 --> E
 ```
 
-- **F1 name** uses the Stage 1 SOP name rule (variants, joined/split parts, small spelling edits, nicknames, order-free). `shared.names.agree_parts` is symmetric since PR #10. Stage 3 still calls it both ways through `stage3/names.py` (`agree_symmetric`), a workaround from before that fix. It is now redundant (R3.1). The blocking index is `index_name_part_record_id.json` (exact parts only). It is expanded with variant groups, edit distance and joined or split forms before the full name rule confirms a candidate. `index_name.json` is not read, because it can contain the verified legal name.
+- **F1 name** uses the Stage 1 SOP name rule (variants, joined/split parts, small spelling edits, nicknames, order-free). `shared.names.agree_parts` is symmetric since PR #10. Stage 3 calls it once per pair. The blocking index is `index_name_part_record_id.json` (exact parts only). It is expanded with variant groups, edit distance and joined or split forms before the full name rule confirms a candidate. `index_name.json` is not read, because it can contain the verified legal name.
 - **Companies.** The date filter uses the declared `customers.dob`, not `record_view.dob`. For a company the view's date is the registry incorporation date when an approved registry extract exists. Principle 2 compares the date the customer declared.
 - **F2 date of birth:** a year-only screened date is compatible with any full date in that year.
 - **F3 country:** codes, names and nationality adjectives are compared after normalisation.
@@ -293,7 +293,6 @@ Nothing here decides a hit. These are the rules Stage 4 must apply to Stage 3's 
 | `system/stage3/stage1_adapter.py` | ~260 | `load_catalog`: reads the Stage 1 record view and record-level indexes back from `working/`, and re-reads `customers.jsonl` to put a company's declared DOB back |
 | `system/stage3/blocking.py` | ~80 | `PartBlock`: expands exact-part index keys with variants, edit distance and joins, to find name candidates fast |
 | `system/stage3/recall.py` | ~75 | Checks that the index search finds the same records as a full scan (a safety check, not pipeline logic) |
-| `system/stage3/names.py` | ~40 | `agree_symmetric`, `record_name_agrees`: two-way wrapper around `names_agree` (redundant since PR #10) |
 | `system/stage3/cli.py`, `__main__.py` | ~120 | `run_stage3` (called by the pipeline), a standalone CLI, and the practice-label check |
 
 Tests: `system/tests/test_stage3.py`.
@@ -311,9 +310,9 @@ Same output, byte for byte, with practice labels still 50/50. When a step lands,
 
 | ID | Change | Why | Status |
 |---|---|---|---|
-| R3.1 | Delete `stage3/names.py` and call `NameTools.names_agree` directly in `resolve.py` and `recall.py`. First add a test showing `agree_parts(a, b)` equals `agree_parts(b, a)` on the Stage 3 cases | The bug it worked around was fixed in PR #10 | To do |
+| R3.1 | Delete `stage3/names.py` and call `NameTools.names_agree` directly in `resolve.py` and `recall.py`. First add a test showing `agree_parts(a, b)` equals `agree_parts(b, a)` on the Stage 3 cases | The bug it worked around was fixed in PR #10 | **Done** (`3a18af6`) |
 | R3.2 | Take Stage 1's record views and indexes **in memory** from the pipeline (Stage 1 doc, R1.3). `load_catalog` keeps a file-reading path only for running Stage 3 alone | Removes the write-then-read-back round trip through `working/` | To do |
 | R3.3 | Have Stage 1's record view carry the company's **declared** DOB next to the incorporation date, and remove `_overlay_company_declared_dobs`, which re-reads `customers.jsonl` | Stage 3 should not reach around Stage 1 into raw files | To do |
 | R3.4 | Import names, dates, countries and text folding from `system/shared/` (Stage 1 doc, R1.1) | No stage imports another's internals | To do |
-| R3.5 | Move `recall.py` and `cli._practice` into the evaluation tool (shared doc, RS.5), and replace the private `_read_json` and `_read_jsonl` with the shared reader (RS.2) | Evaluation separate from the pipeline; one reader | To do |
+| R3.5 | Move `recall.py` and `cli._practice` into the evaluation tool (shared doc, RS.5), and replace the private `_read_json` and `_read_jsonl` with the shared reader (RS.2) | Evaluation separate from the pipeline; one reader | Reader **done** (`881953b`); evaluation move to do |
 | R3.6 | Split `resolve.py` (~810 lines): link following and joint pick, search cascade, and candidate filters and fragility | Easier to review | To do |

@@ -1,6 +1,6 @@
 # Stage 4: Decision rules (notes)
 
-> **Status: designed, not built.** §1 covers the alert roll-up. §2 is the full build guide for Stage 4: the decision procedure, the pre-clearance gate (including every Stage 1, 2 and 3 flag it reads), the optional LLM veto, the clearance log, reasons and evidence, tests and build order. Anyone can add to it.
+> **Status: built** (`system/stage4/`; as-built summary in [system/README.md](../system/README.md)). The optional LLM veto (§2.6) was never wired to a model and has been removed. §1 covers the alert roll-up. §2 is the full build guide for Stage 4: the decision procedure, the pre-clearance gate (including every Stage 1, 2 and 3 flag it reads), the optional LLM veto, the clearance log, reasons and evidence, tests and build order. Anyone can add to it.
 >
 > Part of the 4-stage architecture: **1** customer golden record · **2** hit golden profile · **3** alert → person resolution · **4** decision rules (this doc).
 

@@ -554,7 +554,7 @@ Each item is a unit or integration test. Test fixtures use synthetic records.
 
 | File | Lines | What it does |
 |---|---|---|
-| `system/stage1/load.py` | ~55 | `DataStore`: reads the five customer tables plus `name_variants.json` from the data folder |
+| `system/stage1/load.py` | ~30 | `DataStore`: the five customer tables plus `name_variants.json`, through `shared/io.py` |
 | `system/stage1/normalise_text.py` | ~50 | `norm_text`, `country_fold`: Unicode folding shared by names and countries |
 | `system/stage1/normalise.py` | ~285 | `parse_date` (customer/hit modes), `dates_compatible`, `dates_identical_full`, `norm_phone`, `norm_email`, `norm_docno`, `levenshtein`, and `NameTools` (name parts, part matching, `names_agree`, which calls `shared.names.agree_parts`) |
 | `system/stage1/countries.py` | ~610 | Country table (ISO codes, names, demonyms, watch-list spellings), `norm_country`, `countries_in_note`, `country_leaves` |
@@ -589,5 +589,5 @@ Goal: same behaviour and byte-identical output, less code, one place for each ru
 | R1.2 | Split `build.py` (~980 lines) into `cluster.py` (union-find and edges), `facts.py` (verification events, legal name, DOB, countries, flags, contracts) and `views.py` (record views and indexes). `build.py` keeps `build_from_tables` and `run_stage1` as thin glue | One file per concern, easier to review | To do |
 | R1.3 | `run_stage1` returns the people, views and indexes **in memory** as well as writing them. The pipeline hands them straight to Stage 3 (see the Stage 3 doc, R3.2) | Removes a write-then-read-back round trip through `working/` | To do |
 | R1.4 | Stop writing person-level indexes that no stage reads (`index_account_id`, `index_login_handle`, `index_email`, `index_name`), unless Stage 4 or the UI needs them. Check with the Stage 4 owner first | Fewer artefacts to keep in sync | To do |
-| R1.5 | Use the shared JSONL reader (shared doc, RS.2) in `DataStore` | One reader | To do |
+| R1.5 | Use the shared JSONL reader (shared doc, RS.2) in `DataStore` | One reader | **Done** (`881953b`) |
 | R1.6 | Fold `stage1/cli.py` and `__main__.py` into the single pipeline entry point, keeping a `--stage 1` option if it's still useful for debugging | One entry point (shared doc, RS.4) | To do |

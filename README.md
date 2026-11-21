@@ -72,7 +72,7 @@ Field-by-field developer notes: [ui/README.md](ui/README.md).
 
 ## Architecture
 
-Four stages. Stages 1–3 are in `system/` and are deterministic. They do not decide hits. Stage 4 will apply the SOP and write one line per hit. `system/run` today runs stages 1–3 and writes a summary JSON, not `output/dev.jsonl`.
+Four deterministic stages in `system/`. Stages 1–3 build both sides of the comparison; Stage 4 applies the SOP and writes one line per hit. `system/run` runs all four. How it decides, cites evidence and stays reproducible: [system/README.md](system/README.md).
 
 ```mermaid
 flowchart LR
@@ -105,7 +105,7 @@ flowchart LR
 | **1. Customer golden record** | Normalises customer data, groups records that are the same person into a `person_id`, and picks each fact (legal name, date of birth, countries) with its source record ID. | Built. [docs/stage1-customer-golden-record.md](docs/stage1-customer-golden-record.md) |
 | **2. Hit golden profile** | Collects each hit's names, countries, birth-date candidates, death date and earliest dated report. | Built. [docs/stage2-hit-golden-profile.md](docs/stage2-hit-golden-profile.md) |
 | **3. Alert → person resolution** | Follows the alert's link (account, login, email) or searches by the screened details to find the person or people behind each alert. | Built. [docs/stage3-alert-resolution.md](docs/stage3-alert-resolution.md) |
-| **4. Decision rules** | Compares the person with the hit and writes `DIFFERENT_ENTITY`, `SAME_ENTITY` or `REVIEW`, with a reason code and evidence. | Not built. [docs/stage4-notes.md](docs/stage4-notes.md) |
+| **4. Decision rules** | Compares the person with the hit and writes `DIFFERENT_ENTITY`, `SAME_ENTITY` or `REVIEW`, with a reason code and evidence. | Built. [system/README.md](system/README.md) · design: [docs/stage4-notes.md](docs/stage4-notes.md) |
 
 ### Dev run
 
@@ -133,15 +133,15 @@ One `system/run` on the development folder, LLM off. Counts are from that run. T
 ├── BRIEF.md  POLICY.md        ← the organisers' brief and the bank's SOP
 ├── docs/                      ← one doc per stage + shared/pipeline (index: docs/README.md)
 ├── system/
-│   ├── run                    ← entry point; stages 1–3 today, writes a summary, not per-hit decisions
+│   ├── run                    ← entry point: stages 1–4, one decision per hit
 │   ├── pipeline.py
 │   ├── stage1/  stage2/  stage3/
-│   ├── shared/                ← name agreement, Stage 4 contracts, LLM client
+│   ├── shared/                ← data reader, name agreement, LLM client, time budget
 │   └── tests/
 ├── tools/repro/               ← reproducibility report (repro.json)
 ├── ui/                        ← read-only reviewer UI (local files only)
 ├── validate.py                ← the organisers' output checker
-└── output/                    ← per-hit decisions, once Stage 4 exists
+└── output/dev.jsonl           ← our decisions for the development set
 ```
 
 ## Documentation
@@ -150,7 +150,7 @@ One `system/run` on the development folder, LLM off. Counts are from that run. T
 |---|---|
 | [docs/README.md](docs/README.md) | Index and conventions |
 | [Stage 1](docs/stage1-customer-golden-record.md) · [Stage 2](docs/stage2-hit-golden-profile.md) · [Stage 3](docs/stage3-alert-resolution.md) | How each stage works, its code map, known gaps and planned refactor |
-| [Stage 4 notes](docs/stage4-notes.md) | Decision rules (being built separately) |
+| [Stage 4 notes](docs/stage4-notes.md) | Decision-rule design (the built system is described in system/README.md) |
 | [Shared code and pipeline](docs/shared-and-pipeline.md) | `system/run`, shared modules, LLM client, tests, cross-stage refactor plan |
 | [Explainability and reproducibility](docs/explainability-and-reproducibility.md) | Per-hit trace, reasons, citations, determinism |
 
