@@ -1,4 +1,4 @@
-"""Run Stage 1, then Stage 2. Decisions are not produced here."""
+"""Run Stage 1, then Stage 2, then Stage 3. Decisions are not produced here."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import sys
 from stage1.build import run_stage1
 from stage1.cli import ARTEFACTS as STAGE1_ARTEFACTS
 from stage2.build import run_stage2
+from stage3.cli import run_stage3
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -21,11 +22,17 @@ def main(argv: list[str] | None = None) -> int:
     try:
         stage1 = run_stage1(data_folder, cache_dir)
         stage2 = run_stage2(data_folder, cache_dir)
+        stage3 = run_stage3(
+            data_folder,
+            os.path.join(cache_dir, "alert_resolution.jsonl"),
+            cache_dir,
+        )
     except FileNotFoundError as error:
         print(f"missing input: {error}", file=sys.stderr)
         return 2
     summary = {
-        "artefacts": list(STAGE1_ARTEFACTS) + ["hit_golden.jsonl"],
+        "alert_resolution": _alert_resolution(stage3),
+        "artefacts": list(STAGE1_ARTEFACTS) + ["hit_golden.jsonl", "alert_resolution.jsonl"],
         "cache_dir": cache_dir,
         "companies": stage2["companies"],
         "dated_report_hits": stage2["dated_report_hits"],
@@ -46,8 +53,8 @@ def main(argv: list[str] | None = None) -> int:
         "phone_dob_edges": stage1["phone_dob_edges"],
         "practice": stage2.get("practice"),
         "records": stage1["records"],
-        "stage": 2,
-        "stages": [1, 2],
+        "stage": 3,
+        "stages": [1, 2, 3],
     }
     parent = os.path.dirname(output_file)
     if parent:
@@ -77,9 +84,46 @@ def main(argv: list[str] | None = None) -> int:
             f"practice: individuals {practice['individual_agree']}/{practice['individual']}; "
             f"companies {practice['company_agree']}/{practice['company']}"
         )
+    resolution = summary["alert_resolution"]
+    status = resolution["status"]
+    print(
+        f"stage 3: {resolution['alerts']} alerts; "
+        + ", ".join(f"{key} {status[key]}" for key in sorted(status))
+        +         f"; joint {resolution['joint_resolved']}/{resolution['joint_alerts']}; "
+        + f"clean {resolution['resolution_clean']}; "
+        + f"{stage3['elapsed_seconds']}s"
+    )
+    alert_practice = resolution.get("practice")
+    if alert_practice:
+        print(
+            f"stage 3 practice: {alert_practice['matched']}/{alert_practice['labels']}"
+        )
     print(f"artefacts: {cache_dir}")
     print(f"summary: {output_file}")
     print(
         f"notes flagged {notes['flagged']}/{notes['notes']}"
     )
     return 0
+
+
+def _alert_resolution(stage3: dict) -> dict:
+    """Stable Stage 3 counts. Elapsed time stays on stdout, not in this object."""
+    kept = {
+        "alerts": stage3["alerts"],
+        "flags": stage3["flags"],
+        "fragility_flags": stage3["fragility_flags"],
+        "joint_alerts": stage3["joint_alerts"],
+        "joint_resolved": stage3["joint_resolved"],
+        "linked_alerts": stage3["linked_alerts"],
+        "method": stage3["method"],
+        "resolution_clean": stage3["resolution_clean"],
+        "resolution_method": stage3["resolution_method"],
+        "resolution_quality": stage3["resolution_quality"],
+        "resolution_status": stage3["resolution_status"],
+        "status": stage3["status"],
+        "unlinked_alerts": stage3["unlinked_alerts"],
+        "unlinked_status": stage3["unlinked_status"],
+    }
+    if "practice" in stage3:
+        kept["practice"] = stage3["practice"]
+    return kept

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the screening system. Stage 1 writes customer records; Stage 2 writes hit_golden."""
+"""Run the screening system. Stages 1–3 fill the cache. Decisions are not written here."""
 
 import os
 import sys
