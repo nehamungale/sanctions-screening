@@ -103,6 +103,28 @@ class CountryTests(unittest.TestCase):
         self.assertEqual(norm_country("Northern Mariana Islands")[0], "Northern Mariana Islands")
         self.assertNotEqual(norm_country("MP")[0], "United States")
 
+    def test_macao_kosovo_palestine(self):
+        macao = (
+            "MO",
+            "Macao",
+            "Macau",
+            "Macao SAR",
+            "Macau SAR",
+            "Macao SAR of China",
+            "Macau SAR of China",
+            "Macao Special Administrative Region of China",
+            "Macau Special Administrative Region of China",
+        )
+        for spelling in macao:
+            self.assertEqual(norm_country(spelling)[0], "Macao", spelling)
+            self.assertEqual(norm_country(spelling)[1], [], spelling)
+        for spelling in ("XK", "Kosovo"):
+            self.assertEqual(norm_country(spelling)[0], "Kosovo", spelling)
+            self.assertEqual(norm_country(spelling)[1], [], spelling)
+        for spelling in ("PS", "Palestine", "Palestina", "State of Palestine", "Palestinian Territories"):
+            self.assertEqual(norm_country(spelling)[0], "Palestine", spelling)
+            self.assertEqual(norm_country(spelling)[1], [], spelling)
+
     def test_unmapped(self):
         value, flags = norm_country("Atlantis")
         self.assertEqual(value, "atlantis")

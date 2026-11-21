@@ -130,6 +130,118 @@ class ClusterTests(unittest.TestCase):
         self.assertEqual(indexes["email"]["luca@example.com"], ["P-CUS-000010"])
         self.assertEqual(indexes["record_id"]["CUS-000020"], "P-CUS-000020")
 
+    def test_record_view_and_record_indexes(self):
+        customers = [
+            customer(
+                "CUS-000020",
+                full_name="J.R. Example",
+                preferred_name="Jay",
+                dob="September 12, 1985",
+                city="Oslo",
+                address="1 High Street, Oslo",
+                postal_code="SW1A 1AA",
+                nationality="XK",
+                residence_country="Palestina",
+                email="jr@example.com",
+                phone="+44 7700 900123",
+            ),
+            customer(
+                "CUS-000010",
+                full_name="Elvira Morillo",
+                dob=None,
+                city=None,
+                address=None,
+                email="elvira@example.com",
+                phone="+34 600222222",
+            ),
+        ]
+        accounts = [
+            {"account_id": "ACC-JOINT", "customer_id": "CUS-000020", "login_handle": "  jr  "},
+            {"account_id": "ACC-JOINT", "customer_id": "CUS-000010", "login_handle": "elvira"},
+            {"account_id": "ACC-ONLY", "customer_id": "CUS-000020", "login_handle": "jr2"},
+        ]
+        _people, indexes, _stats = people_of(tables(customers, accounts=accounts))
+        views = {row["record_id"]: row for row in indexes["record_views"]}
+        self.assertEqual(list(views), ["CUS-000010", "CUS-000020"])
+        first = views["CUS-000010"]
+        self.assertEqual(first["person_id"], "P-CUS-000010")
+        self.assertEqual(first["entity_type"]["value"], "Individual")
+        self.assertIsNone(first["dob"]["value"])
+        self.assertEqual(first["dob"]["role"], "declared")
+        self.assertFalse(first["dob"]["comparable"])
+        self.assertEqual(first["dob"]["source_id"], "CUS-000010")
+        self.assertIsNone(first["postcode"])
+        self.assertIsNone(first["city"]["raw"])
+        self.assertIsNone(first["address"]["raw"])
+        self.assertEqual(first["full_name"]["parts"], ["elvira", "morillo"])
+        self.assertEqual(first["preferred_name"]["parts"], [])
+        self.assertEqual(first["login_name"]["parts"], [])
+        self.assertEqual(first["account_ids"], ["ACC-JOINT"])
+        self.assertEqual(first["login_handles"], ["elvira"])
+        second = views["CUS-000020"]
+        self.assertEqual(second["person_id"], "P-CUS-000020")
+        self.assertEqual(second["full_name"]["parts"], ["jr", "example"])
+        self.assertEqual(second["preferred_name"]["parts"], ["jay"])
+        self.assertEqual(second["login_name"]["parts"], [])
+        self.assertEqual(second["full_name"]["source_id"], "CUS-000020")
+        self.assertNotIn("verified_name", second)
+        self.assertEqual(second["dob"]["value"], "1985-09-12")
+        self.assertEqual(second["dob"]["precision"], "day")
+        self.assertEqual(second["dob"]["role"], "declared")
+        self.assertEqual(second["city"]["raw"], "Oslo")
+        self.assertEqual(second["city"]["normalised"], "oslo")
+        self.assertEqual(second["address"]["raw"], "1 High Street, Oslo")
+        self.assertEqual(second["postcode"]["value"], "SW1A 1AA")
+        self.assertEqual(second["postcode"]["source_field"], "postal_code")
+        self.assertEqual(second["nationality"]["value"], "Kosovo")
+        self.assertEqual(second["residence_country"]["value"], "Palestine")
+        self.assertEqual(second["phone"]["value"], "+447700900123")
+        self.assertEqual(second["email"]["value"], "jr@example.com")
+        self.assertEqual(second["account_ids"], ["ACC-JOINT", "ACC-ONLY"])
+        self.assertEqual(second["login_handles"], ["jr", "jr2"])
+        self.assertEqual(indexes["account_record_id"]["ACC-JOINT"], ["CUS-000010", "CUS-000020"])
+        self.assertEqual(indexes["account_record_id"]["ACC-ONLY"], ["CUS-000020"])
+        self.assertEqual(indexes["login_record_id"]["jr"], ["CUS-000020"])
+        self.assertEqual(indexes["login_record_id"]["elvira"], ["CUS-000010"])
+        self.assertEqual(indexes["email_record_id"]["jr@example.com"], ["CUS-000020"])
+        self.assertEqual(indexes["name_part_record_id"]["jr"], ["CUS-000020"])
+        self.assertEqual(indexes["name_part_record_id"]["example"], ["CUS-000020"])
+        self.assertEqual(indexes["name_part_record_id"]["jay"], ["CUS-000020"])
+        self.assertEqual(indexes["name_part_record_id"]["elvira"], ["CUS-000010"])
+        self.assertNotIn("yusuf", indexes["name_part_record_id"])
+        self.assertEqual(indexes["account_id"]["ACC-JOINT"], ["P-CUS-000010", "P-CUS-000020"])
+
+    def test_company_record_dob_is_incorporation_date(self):
+        company = customer(
+            "CUS-000030",
+            entity_type="Company",
+            full_name="TD Bank, N.A. GmbH",
+            dob="February 1968",
+            email="co@example.com",
+            phone="+31 201111111",
+            nationality=None,
+            residence_country="NL",
+        )
+        onboarding = [{"customer_id": "CUS-000030", "kyc_applicant_id": "APP-CO", "account_id": "ACC-CO"}]
+        checks = [
+            _check(
+                "KYC-CO", "APP-CO", "approved", "2013-02", None, "2022-03-03",
+                name="TD BANK", country="Netherlands", document_type="registry extract",
+            ),
+        ]
+        _people, indexes, _stats = people_of(tables([company], onboarding=onboarding, checks=checks))
+        view = indexes["record_views"][0]
+        self.assertEqual(view["entity_type"]["value"], "Company")
+        self.assertEqual(view["dob"]["role"], "incorporation")
+        self.assertEqual(view["dob"]["value"], "2013-02")
+        self.assertEqual(view["dob"]["precision"], "month")
+        self.assertEqual(view["dob"]["source_id"], "KYC-CO")
+        self.assertEqual(view["dob"]["source_kind"], "registry_extract")
+        self.assertEqual(view["full_name"]["parts"], ["td", "bank"])
+        self.assertEqual(indexes["name_part_record_id"]["td"], ["CUS-000030"])
+        self.assertNotIn("gmbh", indexes["name_part_record_id"])
+        self.assertNotIn("na", indexes["name_part_record_id"])
+
 
 class FactTests(unittest.TestCase):
     def test_verified_beats_declared_and_newer_rejected_is_ignored(self):
