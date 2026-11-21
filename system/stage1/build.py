@@ -178,6 +178,7 @@ def build_from_tables(tables: dict, use_llm: bool | None = None) -> tuple[list[d
         "doc_edges_new_components": doc_new,
         "multi_record_persons": multi,
         "notes": note_stats,
+        "person_flag_counts": _person_flag_counts(people),
     }
     return people, indexes, stats
 
@@ -320,12 +321,20 @@ def _assemble_person(
 
     verification_events = [_check_event(check, flags) for check in checks_ok]
     residence_events = []
+    note_countries = []
     for note in attached_notes:
         parsed = parsed_by_id.get(note["note_id"])
         if parsed is None:
             parsed = parse_note(note)
         if parsed["flags"]:
             flags.append(f"NOTE_FLAGGED:{note['note_id']}")
+            flags.append("BLOCK_LOCATION_MISMATCH")
+        if parsed.get("verification_like") and not parsed.get("fully_parsed_verification"):
+            flags.append("BLOCK_DOB_AGE_NAME_CLEAR")
+        if parsed.get("kind") != "noise" and parsed.get("location_unresolved"):
+            flags.append("BLOCK_LOCATION_MISMATCH")
+        for canonical in parsed.get("countries") or []:
+            note_countries.append((canonical, note["note_id"]))
         if parsed["kind"] == "verification":
             verification_events.append(parsed["event"])
         elif parsed["kind"] == "residence":
@@ -340,7 +349,9 @@ def _assemble_person(
     legal_name = _legal_name(primary, records, record_ids, names, agreed_type, flags)
     dob = _dob(primary, records, record_ids, flags)
     incorporation = _incorporation(agreed_type, checks_ok, records, record_ids, flags)
-    countries = _countries(record_ids, records, checks_ok, verification_events, residence_events, flags)
+    countries = _countries(
+        record_ids, records, checks_ok, verification_events, residence_events, note_countries, flags
+    )
     declared = _declared_dobs(records, record_ids, flags)
     names_all = _names_all(legal_name, records, record_ids, names, flags)
 
@@ -349,9 +360,14 @@ def _assemble_person(
         tuple(edge.get("records") or []),
         edge.get("phone") or edge.get("document_number") or "",
     ))
+    if "UNMAPPED_COUNTRY" in flags:
+        flags.append("BLOCK_LOCATION_MISMATCH")
+    flag_list = sorted(set(flags))
+    customer_record_ids = list(record_ids)
     return {
         "person_id": person_id,
-        "record_ids": list(record_ids),
+        "record_ids": customer_record_ids,
+        "customer_record_ids": customer_record_ids,
         "cluster_edges": edges,
         "entity_type": entity_type,
         "legal_name": legal_name,
@@ -377,7 +393,8 @@ def _assemble_person(
             event["source_id"] for event in verification_events if event.get("kind") == "kyc_note"
         ],
         "note_ids_residence": [event["note_id"] for event in residence_events],
-        "flags": sorted(set(flags)),
+        "flags": flag_list,
+        "contracts": _contracts(customer_record_ids, flag_list),
     }
 
 
@@ -401,6 +418,8 @@ def _check_event(check: dict, flags: list[str]) -> dict:
         "doc_country": country,
         "document_type": check.get("document_type"),
         "provider": check.get("provider"),
+        "method": "regex",
+        "may_solely_support_different_entity": True,
     }
 
 
@@ -459,40 +478,62 @@ def _legal_name(primary, records, record_ids, names: NameTools, agreed_type, fla
                 record_for_type = record
                 break
         flags.append("UNVERIFIED")
+        flags.append("BLOCK_NAME_MISMATCH_VERIFIED")
     parts, had_placeholder = names.split(raw, _name_type(agreed_type, record_for_type))
     if had_placeholder:
         flags.append("PLACEHOLDER_NAME")
     individual = (agreed_type or (record_for_type or {}).get("entity_type")) == "Individual"
-    if individual and len(parts) < 2:
+    blocks_name_clear = bool(individual and len(parts) < 2)
+    placeholder_only = bool(had_placeholder and len(parts) == 0) or blocks_name_clear and had_placeholder and len(parts) < 2
+    if blocks_name_clear or placeholder_only:
         flags.append("NAME_TOO_SHORT")
+        flags.append("BLOCK_NAME_CLEAR")
+    method = "record"
+    may_clear = False
+    if verified and primary is not None:
+        method = primary.get("method") or "regex"
+        may_clear = method != "llm" and not blocks_name_clear
+        if method == "llm":
+            flags.append("BLOCK_NAME_MISMATCH_VERIFIED")
     return {
         "value": raw,
         "parts": parts,
         "real_part_count": len(parts),
+        "blocks_name_clear": blocks_name_clear or placeholder_only,
         "source_id": source_id,
         "source_kind": source_kind,
         "verified": verified,
+        "method": method,
+        "may_solely_support_different_entity": may_clear,
     }
 
 
 def _dob(primary, records, record_ids, flags: list[str]) -> dict:
     if primary and primary.get("dob"):
+        method = primary.get("method") or "regex"
         return {
             "value": primary["dob"],
             "precision": primary.get("dob_precision"),
             "source_id": primary.get("source_id"),
             "verified": True,
+            "method": method,
+            "may_solely_support_different_entity": method != "llm",
         }
     chosen = _agreed_declared(records, flags)
     flags.append("UNVERIFIED")
     if chosen is None:
-        return {"value": None, "precision": None, "source_id": None, "verified": False}
+        return {
+            "value": None, "precision": None, "source_id": None, "verified": False,
+            "method": "record", "may_solely_support_different_entity": False,
+        }
     parsed, source_id = chosen
     return {
         "value": parsed["value"],
         "precision": parsed["precision"],
         "source_id": source_id,
         "verified": False,
+        "method": "record",
+        "may_solely_support_different_entity": False,
     }
 
 
@@ -538,17 +579,22 @@ def _incorporation(agreed_type, checks_ok, records, record_ids, flags: list[str]
         }
     chosen = _agreed_declared(records, flags)
     if chosen is None:
-        return {"value": None, "precision": None, "source_id": None, "verified": False}
+        return {
+            "value": None, "precision": None, "source_id": None, "verified": False,
+            "method": "record", "may_solely_support_different_entity": False,
+        }
     parsed, source_id = chosen
     return {
         "value": parsed["value"],
         "precision": parsed["precision"],
         "source_id": source_id,
         "verified": False,
+        "method": "record",
+        "may_solely_support_different_entity": False,
     }
 
 
-def _countries(record_ids, records, checks_ok, verification_events, residence_events, flags: list[str]):
+def _countries(record_ids, records, checks_ok, verification_events, residence_events, note_countries, flags: list[str]):
     countries = []
     for record in records:
         for field, kind in (("nationality", "nationality"), ("residence_country", "residence")):
@@ -582,21 +628,36 @@ def _countries(record_ids, records, checks_ok, verification_events, residence_ev
                 "value": value,
                 "years": [event["year_from"], event["year_to"]],
             })
+    seen = {(item["source_id"], item["value"]) for item in countries}
+    for canonical, source_id in note_countries:
+        value, country_flags = norm_country(canonical)
+        if "UNMAPPED_COUNTRY" in country_flags:
+            flags.append("UNMAPPED_COUNTRY")
+            flags.append("BLOCK_LOCATION_MISMATCH")
+        if not value or (source_id, value) in seen:
+            continue
+        countries.append({"kind": "note_country", "source_id": source_id, "value": value})
+        seen.add((source_id, value))
     return countries
 
 
 def _declared_dobs(records, record_ids, flags: list[str]):
+    """Every record keeps its declared date, including ones that cannot be compared.
+
+    Later stages may emit DOB_MISMATCH only when every entry contradicts the hit.
+    A missing or unparsed entry blocks that clear.
+    """
     declared = []
     for record in records:
         parsed, date_flags = parse_date(record.get("dob"))
         if "UNPARSED_DATE" in date_flags:
             flags.append("UNPARSED_DATE")
-        if parsed:
-            declared.append({
-                "precision": parsed["precision"],
-                "source_id": record["record_id"],
-                "value": parsed["value"],
-            })
+        declared.append({
+            "comparable": parsed is not None,
+            "precision": parsed["precision"] if parsed else None,
+            "source_id": record["record_id"],
+            "value": parsed["value"] if parsed else None,
+        })
     return declared
 
 
@@ -604,8 +665,10 @@ def _names_all(legal_name, records, record_ids, names: NameTools, flags: list[st
     rows = []
     if legal_name.get("value"):
         rows.append({
+            "blocks_name_clear": bool(legal_name.get("blocks_name_clear")),
             "kind": "legal_name",
             "parts": list(legal_name["parts"]),
+            "real_part_count": legal_name.get("real_part_count", len(legal_name["parts"])),
             "source_id": legal_name.get("source_id"),
             "value": legal_name["value"],
         })
@@ -617,13 +680,45 @@ def _names_all(legal_name, records, record_ids, names: NameTools, flags: list[st
             parts, had_placeholder = names.split(raw, record.get("entity_type"))
             if had_placeholder:
                 flags.append("PLACEHOLDER_NAME")
+            individual = record.get("entity_type") != "Company"
+            blocks = bool(individual and len(parts) < 2)
             rows.append({
+                "blocks_name_clear": blocks,
                 "kind": kind,
                 "parts": parts,
+                "real_part_count": len(parts),
                 "source_id": record["record_id"],
                 "value": raw,
             })
     return rows
+
+
+def _person_flag_counts(people: list[dict]) -> dict:
+    counts: dict[str, int] = {}
+    for person in people:
+        seen = set()
+        for flag in person.get("flags") or []:
+            key = "NOTE_FLAGGED" if str(flag).startswith("NOTE_FLAGGED:") else flag
+            if key in seen:
+                continue
+            seen.add(key)
+            counts[key] = counts.get(key, 0) + 1
+    return {key: counts[key] for key in sorted(counts)}
+
+
+def _contracts(customer_record_ids: list[str], flags: list[str]) -> dict:
+    """Machine-readable rules for the decision stage. Do not emit ``person_id``."""
+    present = set(flags)
+    return {
+        "block_dob_age_name_clear": "BLOCK_DOB_AGE_NAME_CLEAR" in present,
+        "block_location_mismatch": "BLOCK_LOCATION_MISMATCH" in present or "UNMAPPED_COUNTRY" in present,
+        "block_name_clear": "BLOCK_NAME_CLEAR" in present or "NAME_TOO_SHORT" in present,
+        "block_name_mismatch_verified": "BLOCK_NAME_MISMATCH_VERIFIED" in present or "NAME_TOO_SHORT" in present,
+        "customer_record_ids": list(customer_record_ids),
+        "dob_mismatch_only_if_every_declared_contradicts": True,
+        "emit_customer_record_id_not_person_id": True,
+        "llm_method_cannot_solely_support_different_entity": True,
+    }
 
 
 def _indexes(people: list[dict]) -> dict:
