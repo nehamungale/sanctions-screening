@@ -1,5 +1,9 @@
 # Development set (event participants only; never commit)
 dev/
+data/
+
+# Stage 1 working cache (person_golden and indexes; not the submission output/)
+working/
 
 # Organisers' spreadsheet export of the development set
 *.xlsx
