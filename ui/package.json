@@ -7,8 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "node --test tests/rollup.test.ts",
-    "test:dom": "bash tests/dom-check.sh"
+    "test": "node --test tests/rollup.test.ts && bash tests/check-ids.sh",
+    "test:dom": "bash tests/dom-check.sh",
+    "check:repro-build": "bash tests/check-repro-build.sh",
+    "check:ids": "bash tests/check-ids.sh"
   },
   "dependencies": {
     "class-variance-authority": "0.7.1",

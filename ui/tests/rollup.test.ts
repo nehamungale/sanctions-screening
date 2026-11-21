@@ -3,11 +3,26 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 
-import { DECIDING_DIMS, REASON_LABELS, STATUS_LABELS, reasonLabel, statusFromSlug, undecidedText } from '../src/lib/labels.ts'
+import {
+  COMPARISON_STATUS_LABELS,
+  DECIDING_DIMS,
+  MISSING_TEXT,
+  REASON_LABELS,
+  STATUS_LABELS,
+  comparisonStatusLabel,
+  crossCheckText,
+  missingSideText,
+  reasonLabel,
+  statusFromSlug,
+  undecidedText,
+} from '../src/lib/labels.ts'
 import { parseAlerts, parseTraceJsonl } from '../src/lib/parse.ts'
 import { HIT_NOT_DECIDED, REASON_CODES, ROLLUP_STATUSES } from '../src/lib/policy.ts'
-import { alertsFromHits, overviewCounts, rollUpAlerts } from '../src/lib/rollup.ts'
-import { readComparison, readIdentity, unknownFacts } from '../src/lib/trace-view.ts'
+import { alertsFromHits, crossCheckSummaries, overviewCounts, rollUpAlerts } from '../src/lib/rollup.ts'
+import { readComparison, readDecidingDims, readIdentity, unknownFacts } from '../src/lib/trace-view.ts'
+import { buildModel, buildRepro, type Loaded } from '../src/lib/model.ts'
+import { getUnstableHitIds, isFlippedClear, parseRepro, reproMetrics } from '../src/lib/repro.ts'
+import { allHitRows, filterRows, NO_FILTERS, queueGroups, whatsMissingLine } from '../src/lib/worklist.ts'
 
 const fixture = (name: string) => readFileSync(new URL(`../fixtures/${name}`, import.meta.url), 'utf8')
 
@@ -23,6 +38,17 @@ const line = (...a: Parameters<typeof rec>) => JSON.stringify(rec(...a))
 const roll = (lines: string[], hit_ids: string[], alertsVerified = true) => {
   const t = parseTraceJsonl(lines.join('\n'))
   return rollUpAlerts([{ alert_id: 'A-1', hit_ids }], t.hits, { alertsVerified, rejected: t.rejected })[0]
+}
+
+const INTERNAL = /ESCALATED|NEEDS_REVIEW|NOT_VERIFIED/
+
+function loadFixtures(o: { alerts?: boolean; summaries?: boolean }): Loaded {
+  return {
+    trace: { name: 't', result: parseTraceJsonl(fixture('trace.sample.jsonl')) },
+    alerts: o.alerts ? { name: 'a', result: parseAlerts(fixture('alerts.sample.jsonl')) } : null,
+    summaries: o.summaries ? { name: 's', result: parseAlerts(fixture('alerts-trace.sample.jsonl')) } : null,
+    repro: null,
+  }
 }
 
 // --- roll-up rule ---
@@ -124,28 +150,51 @@ test('bad lines are reported, not thrown', () => {
 
 // --- B2: alerts.trace.jsonl (Stage 4 alert summaries) ---
 
-test('alerts.trace.jsonl is recognised; hit list includes undecided ids', () => {
-  const a = parseAlerts(fixture('sample.alerts.trace.jsonl'))
+test('alerts.trace.jsonl is recognised as summaries; hit list includes undecided ids', () => {
+  const a = parseAlerts(fixture('alerts-trace.sample.jsonl'))
   assert.equal(a.kind, 'summaries')
-  assert.deepEqual(a.issues, [])
-  const a5 = a.alerts.find((x) => x.alert_id === 'A-000005')
-  assert.deepEqual(a5?.hit_ids.sort(), ['H-000008', 'H-000009'])
-  const t = parseTraceJsonl(fixture('sample.trace.jsonl'))
-  const sums = rollUpAlerts(a.alerts, t.hits, { alertsVerified: true, rejected: t.rejected })
-  assert.deepEqual(overviewCounts(sums, t.hits, true).pipelineDisagreements, [])
+  assert.deepEqual([a.issues, a.alerts], [[], []])
+  const a5 = a.summaries.find((x) => x.alert_id === 'A-SYN005')
+  assert.deepEqual(a5?.hit_ids.sort(), ['H-SYN008', 'H-SYN009'])
 })
 
-test('pipeline summary that disagrees with the roll-up is flagged', () => {
-  const a = parseAlerts('{"alert_id":"A-1","alert_status":"CLEARED","hits":[{"hit_id":"H-1"}],"undecided_hit_ids":["H-2"]}')
+test('B1: alerts.trace.jsonl alone never shows Cleared (Not verified instead)', () => {
+  const m = buildModel(loadFixtures({ summaries: true }))!
+  assert.equal(m.verified, false)
+  assert.equal(m.alertSource, 'summaries')
+  assert.equal(m.counts.alerts.CLEARED, 0)
+  assert.equal(m.counts.alerts.NOT_VERIFIED, 2)
+  // pipeline CLEARED vs UI Not verified is not a disagreement
+  assert.deepEqual(m.crossCheck?.problems, [])
+})
+
+test('B1: with alerts.jsonl + summaries, Cleared shows and the cross-check agrees', () => {
+  const m = buildModel(loadFixtures({ alerts: true, summaries: true }))!
+  assert.equal(m.counts.alerts.CLEARED, 2)
+  assert.deepEqual(m.crossCheck?.problems, [])
+})
+
+test('cross-check flags a pipeline status or hit list that disagrees', () => {
+  const pipeline = parseAlerts('{"alert_id":"A-1","alert_status":"CLEARED","hits":[{"hit_id":"H-1"}]}').summaries
   const t = parseTraceJsonl(line('H-1', 'DIFFERENT_ENTITY', 'DOB_MISMATCH'))
-  const sums = rollUpAlerts(a.alerts, t.hits, { alertsVerified: true })
-  assert.equal(sums[0].alert_status, 'NEEDS_REVIEW')
-  assert.deepEqual(overviewCounts(sums, t.hits, true).pipelineDisagreements, ['A-1'])
+  const sums = rollUpAlerts([{ alert_id: 'A-1', hit_ids: ['H-1', 'H-2'] }], t.hits, { alertsVerified: true })
+  const kinds = crossCheckSummaries(sums, pipeline, true).map((p) => p.kind).sort()
+  assert.deepEqual(kinds, ['hit_ids', 'status'])
+  for (const p of crossCheckSummaries(sums, pipeline, true)) assert.doesNotMatch(crossCheckText(p), INTERNAL)
+})
+
+test('B2: a hit filed under the wrong alert counts as undecided only, not in decision totals', () => {
+  const t = parseTraceJsonl([line('H-1', 'DIFFERENT_ENTITY', 'DOB_MISMATCH'), line('H-2', 'SAME_ENTITY', 'NAME_DOB_MATCH', 'A-9')].join('\n'))
+  const sums = rollUpAlerts([{ alert_id: 'A-1', hit_ids: ['H-1', 'H-2'] }], t.hits, { alertsVerified: true })
+  const c = overviewCounts(sums, t.hits, true)
+  assert.deepEqual(c.hitsByDecision, { DIFFERENT_ENTITY: 1, SAME_ENTITY: 0, REVIEW: 0 })
+  assert.equal(c.hitsDecided, 1)
+  assert.equal(c.hitsMisfiled, 1)
+  assert.equal(c.hitsUndecided, 1)
+  assert.equal(c.hitsByReason.find((r) => r.reason_code === 'NAME_DOB_MATCH')?.count, 0)
 })
 
 // --- A: on-screen language ---
-
-const INTERNAL = /ESCALATED|NEEDS_REVIEW|NOT_VERIFIED/
 
 test('status labels use the brief’s words and never internal names', () => {
   assert.equal(STATUS_LABELS.CLEARED.label, 'Cleared')
@@ -176,20 +225,20 @@ test('every reason code has a plain-English label', () => {
 // --- fixtures + panel readers ---
 
 test('sample fixtures roll up as documented', () => {
-  const t = parseTraceJsonl(fixture('sample.trace.jsonl'))
-  const a = parseAlerts(fixture('sample.alerts.jsonl'))
+  const t = parseTraceJsonl(fixture('trace.sample.jsonl'))
+  const a = parseAlerts(fixture('alerts.sample.jsonl'))
   assert.deepEqual([t.issues, a.issues], [[], []])
   const sums = rollUpAlerts(a.alerts, t.hits, { alertsVerified: true, rejected: t.rejected })
   assert.deepEqual(
     sums.map((s) => [s.alert_id, s.alert_status]),
     [
-      ['A-000001', 'CLEARED'],
-      ['A-000002', 'ESCALATED'],
-      ['A-000003', 'NEEDS_REVIEW'],
-      ['A-000004', 'NEEDS_REVIEW'],
-      ['A-000005', 'NEEDS_REVIEW'],
-      ['A-000006', 'CLEARED'],
-      ['A-000007', 'ESCALATED'],
+      ['A-SYN001', 'CLEARED'],
+      ['A-SYN002', 'ESCALATED'],
+      ['A-SYN003', 'NEEDS_REVIEW'],
+      ['A-SYN004', 'NEEDS_REVIEW'],
+      ['A-SYN005', 'NEEDS_REVIEW'],
+      ['A-SYN006', 'CLEARED'],
+      ['A-SYN007', 'ESCALATED'],
     ],
   )
   const c = overviewCounts(sums, t.hits, true)
@@ -198,18 +247,182 @@ test('sample fixtures roll up as documented', () => {
 })
 
 test('panel readers: comparison has 6 dims, AMBIGUOUS lists candidates, unknowns named', () => {
-  const t = parseTraceJsonl(fixture('sample.trace.jsonl'))
+  const t = parseTraceJsonl(fixture('trace.sample.jsonl'))
   for (const h of t.hits) assert.equal(readComparison(h.raw).length, 6, h.hit_id)
   const amb = t.hits.find((h) => h.verdict.customer_record_id === 'AMBIGUOUS')!
   assert.equal(readIdentity(amb.raw).candidates.length, 2)
-  const rev = t.hits.find((h) => h.hit_id === 'H-000004')!
-  assert.deepEqual(unknownFacts(readComparison(rev.raw)).map((u) => `${u.dim}:${u.missing}`), [
+  const rev = t.hits.find((h) => h.hit_id === 'H-SYN004')!
+  assert.deepEqual(unknownFacts(readComparison(rev.raw)).map((u) => `${u.dim}:${u.side}`), [
     'dob:hit',
     'country:hit',
-    'death:both sides',
-    'earliest_report:both sides',
+    'death:both',
+    'earliest_report:both',
   ])
   // malformed optional parts never throw
   assert.deepEqual(readIdentity({ identity: 'x' }).candidates, [])
   assert.deepEqual(readComparison({ comparison: [1, null, { dim: 'dob' }] }).map((r) => r.status), ['unknown'])
+})
+
+// --- 3 / 4: comparison wording ---
+
+test('3: comparison statuses have plain-English labels; unknown raw values pass through', () => {
+  assert.deepEqual(COMPARISON_STATUS_LABELS, { agree: 'agrees', contradict: 'contradicts', no_conflict: 'no conflict', unknown: 'can’t compare' })
+  assert.equal(comparisonStatusLabel('no_conflict'), 'no conflict')
+  assert.equal(comparisonStatusLabel('weird_value'), 'weird_value')
+})
+
+test('4: missing values are phrased plainly by side', () => {
+  assert.equal(MISSING_TEXT.hit, 'not on list profile')
+  assert.equal(MISSING_TEXT.customer, 'not in customer records')
+  assert.equal(missingSideText('hit'), 'not on list profile')
+  assert.equal(missingSideText('customer'), 'not in customer records')
+  assert.match(missingSideText('both'), /not on list profile.*not in customer records/)
+})
+
+// --- 5: deciding dims ---
+
+test('5: explicit deciding_dims wins; invalid falls back to the reason code; REVIEW has none', () => {
+  assert.deepEqual(readDecidingDims({ deciding_dims: ['dob'] }, 'NAME_DOB_MATCH'), { dims: ['dob'], source: 'trace' })
+  assert.deepEqual(readDecidingDims({ deciding_dims: ['nope'] }, 'NAME_DOB_MATCH'), { dims: ['name', 'dob'], source: 'derived' })
+  assert.deepEqual(readDecidingDims({}, 'DOB_MISMATCH'), { dims: ['dob'], source: 'derived' })
+  assert.deepEqual(readDecidingDims({}, 'INSUFFICIENT_DATA'), { dims: [], source: 'none' })
+})
+
+// --- 6: repro.json ---
+
+test('repro sample: parses, 10 of 11 judges-stable, 2 unstable, 0 flipped clears, summary agrees', () => {
+  const r = parseRepro(fixture('repro.sample.json'))
+  assert.deepEqual(r.issues, [])
+  const m = reproMetrics(r.report!)
+  assert.equal(m.n_hits, 11)
+  assert.equal(m.judges_stable, 10)
+  assert.deepEqual(m.flipped_clear_ids, [])
+  assert.deepEqual(m.unstable_ids, ['H-SYN004', 'H-SYN006'])
+  assert.deepEqual(m.summary_mismatches, [])
+  assert.deepEqual(getUnstableHitIds(r.report), ['H-SYN004', 'H-SYN006'])
+  assert.deepEqual(getUnstableHitIds(null), [])
+})
+
+test('repro flipped variant: exactly one flipped clear (H-SYN008)', () => {
+  const m = reproMetrics(parseRepro(fixture('repro-flipped.sample.json')).report!)
+  assert.deepEqual(m.flipped_clear_ids, ['H-SYN008'])
+  assert.equal(m.judges_stable, 9)
+})
+
+test('flipped clear rule: missing run counts, code-only change between clears does not', () => {
+  const h = (cells: ([string, string] | null)[]) => ({
+    hit_id: 'H', alert_id: null, stable: false, flip_type: 'decision' as const, modal_decision: null, modal_reason_code: null, llm_used: null, fragility: null,
+    per_run: cells.map((c) => (c ? { decision: c[0] as 'DIFFERENT_ENTITY', reason_code: c[1] } : null)),
+  })
+  assert.equal(isFlippedClear(h([['DIFFERENT_ENTITY', 'DOB_MISMATCH'], null])), true)
+  assert.equal(isFlippedClear(h([['DIFFERENT_ENTITY', 'DOB_MISMATCH'], ['REVIEW', 'INSUFFICIENT_DATA']])), true)
+  assert.equal(isFlippedClear(h([['DIFFERENT_ENTITY', 'DOB_MISMATCH'], ['DIFFERENT_ENTITY', 'LOCATION_MISMATCH']])), false)
+  assert.equal(isFlippedClear(h([['REVIEW', 'INSUFFICIENT_DATA'], ['SAME_ENTITY', 'NAME_DOB_MATCH']])), false)
+})
+
+test('repro parsing is defensive: bad JSON, wrong version, bad rows', () => {
+  assert.equal(parseRepro('{').report, null)
+  assert.equal(parseRepro('{"schema_version":2}').report, null)
+  const r = parseRepro(
+    JSON.stringify({
+      schema_version: 1,
+      meta: { run_labels: ['a', 'b'] },
+      summary: { n_runs: 2, n_hits: 3, judges_stable_hits: 1 },
+      hits: [
+        { hit_id: 'H-1', per_run: [['REVIEW', 'INSUFFICIENT_DATA'], ['REVIEW', 'INSUFFICIENT_DATA']], stable: true, flip_type: 'none' },
+        { hit_id: 'H-2', per_run: [['MAYBE', 'X'], null], stable: false, flip_type: 'decision' },
+        { hit_id: 'H-3', per_run: [null], stable: false, flip_type: 'other' },
+        { per_run: [] },
+      ],
+    }),
+  )
+  assert.equal(r.report?.hits.length, 1)
+  assert.equal(r.issues.length, 3)
+  assert.deepEqual(reproMetrics(r.report!).summary_mismatches.length, 1)
+  assert.ok(buildRepro({ name: 'x', result: r }))
+})
+
+// --- queue and audit ---
+
+test('queue: REVIEW, then no decision, then SAME_ENTITY, each with a one-line what’s missing', () => {
+  const m = buildModel(loadFixtures({ alerts: true }))!
+  const g = queueGroups(m)
+  assert.deepEqual(g.map((x) => [x.id, x.rows.map((r) => r.hit_id)]), [
+    ['review', ['H-SYN004', 'H-SYN006', 'H-SYN007']],
+    ['undecided', ['H-SYN009']],
+    ['same', ['H-SYN003', 'H-SYN012']],
+  ])
+  const lines = Object.fromEntries(g.flatMap((x) => x.rows).map((r) => [r.hit_id, whatsMissingLine(r)]))
+  assert.equal(lines['H-SYN004'], 'Not on list profile: date of birth, country, earliest report')
+  assert.match(lines['H-SYN006'], /declared, not verified/)
+  assert.match(lines['H-SYN007'], /2 customers fit \(CUS-SYN004, CUS-SYN005\)/)
+  assert.equal(lines['H-SYN009'], 'No record for this hit in the trace')
+  assert.equal(lines['H-SYN003'], 'Confirmed on name, date of birth; nothing contradicts')
+  for (const l of Object.values(lines)) assert.doesNotMatch(l, INTERNAL)
+})
+
+test('audit: all hits incl. undecided; filters combine; unstable uses the repro set', () => {
+  const m = buildModel(loadFixtures({ alerts: true }))!
+  const rows = allHitRows(m)
+  assert.equal(rows.length, 12)
+  const unstable = new Set(getUnstableHitIds(parseRepro(fixture('repro.sample.json')).report))
+  assert.equal(filterRows(rows, NO_FILTERS, unstable).length, 12)
+  assert.deepEqual(filterRows(rows, { ...NO_FILTERS, verdict: 'REVIEW' }, unstable).map((r) => r.hit_id), ['H-SYN004', 'H-SYN006', 'H-SYN007'])
+  assert.deepEqual(filterRows(rows, { ...NO_FILTERS, verdict: 'none' }, unstable).map((r) => r.hit_id), ['H-SYN009'])
+  assert.deepEqual(filterRows(rows, { ...NO_FILTERS, code: 'DOB_MISMATCH' }, unstable).map((r) => r.hit_id), ['H-SYN001'])
+  assert.deepEqual(filterRows(rows, { ...NO_FILTERS, unstable: true }, unstable).map((r) => r.hit_id), ['H-SYN004', 'H-SYN006'])
+  assert.deepEqual(filterRows(rows, { ...NO_FILTERS, llm: 'yes' }, unstable).map((r) => r.hit_id), ['H-SYN006'])
+  assert.equal(filterRows(rows, { ...NO_FILTERS, fragility: 'thin', verdict: 'DIFFERENT_ENTITY' }, unstable).length, 3)
+})
+
+// --- security review fixes ---
+
+test('duplicate alert lines: union of hit_ids, never Cleared, warning names the lines', () => {
+  const a = parseAlerts(fixture('alerts-duplicate.sample.jsonl'))
+  const a1 = a.alerts.find((x) => x.alert_id === 'A-SYN001')!
+  assert.deepEqual([...a1.hit_ids].sort(), ['H-SYN001', 'H-SYN002', 'H-SYN099'])
+  assert.deepEqual(a1.conflicting_lines, [1, 2])
+  assert.ok(a.issues.some((i) => i.severity !== 'info' && /A-SYN001: conflicting lines 1, 2/.test(i.message)))
+  // identical duplicates merge quietly
+  assert.equal(a.alerts.find((x) => x.alert_id === 'A-SYN006')?.conflicting_lines, undefined)
+  assert.ok(a.issues.some((i) => i.severity === 'info' && /A-SYN006/.test(i.message)))
+  const m = buildModel({ ...loadFixtures({}), alerts: { name: 'dup', result: a } })!
+  const s1 = m.summariesById.get('A-SYN001')!
+  assert.equal(s1.alert_status, 'NEEDS_REVIEW')
+  assert.deepEqual(s1.undecided_hit_ids, ['H-SYN099'])
+  assert.deepEqual(m.conflictingAlerts, [{ alert_id: 'A-SYN001', lines: [1, 2] }])
+  assert.equal(m.summariesById.get('A-SYN006')!.alert_status, 'CLEARED')
+})
+
+test('conflicting lines block a clear even when every listed hit is DIFFERENT_ENTITY', () => {
+  const a = parseAlerts(['{"alert_id":"A-1","hit_ids":["H-1"]}', '{"alert_id":"A-1","hit_ids":["H-1"],"note":"x"}'].join('\n'))
+  const t = parseTraceJsonl(line('H-1', 'DIFFERENT_ENTITY', 'DOB_MISMATCH'))
+  assert.equal(rollUpAlerts(a.alerts, t.hits, { alertsVerified: true })[0].alert_status, 'NEEDS_REVIEW')
+})
+
+test('duplicate summary lines are flagged in the cross-check', () => {
+  const p = parseAlerts(['{"alert_id":"A-1","alert_status":"CLEARED","hits":[{"hit_id":"H-1"}]}', '{"alert_id":"A-1","alert_status":"NEEDS_REVIEW","hits":[{"hit_id":"H-1"}]}'].join('\n'))
+  assert.deepEqual(p.summaries[0].conflicting_lines, [1, 2])
+  const t = parseTraceJsonl(line('H-1', 'DIFFERENT_ENTITY', 'DOB_MISMATCH'))
+  const sums = rollUpAlerts(p.summaries, t.hits, { alertsVerified: false })
+  assert.equal(sums[0].alert_status, 'NEEDS_REVIEW')
+  assert.ok(crossCheckSummaries(sums, p.summaries, false).some((x) => x.kind === 'duplicate'))
+})
+
+test('MUST-FIX 2: only alerts.jsonl lines verify; a summaries file in the alerts slot does not', () => {
+  const summariesFile = { name: 'alerts.trace.jsonl', result: parseAlerts(fixture('alerts-trace.sample.jsonl')) }
+  const m = buildModel({ ...loadFixtures({}), alerts: summariesFile })!
+  assert.equal(m.verified, false)
+  assert.equal(m.counts.alerts.CLEARED, 0)
+})
+
+test('unreadable alert lines withhold every clear', () => {
+  const text = fixture('alerts.sample.jsonl') + '{broken\n{"alert_id":"A-SYN099"}\n'
+  const a = parseAlerts(text)
+  assert.equal(a.bad_lines, 2)
+  const m = buildModel({ ...loadFixtures({}), alerts: { name: 'a', result: a } })!
+  assert.equal(m.verified, false)
+  assert.equal(m.badAlertLines, 2)
+  assert.equal(m.counts.alerts.CLEARED, 0)
+  assert.equal(m.counts.alerts.NOT_VERIFIED, 2)
 })

@@ -1,0 +1,7 @@
+{"alert_id": "A-SYN001", "hit_ids": ["H-SYN001", "H-SYN002"]}
+{"alert_id": "A-SYN002", "hit_ids": ["H-SYN003", "H-SYN004"]}
+{"alert_id": "A-SYN003", "hit_ids": ["H-SYN005", "H-SYN006"]}
+{"alert_id": "A-SYN004", "hit_ids": ["H-SYN007"]}
+{"alert_id": "A-SYN005", "hit_ids": ["H-SYN008", "H-SYN009"]}
+{"alert_id": "A-SYN006", "hit_ids": ["H-SYN010", "H-SYN011"]}
+{"alert_id": "A-SYN007", "hit_ids": ["H-SYN012"]}

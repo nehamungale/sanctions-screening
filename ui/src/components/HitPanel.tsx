@@ -5,11 +5,13 @@
 import type { ReactNode } from 'react'
 
 import { DecisionBadge, ReasonCode } from '@/components/verdict'
-import { DECIDING_DIMS, DIM_LABELS, DIMS, undecidedText } from '@/lib/labels'
+import { comparisonStatusLabel, DIM_LABELS, DIMS, MISSING_TEXT, missingSideText, undecidedText } from '@/lib/labels'
 import { HIT_NOT_DECIDED, isDecision } from '@/lib/policy'
 import {
   formatValue,
+  isEmpty,
   readComparison,
+  readDecidingDims,
   readIdentity,
   readLlmCalls,
   readSteps,
@@ -51,7 +53,8 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
   const steps = readSteps(hit.raw)
   const llmCalls = readLlmCalls(hit.raw)
   const tipping = readTippingPoint(hit.raw)
-  const deciding = new Set(DECIDING_DIMS[v.reason_code] ?? [])
+  const decidingInfo = readDecidingDims(hit.raw, v.reason_code)
+  const deciding = new Set(decidingInfo.dims)
   const isReview = v.decision === 'REVIEW'
   const ambiguous = v.customer_record_id === 'AMBIGUOUS'
   const byDim = new Map(comparison.map((r) => [r.dim, r]))
@@ -132,13 +135,13 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
           <div className="grid gap-3 sm:grid-cols-2">
             <Party
               title="Customer"
-              name={formatValue(byDim.get('name')?.customer)}
+              name={isEmpty(byDim.get('name')?.customer) ? MISSING_TEXT.customer : formatValue(byDim.get('name')?.customer)}
               ids={[v.customer_record_id ?? 'no customer record found', identity.person_id].filter((x): x is string => !!x)}
               type={formatValue(byDim.get('type')?.customer)}
             />
             <Party
               title="Hit"
-              name={formatValue(byDim.get('name')?.hit)}
+              name={isEmpty(byDim.get('name')?.hit) ? MISSING_TEXT.hit : formatValue(byDim.get('name')?.hit)}
               ids={[hit.hit_id]}
               type={formatValue(byDim.get('type')?.hit)}
             />
@@ -147,7 +150,16 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
       </Section>
 
       {/* 3. Comparison card */}
-      <Section title="Comparison" aside={deciding.size ? 'Highlighted: the row(s) this reason code rests on' : undefined}>
+      <Section
+        title="Comparison"
+        aside={
+          decidingInfo.source === 'trace'
+            ? 'Highlighted: the deciding row(s) named in the trace'
+            : decidingInfo.source === 'derived'
+              ? 'Highlighted: the row(s) this reason code rests on'
+              : undefined
+        }
+      >
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
@@ -168,8 +180,12 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
                       {DIM_LABELS[r.dim] ?? r.dim}
                       {isDeciding ? <span className="ml-2 text-[11px] font-normal text-sky-700">deciding</span> : null}
                     </td>
-                    <td className={cn('min-w-36 px-3 py-2.5', r.customer == null && 'text-muted-foreground')}>{formatValue(r.customer)}</td>
-                    <td className={cn('min-w-36 px-3 py-2.5', r.hit == null && 'text-muted-foreground')}>{formatValue(r.hit)}</td>
+                    <td className={cn('min-w-36 px-3 py-2.5', isEmpty(r.customer) && 'text-muted-foreground italic')}>
+                      {isEmpty(r.customer) ? (ambiguous ? MISSING_TEXT.ambiguousCustomer : MISSING_TEXT.customer) : formatValue(r.customer)}
+                    </td>
+                    <td className={cn('min-w-36 px-3 py-2.5', isEmpty(r.hit) && 'text-muted-foreground italic')}>
+                      {isEmpty(r.hit) ? MISSING_TEXT.hit : formatValue(r.hit)}
+                    </td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <StatusText status={r.status} />
                     </td>
@@ -193,9 +209,15 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
           <ul className="mt-3 flex flex-col gap-1 text-sm">
             {unknown.map((u) => (
               <li key={u.dim} className="flex gap-2">
-                <span className="text-muted-foreground">Unknown:</span>
+                <span className="text-muted-foreground">Can’t compare:</span>
                 <span>
-                  {DIM_LABELS[u.dim] ?? u.dim} <span className="text-muted-foreground">(missing on {u.missing})</span>
+                  {DIM_LABELS[u.dim] ?? u.dim}
+                  {u.side !== 'neither' ? (
+                    <span className="text-muted-foreground">
+                      {' '}
+                      ({u.side === 'customer' && ambiguous ? MISSING_TEXT.ambiguousCustomer : missingSideText(u.side)})
+                    </span>
+                  ) : null}
                 </span>
               </li>
             ))}
@@ -383,7 +405,11 @@ function StatusText({ status }: { status: string }) {
         : status === 'no_conflict'
           ? 'text-slate-600'
           : 'text-muted-foreground'
-  return <span className={cn('font-mono text-xs', tone)}>{status}</span>
+  return (
+    <span className={cn('text-xs', tone)} title={`raw: ${status}`}>
+      {comparisonStatusLabel(status)}
+    </span>
+  )
 }
 
 function Party({ title, name, ids, type }: { title: string; name: string; ids: string[]; type: string }) {

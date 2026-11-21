@@ -135,11 +135,22 @@ export function parseTraceJsonl(text: string): TraceParseResult {
   return { hits, issues, rejected, skipped, lines }
 }
 
+interface Group {
+  ref: AlertRef
+  lines: number[]
+  forms: Set<string>
+  statuses: Set<string | undefined>
+}
+
 export interface AlertsParseResult {
+  /** From alerts.jsonl lines (alert_id + hit_ids): the source of truth for which hits an alert has. */
   alerts: AlertRef[]
+  /** From alerts.trace.jsonl lines (Stage 4 summaries, with pipeline_status). A cross-check only. */
+  summaries: AlertRef[]
   issues: ParseIssue[]
   lines: number
-  /** 'summaries' when the file is alerts.trace.jsonl (Stage 4 alert summaries). */
+  /** Lines that could not be read as an alert or a summary. While above 0, nothing can show as Cleared. */
+  bad_lines: number
   kind: 'alerts' | 'summaries' | 'mixed' | 'empty'
 }
 
@@ -160,7 +171,7 @@ function toAlert(rec: unknown, line: number, issues: ParseIssue[]): AlertRef | n
     }
     return { alert_id: rec.alert_id, hit_ids: rec.hit_ids as string[] }
   }
-  // alerts.trace.jsonl line: alert summary. Its hit list is hits[] plus any undecided ids.
+  // alerts.trace.jsonl line: alert summary. Its hit list is hits[] plus any undecided/blocking ids.
   if ('alert_status' in rec) {
     if (!isAlertStatus(rec.alert_status) || !Array.isArray(rec.hits)) {
       issues.push({ line, message: `${rec.alert_id}: alert summary needs a known alert_status and hits[]` })
@@ -178,35 +189,63 @@ function toAlert(rec: unknown, line: number, issues: ParseIssue[]): AlertRef | n
   return null
 }
 
-/** Accepts alerts.jsonl, alerts.trace.jsonl (alert summaries) or a JSON array of either. */
+/** Accepts alerts.jsonl, alerts.trace.jsonl (alert summaries), or a JSON array of either. */
 export function parseAlerts(text: string): AlertsParseResult {
   const issues: ParseIssue[] = []
-  const alerts: AlertRef[] = []
-  const seen = new Set<string>()
-  const push = (a: AlertRef | null, line: number) => {
-    if (!a) return
-    if (seen.has(a.alert_id)) {
-      issues.push({ line, message: `${a.alert_id}: duplicate alert_id, kept the first` })
+  // Never drop a line. Lines for the same alert_id are merged: identical ones silently (with a note);
+  // differing ones take the union of their hit_ids and mark the alert as conflicting, which the
+  // roll-up turns into Needs review (never Cleared).
+  const groups = { alerts: new Map<string, Group>(), summaries: new Map<string, Group>() }
+  let bad = 0
+  const push = (raw: unknown, a: AlertRef | null, line: number) => {
+    if (!a) {
+      bad++
       return
     }
-    seen.add(a.alert_id)
-    alerts.push(a)
+    const key = a.pipeline_status ? 'summaries' : 'alerts'
+    const g = groups[key].get(a.alert_id)
+    if (!g) {
+      groups[key].set(a.alert_id, { ref: { ...a, hit_ids: [...a.hit_ids] }, lines: [line], forms: new Set([canonicalJson(raw)]), statuses: new Set([a.pipeline_status]) })
+      return
+    }
+    g.lines.push(line)
+    g.forms.add(canonicalJson(raw))
+    g.statuses.add(a.pipeline_status)
+    g.ref.hit_ids = [...new Set([...g.ref.hit_ids, ...a.hit_ids])]
   }
-  const kindOf = (): AlertsParseResult['kind'] => {
-    const s = alerts.filter((a) => a.pipeline_status).length
-    if (alerts.length === 0) return 'empty'
-    return s === 0 ? 'alerts' : s === alerts.length ? 'summaries' : 'mixed'
+  const finish = (m: Map<string, Group>): AlertRef[] =>
+    [...m.values()].map((g) => {
+      if (g.lines.length === 1) return g.ref
+      if (g.forms.size === 1) {
+        issues.push({ line: g.lines[0], message: `${g.ref.alert_id}: ${g.lines.length} identical lines (${g.lines.join(', ')}), merged`, severity: 'info' })
+        return g.ref
+      }
+      issues.push({
+        line: g.lines[0],
+        message: `${g.ref.alert_id}: conflicting lines ${g.lines.join(', ')}; hit lists combined and the alert can't be cleared`,
+      })
+      const ref: AlertRef = { ...g.ref, conflicting_lines: g.lines }
+      if (g.statuses.size > 1) delete ref.pipeline_status
+      return ref
+    })
+  const result = () => {
+    const alerts = finish(groups.alerts)
+    const summaries = finish(groups.summaries)
+    return { alerts, summaries }
   }
+  const kindOf = (alerts: AlertRef[], summaries: AlertRef[]): AlertsParseResult['kind'] =>
+    alerts.length && summaries.length ? 'mixed' : alerts.length ? 'alerts' : summaries.length ? 'summaries' : 'empty'
 
   const trimmed = text.replace(/^\uFEFF/, '').trim()
   if (trimmed.startsWith('[')) {
     try {
       const arr = JSON.parse(trimmed) as unknown[]
-      arr.forEach((rec, i) => push(toAlert(rec, i + 1, issues), i + 1))
-      return { alerts, issues, lines: arr.length, kind: kindOf() }
+      arr.forEach((rec, i) => push(rec, toAlert(rec, i + 1, issues), i + 1))
+      const { alerts, summaries } = result()
+      return { alerts, summaries, issues, lines: arr.length, bad_lines: bad, kind: kindOf(alerts, summaries) }
     } catch {
       issues.push({ line: 1, message: 'file starts with [ but is not a valid JSON array' })
-      return { alerts, issues, lines: 0, kind: 'empty' }
+      return { alerts: [], summaries: [], issues, lines: 0, bad_lines: 1, kind: 'empty' }
     }
   }
   let lines = 0
@@ -218,11 +257,13 @@ export function parseAlerts(text: string): AlertsParseResult {
       rec = JSON.parse(rawLine)
     } catch {
       issues.push({ line: i + 1, message: `not valid JSON: ${short(rawLine.trim())}` })
+      bad++
       return
     }
     // A run header can sit at the top of a trace-style file.
     if (isObj(rec) && !('alert_id' in rec) && 'run_id' in rec) return
-    push(toAlert(rec, i + 1, issues), i + 1)
+    push(rec, toAlert(rec, i + 1, issues), i + 1)
   })
-  return { alerts, issues, lines, kind: kindOf() }
+  const { alerts, summaries } = result()
+  return { alerts, summaries, issues, lines, bad_lines: bad, kind: kindOf(alerts, summaries) }
 }

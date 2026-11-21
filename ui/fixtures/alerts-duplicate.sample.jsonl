@@ -1,0 +1,4 @@
+{"alert_id": "A-SYN001", "hit_ids": ["H-SYN001", "H-SYN002"]}
+{"alert_id": "A-SYN001", "hit_ids": ["H-SYN001", "H-SYN099"]}
+{"alert_id": "A-SYN006", "hit_ids": ["H-SYN010", "H-SYN011"]}
+{"alert_id": "A-SYN006", "hit_ids": ["H-SYN010", "H-SYN011"]}

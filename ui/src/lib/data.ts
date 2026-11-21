@@ -1,44 +1,27 @@
-import sampleAlertsText from '../../fixtures/sample.alerts.jsonl?raw'
-import sampleTraceText from '../../fixtures/sample.trace.jsonl?raw'
-import { parseAlerts, parseTraceJsonl, type AlertsParseResult, type TraceParseResult } from './parse.ts'
-import { alertsFromHits, overviewCounts, rollUpAlerts, type OverviewCounts } from './rollup.ts'
-import type { AlertSummary, TraceHit } from './types.ts'
+import sampleSummariesText from '../../fixtures/alerts-trace.sample.jsonl?raw'
+import sampleAlertsText from '../../fixtures/alerts.sample.jsonl?raw'
+import sampleReproFlippedText from '../../fixtures/repro-flipped.sample.json?raw'
+import sampleReproText from '../../fixtures/repro.sample.json?raw'
+import sampleTraceText from '../../fixtures/trace.sample.jsonl?raw'
+import { parseAlerts, parseTraceJsonl } from './parse.ts'
+import { parseRepro } from './repro.ts'
+import { EMPTY, type Loaded } from './model.ts'
 
-export interface LoadedTrace {
-  name: string
-  result: TraceParseResult
-}
-export interface LoadedAlerts {
-  name: string
-  result: AlertsParseResult
-}
+export * from './model.ts'
 
-/** Bundled synthetic fixtures. Static strings compiled into the app; no fetch. */
-export function loadSample(): { trace: LoadedTrace; alerts: LoadedAlerts } {
-  return {
-    trace: { name: 'sample.trace.jsonl (bundled)', result: parseTraceJsonl(sampleTraceText) },
-    alerts: { name: 'sample.alerts.jsonl (bundled)', result: parseAlerts(sampleAlertsText) },
-  }
-}
-
-export interface Model {
-  verified: boolean
-  summaries: AlertSummary[]
-  summariesById: Map<string, AlertSummary>
-  hitsById: Map<string, TraceHit>
-  counts: OverviewCounts
+/**
+ * Bundled synthetic fixtures (static strings compiled into the app; no fetch).
+ * mode 'full': trace + alerts + summaries + repro; 'trace': trace only; 'summaries': trace + summaries only.
+ */
+export function loadSample(mode: 'full' | 'trace' | 'summaries' = 'full', repro: 'stable' | 'flipped' = 'stable'): Loaded {
+  const trace = { name: 'trace.sample.jsonl (bundled)', result: parseTraceJsonl(sampleTraceText) }
+  const summaries = { name: 'alerts-trace.sample.jsonl (bundled)', result: parseAlerts(sampleSummariesText) }
+  const reproFile =
+    repro === 'flipped'
+      ? { name: 'repro-flipped.sample.json (bundled)', result: parseRepro(sampleReproFlippedText) }
+      : { name: 'repro.sample.json (bundled)', result: parseRepro(sampleReproText) }
+  if (mode === 'trace') return { ...EMPTY, trace }
+  if (mode === 'summaries') return { ...EMPTY, trace, summaries }
+  return { trace, alerts: { name: 'alerts.sample.jsonl (bundled)', result: parseAlerts(sampleAlertsText) }, summaries, repro: reproFile }
 }
 
-export function buildModel(trace: LoadedTrace, alerts: LoadedAlerts | null): Model {
-  const hits = trace.result.hits
-  const verified = alerts !== null && alerts.result.alerts.length > 0
-  const refs = verified ? alerts.result.alerts : alertsFromHits(hits)
-  const summaries = rollUpAlerts(refs, hits, { alertsVerified: verified, rejected: trace.result.rejected })
-  return {
-    verified,
-    summaries,
-    summariesById: new Map(summaries.map((s) => [s.alert_id, s])),
-    hitsById: new Map(hits.map((h) => [h.hit_id, h])),
-    counts: overviewCounts(summaries, hits, verified),
-  }
-}

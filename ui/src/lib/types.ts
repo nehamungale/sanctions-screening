@@ -30,6 +30,8 @@ export interface AlertRef {
   hit_ids: string[]
   /** alert_status as written by the pipeline, when loaded from alerts.trace.jsonl. */
   pipeline_status?: AlertStatus
+  /** Set when the file had differing lines for this alert_id (their hit_ids were combined). */
+  conflicting_lines?: number[]
 }
 
 export interface RollupHit {
@@ -47,7 +49,8 @@ export interface AlertSummary {
   hits: RollupHit[]
   blocking_hit_ids: string[]
   undecided_hit_ids: string[]
-  pipeline_status?: AlertStatus
+  /** Differing lines for this alert in alerts.jsonl: never cleared. */
+  conflicting_lines?: number[]
 }
 
 export interface ParseIssue {
