@@ -2,7 +2,7 @@
 
 > **Goal:** turn the bank's scattered customer data into one clean, traceable record per real person. Every fact carries the ID of the record it came from.
 >
-> **Next stage:** Stage 2 (alert → person resolution) consumes this table to find the person behind each screening alert. It is designed separately.
+> **Later stages:** Stage 2 builds the hit golden profile. Stage 3 resolves each alert to a person in this table. Stage 4 decides the hit. This document is Stage 1 only.
 
 ---
 
@@ -166,16 +166,16 @@ All are pure functions, each with unit tests.
 
 - Two parts **match** when they are identical, belong to the same variant group in `name_variants.json` (a part can be in more than one group, so take the union), or are within edit distance 1 (shorter part 4–6 letters) or 2 (7+ letters). Parts under 4 letters must be identical. Edit distance counts insert/delete/substitute as 1, so swapping two letters costs 2.
 - **Written together or apart**: adjacent parts are also compared concatenated ("abdul salam" ↔ "abdulsalam"). Such a match counts once but covers both parts.
-- Two names **agree** when at least two parts match, or every part of the shorter name matches. Matching is one-to-one and greedy (longest parts first, ties alphabetical), so it is deterministic. The function returns the matched pairs for the trace.
+- Two names **agree** when at least two parts match, or every part of the shorter name matches. Pairing is exhaustive and one-to-one (`shared.names.agree_parts`), with a fixed tie-break, not greedy longest-first. **Status:** Fixed (on main before PRs #7 to #9). **Status:** Open, fix pending in PR #10: when both names have the same number of parts, full coverage is checked on the left name only. The function returns the matched pairs for the trace.
 
 ### 4.2 Dates
 
-Dates come in mixed formats across tables. `parse_date` returns `{year, month|null, day|null, precision}` and keeps the original string.
+Dates come in mixed formats across tables. `parse_date` returns `{y, m, d, precision, value}` and keeps the original string on `raw`. Customer slash dates are day-first. **Status:** Fixed (on main before PRs #7 to #9): `mode="hit"` leaves a slash date UNKNOWN when both numeric parts are 12 or under.
 
 | Pattern | Precision | Note |
 |---|---|---|
 | `YYYY-MM-DD` | day | most common |
-| `DD/MM/YYYY` | day | **always day-first** in this data (verified: the second field never exceeds 12) |
+| `DD/MM/YYYY` | day | Customer mode is day-first. Hit mode leaves the date unknown when both parts are 12 or under |
 | `D Month YYYY` | day | English month names |
 | `Month D, YYYY` | day | |
 | `YYYY-MM`, `Month YYYY` | month | rare |
@@ -504,6 +504,6 @@ Each item is a unit or integration test. Test fixtures use synthetic records.
 
 ## 10. What Stage 1 does *not* do
 
-- It does not look at alerts or hits. Finding the person behind an alert is **Stage 2**, and deciding `SAME_ENTITY / DIFFERENT_ENTITY / REVIEW` is the matching stage.
+- It does not look at alerts or hits. Finding the person behind an alert is **Stage 3**, and deciding `SAME_ENTITY / DIFFERENT_ENTITY / REVIEW` is **Stage 4**.
 - It never uses one person's records to fill in another person's facts.
 - It never invents a value. Missing stays missing, and is flagged.

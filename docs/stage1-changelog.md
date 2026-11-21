@@ -10,7 +10,7 @@ Missing, unread, or unmappable evidence blocks a clear. It never causes one. Sta
 - `declared_dobs` lists every record in the cluster, with `source_id` and `comparable`. A missing or unparsed date stays in the list.
 - `customer_record_ids` repeats the `CUS-` ids. Decision output must use one of those, never `person_id`.
 - Each decisive fact keeps `source_id`. Verified regex facts use `method: "regex"`. LLM facts use `method: "llm"` and `may_solely_support_different_entity: false`.
-- The OpenRouter client lives in `shared/llm_client.py` (stdlib `urllib` only). It is off unless `USE_LLM_NOTES=1`. Free models only: the pinned default is `google/gemma-4-31b-it:free`, and any slug that does not end in `:free` is refused with no network call (the fact stays UNKNOWN). It sends a fixed provider order (`Google AI Studio`) with `allow_fallbacks: false`, `temperature: 0`, and a fixed seed, requests a strict JSON schema, checks that every string appears verbatim in the source, and requires 3 identical calls. HTTP 429 is retried with a short bounded backoff, then UNKNOWN. A timeout, retry exhaustion, disagreement, quote miss, call budget, or the 90 second time cap also yields UNKNOWN. Nothing is cached.
+- The OpenRouter client lives in `shared/llm_client.py` (stdlib `urllib` only). It is off unless `USE_LLM_NOTES=1`. Stage 1 does not read `SANCTIONS_LLM`. Free models only: the pinned default is `google/gemma-4-31b-it:free`, and any slug that does not end in `:free` is refused with no network call (the fact stays UNKNOWN). It sends a fixed provider order (`Google AI Studio`) with `allow_fallbacks: false`, `temperature: 0`, and a fixed seed, requests a strict JSON schema, checks that every string appears verbatim in the source, and requires 3 identical calls. HTTP 429 is retried with a short bounded backoff, then UNKNOWN. A timeout, retry exhaustion, disagreement, quote miss, call budget, or the 90 second time cap also yields UNKNOWN. Nothing is cached. This paragraph describes main. An open pull request changes the cap, the shared client, and whether Stage 1 honours `SANCTIONS_LLM`.
 
 ## Flags later stages must obey
 
@@ -24,4 +24,4 @@ Missing, unread, or unmappable evidence blocks a clear. It never causes one. Sta
 
 `DOB_MISMATCH` is allowed only when every `declared_dobs` entry is comparable and contradicts the hit. One agreeing date, or any date that cannot be compared, blocks it. `contracts.dob_mismatch_only_if_every_declared_contradicts` is always true.
 
-An LLM fact (`method: "llm"`) may support a confirmation or push the hit toward `REVIEW`. It must never be the sole ground for `DIFFERENT_ENTITY`.
+An LLM fact (`method: "llm"`) may support a confirmation or push the hit toward `REVIEW`. On main it must never be the sole ground for `DIFFERENT_ENTITY` (`may_solely_support_different_entity: false`). The stricter rule, that an LLM-read fact cannot contribute to a clearance at all, is not what this flag enforces.
