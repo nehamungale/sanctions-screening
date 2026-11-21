@@ -73,9 +73,48 @@ flowchart LR
 ├── system/
 │   ├── README.md              ← how to run the system
 │   └── run                    ← entry point: reads a data folder, writes decisions
+├── tools/repro/               ← reproducibility report (repro.json)
 └── output/
     └── dev.jsonl              ← our decisions for the development set
 ```
+
+## Reproducibility report
+
+`tools/repro` compares repeated runs and writes one `repro.json` for the static UI. Full field guide, schema, and the gaps against the design: [tools/repro/README.md](tools/repro/README.md). Schema: [tools/repro/repro.schema.json](tools/repro/repro.schema.json). A synthetic five-run sample (no real customers) is [tools/repro/repro.example.json](tools/repro/repro.example.json).
+
+```bash
+python -m unittest discover -s tools/repro/tests -v
+
+python -m tools.repro \
+  --outputs run1.jsonl run2.jsonl run3.jsonl run4.jsonl run5.jsonl \
+  --traces trace1.jsonl trace2.jsonl trace3.jsonl trace4.jsonl trace5.jsonl \
+  --llm-off-output llm-off.jsonl \
+  --out repro.json
+
+python -m tools.repro --run --data /path/to/data --n 5 \
+  --work-dir repro-work --capture-traces --llm-off --out repro.json
+```
+
+File order is run order. Traces are optional. `--capture-traces` sets `TRACE_PATH` on each `system/run`. The report is deterministic: sorted keys, hits sorted by `hit_id`, and no timestamp except `meta.generated_at`.
+
+| Field | Meaning |
+|---|---|
+| `summary.judges_metric` | Share of hits with the same decision and reason code in every run. A hit missing from a run does not count. |
+| `summary.decision_flip_hits` | Decision not the same across the runs that contain the hit. |
+| `summary.code_only_flip_hits` | Decision agrees, reason code does not. |
+| `summary.strict_change_hits` | Evidence, `customer_record_id`, canonical facts, or canonical steps changed. The judges' metric can still be 1. |
+| `summary.missing_hits` | Hits absent from at least one run. |
+| `summary.decision_counts_per_run` | `DIFFERENT_ENTITY` / `SAME_ENTITY` / `REVIEW` counts for each run. |
+| `summary.flips_by_llm_used` | Those flips split by the trace badge `llm_used`, or `unknown` when there is no badge. |
+| `config_check` | Per-run git SHA, `rules_version`, policy / name-variant / prompt / input hashes, model, served provider, Python version. Each `all_identical` flag is null when only outputs were given. |
+| `llm_sensitivity` | Hits whose decision or code differs from the LLM-on modal result. Null if no LLM-off file was passed. |
+| `hits[].per_run` | The five-dot strip: `[decision, reason_code]`, or null. |
+| `hits[].flip_type` | `none`, `decision`, `code`, `evidence` (evidence ids or customer record), or `other` (missing hit, facts, steps). |
+| `hits[].first_divergent_step` | First step in the stable rule order where traced runs diverge, plus that step's values. |
+| `heatmap` | Decisions (and reason codes) with one row per hit and one column per run. |
+| `ui.filters` | Hit ids for flipped-only, LLM-sensitive, thin clearances, and thin or borderline plus LLM. |
+
+Canonical facts are the attribute, the normalised value, and the source id. Quote text and `llm_calls` are not compared, and reason sentences are not written into the report. Do not commit a `repro.json` built from real traces.
 
 ## Data and secrets
 

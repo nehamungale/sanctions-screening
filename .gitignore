@@ -27,3 +27,8 @@ node_modules/
 
 # OS
 .DS_Store
+
+# Local screening traces and repro runs (identity facts; never commit)
+output/trace.jsonl
+*.trace.jsonl
+repro-work/

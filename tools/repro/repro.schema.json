@@ -1,0 +1,310 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Screening reproducibility report",
+  "description": "repro.json written by python -m tools.repro. Keys are sorted. The only timestamp is meta.generated_at. A static UI can read this file directly: one 5-dot strip per hit (hits[].per_run), flipped-only filters (ui.filters), a flip panel (hits[].changes, first_divergent_step, evidence_per_run), and a hits-by-runs heatmap (heatmap).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "meta",
+    "summary",
+    "config_check",
+    "llm_sensitivity",
+    "heatmap",
+    "ui",
+    "hits"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 1},
+    "meta": {
+      "type": "object",
+      "required": ["generated_at", "generator", "run_labels", "sources"],
+      "properties": {
+        "generated_at": {
+          "type": "string",
+          "description": "UTC timestamp of this report only. Never copied onto a hit."
+        },
+        "generator": {"const": "tools/repro"},
+        "run_labels": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Column titles for the run strip and the heatmap, in run order."
+        },
+        "sources": {
+          "type": "object",
+          "properties": {
+            "outputs": {"type": "boolean"},
+            "traces": {"type": "boolean"},
+            "llm_off_output": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "n_runs",
+        "n_hits",
+        "judges_metric",
+        "judges_stable_hits",
+        "judges_flip_hits",
+        "decision_flip_hits",
+        "code_only_flip_hits",
+        "strict_change_hits",
+        "missing_hits"
+      ],
+      "properties": {
+        "n_runs": {"type": "integer", "minimum": 2},
+        "n_hits": {
+          "type": "integer",
+          "description": "Union of hit ids across the N runs."
+        },
+        "judges_metric": {
+          "type": ["number", "null"],
+          "description": "judges_stable_hits / n_hits. Null when there are no hits. A hit counts only when it is present in every run with the same decision and reason code."
+        },
+        "judges_stable_hits": {"type": "integer"},
+        "judges_flip_hits": {
+          "type": "integer",
+          "description": "Hits whose decision flipped, plus hits whose reason code flipped while the decision did not."
+        },
+        "judges_flips_all_llm_used": {
+          "type": ["boolean", "null"],
+          "description": "True when every judges flip has llm_used true. Null when there is no judges flip or any of those hits has unknown llm_used."
+        },
+        "decision_flip_hits": {"type": "integer"},
+        "code_only_flip_hits": {"type": "integer"},
+        "strict_change_hits": {
+          "type": "integer",
+          "description": "Hits where evidence, customer_record_id, canonical facts, or canonical steps differ. Independent of the judges' metric."
+        },
+        "strict_change_hit_ids": {"type": "array", "items": {"type": "string"}},
+        "missing_hits": {"type": "integer"},
+        "hits_missing_from_some_runs": {"type": "array", "items": {"type": "string"}},
+        "decision_counts_per_run": {
+          "type": "array",
+          "description": "One object per run. DIFFERENT_ENTITY, SAME_ENTITY, and REVIEW are always present.",
+          "items": {"type": "object", "additionalProperties": {"type": "integer"}}
+        },
+        "flips_by_llm_used": {
+          "type": "object",
+          "description": "Flip counts split by whether any run's badge said the hit used an LLM.",
+          "properties": {
+            "llm_used": {"$ref": "#/$defs/flip_bucket"},
+            "not_llm_used": {"$ref": "#/$defs/flip_bucket"},
+            "unknown": {"$ref": "#/$defs/flip_bucket"}
+          }
+        }
+      }
+    },
+    "config_check": {
+      "type": "object",
+      "required": ["available", "runs", "all_identical"],
+      "properties": {
+        "available": {
+          "type": "boolean",
+          "description": "False when only output files were given. Header fields are then null."
+        },
+        "runs": {
+          "type": ["array", "null"],
+          "items": {"$ref": "#/$defs/run_header"}
+        },
+        "all_identical": {
+          "type": "object",
+          "description": "True when every run's value is equal and at least one is non-null. False when they differ. Null when every value is null (field not present, or no traces).",
+          "additionalProperties": {"type": ["boolean", "null"]}
+        }
+      }
+    },
+    "llm_sensitivity": {
+      "type": ["object", "null"],
+      "description": "Null unless an LLM-off output was supplied. Lists hits whose decision or reason code differs from the LLM-on modal result.",
+      "properties": {
+        "compared": {"const": true},
+        "n_sensitive": {"type": "integer"},
+        "hit_ids": {"type": "array", "items": {"type": "string"}},
+        "hits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["hit_id", "llm_on_modal_decision", "llm_on_modal_reason_code", "llm_off_decision", "llm_off_reason_code"],
+            "properties": {
+              "hit_id": {"type": "string"},
+              "alert_id": {"type": ["string", "null"]},
+              "llm_on_modal_decision": {"type": ["string", "null"]},
+              "llm_on_modal_reason_code": {"type": ["string", "null"]},
+              "llm_off_decision": {"type": ["string", "null"]},
+              "llm_off_reason_code": {"type": ["string", "null"]}
+            }
+          }
+        }
+      }
+    },
+    "heatmap": {
+      "type": "object",
+      "description": "Hits by runs. Row i is heatmap.hit_ids[i]. Column j is run j. Null means the hit was absent from that run.",
+      "required": ["hit_ids", "run_labels", "decisions", "reason_codes"],
+      "properties": {
+        "hit_ids": {"type": "array", "items": {"type": "string"}},
+        "run_labels": {"type": "array", "items": {"type": "string"}},
+        "decisions": {"type": "array", "items": {"type": "array"}},
+        "reason_codes": {"type": "array", "items": {"type": "array"}}
+      }
+    },
+    "ui": {
+      "type": "object",
+      "properties": {
+        "decision_legend": {
+          "type": "object",
+          "description": "Semantic colour token for each decision. MISSING is the null cell on a strip or heatmap.",
+          "additionalProperties": {"type": "string"}
+        },
+        "flip_types": {
+          "type": "array",
+          "items": {"enum": ["none", "decision", "code", "evidence", "other"]}
+        },
+        "run_strip": {
+          "type": "object",
+          "properties": {
+            "n_runs": {"type": "integer"},
+            "run_labels": {"type": "array", "items": {"type": "string"}}
+          }
+        },
+        "filters": {
+          "type": "object",
+          "description": "Hit ids for the reproducibility card filters. Already sorted. llm_sensitive may name a hit that exists only in the LLM-off file and therefore has no hits[] row.",
+          "properties": {
+            "flipped_only": {"type": "array", "items": {"type": "string"}},
+            "decision_flip": {"type": "array", "items": {"type": "string"}},
+            "code_flip": {"type": "array", "items": {"type": "string"}},
+            "evidence_flip": {"type": "array", "items": {"type": "string"}},
+            "missing": {"type": "array", "items": {"type": "string"}},
+            "llm_sensitive": {"type": "array", "items": {"type": "string"}},
+            "thin_clearances": {"type": "array", "items": {"type": "string"}},
+            "thin_or_borderline_and_llm": {"type": "array", "items": {"type": "string"}}
+          }
+        }
+      }
+    },
+    "hits": {
+      "type": "array",
+      "description": "One row per hit, sorted by hit_id.",
+      "items": {"$ref": "#/$defs/hit"}
+    }
+  },
+  "$defs": {
+    "flip_bucket": {
+      "type": "object",
+      "properties": {
+        "decision": {"type": "integer"},
+        "code": {"type": "integer"},
+        "evidence": {"type": "integer"},
+        "other": {"type": "integer"}
+      }
+    },
+    "run_header": {
+      "type": "object",
+      "properties": {
+        "run_index": {"type": "integer"},
+        "run_label": {"type": "string"},
+        "git_sha": {"type": ["string", "null"]},
+        "rules_version": {"type": ["string", "null"]},
+        "policy_hash": {"type": ["string", "null"]},
+        "name_variants_hash": {"type": ["string", "null"]},
+        "prompt_hashes": {},
+        "input_hash": {"type": ["string", "null"]},
+        "model": {"type": ["string", "null"]},
+        "provider": {"type": ["string", "null"], "description": "Provider OpenRouter actually served."},
+        "python_version": {"type": ["string", "null"]}
+      }
+    },
+    "hit": {
+      "type": "object",
+      "required": ["hit_id", "per_run", "stable", "flip_type", "modal_decision", "modal_reason_code", "llm_used", "fragility"],
+      "properties": {
+        "hit_id": {"type": "string"},
+        "alert_id": {"type": ["string", "null"]},
+        "alert_id_conflict": {"type": "boolean"},
+        "per_run": {
+          "type": "array",
+          "description": "Run strip. Each item is [decision, reason_code], or null when that run has no line for the hit. Index matches meta.run_labels.",
+          "items": {
+            "type": ["array", "null"],
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {"type": ["string", "null"]},
+              {"type": ["string", "null"]}
+            ]
+          }
+        },
+        "stable": {
+          "type": "boolean",
+          "description": "True when flip_type is none. The UI greys these rows; any other row is highlighted."
+        },
+        "judges_stable": {
+          "type": "boolean",
+          "description": "Present in every run with one decision and one reason code. Evidence and fact changes can still be judges-stable."
+        },
+        "flip_type": {"enum": ["none", "decision", "code", "evidence", "other"]},
+        "modal_decision": {"type": ["string", "null"]},
+        "modal_reason_code": {"type": ["string", "null"]},
+        "llm_used": {
+          "type": ["boolean", "null"],
+          "description": "True if any run's badges.llm_used is true. False if a run says false and none say true. Null when no trace badge is present."
+        },
+        "llm_used_per_run": {"type": "array"},
+        "fragility": {
+          "type": ["string", "null"],
+          "description": "badges.fragility. When runs disagree, the most severe of borderline, thin, solid."
+        },
+        "fragility_conflict": {"type": "boolean"},
+        "missing_from_runs": {"type": "array", "items": {"type": "integer"}},
+        "evidence_per_run": {
+          "type": "array",
+          "description": "Sorted evidence ids per run, or null when the hit is absent. Order-only differences are not a flip."
+        },
+        "customer_record_id_per_run": {"type": "array"},
+        "trace_present_per_run": {"type": "array", "items": {"type": "boolean"}},
+        "output_trace_mismatch_runs": {
+          "type": "array",
+          "items": {"type": "integer"},
+          "description": "Runs whose output verdict and trace verdict disagree. The report keeps the output."
+        },
+        "changes": {
+          "type": "object",
+          "description": "Independent booleans for the flip panel. flip_type is the first match of decision, code, evidence, other.",
+          "properties": {
+            "decision": {"type": "boolean"},
+            "reason_code": {"type": "boolean"},
+            "evidence": {"type": "boolean"},
+            "customer_record_id": {"type": "boolean"},
+            "canonical_facts": {"type": "boolean"},
+            "steps": {"type": "boolean"},
+            "missing": {"type": "boolean"},
+            "alert_id": {"type": "boolean"},
+            "output_trace_mismatch": {"type": "boolean"}
+          }
+        },
+        "first_divergent_step": {
+          "type": ["object", "null"],
+          "description": "Set on a flipped hit when canonical steps differ. order_index is 0-based in the stable rule order. values_per_run aligns with runs; null means that run has no such step or no trace. Quote fields are omitted. llm_calls stay in the trace file.",
+          "properties": {
+            "order_index": {"type": "integer"},
+            "occurrence": {"type": "integer"},
+            "rule": {"type": ["string", "null"]},
+            "values_per_run": {"type": "array"}
+          }
+        },
+        "first_divergent_fact": {
+          "type": ["object", "null"],
+          "description": "First canonical fact (attribute, normalised value, source id) that differs, in attribute order. Null when the only divergence is steps or output fields.",
+          "properties": {
+            "attribute": {"type": "string"},
+            "values_per_run": {"type": "array"}
+          }
+        }
+      }
+    }
+  }
+}
