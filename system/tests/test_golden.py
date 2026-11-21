@@ -450,10 +450,31 @@ class RunTests(unittest.TestCase):
             _write_jsonl(os.path.join(data, "notes.jsonl"), [])
             with open(os.path.join(data, "name_variants.json"), "w", encoding="utf-8") as handle:
                 json.dump(VARIANTS, handle)
+            _write_jsonl(os.path.join(data, "hits.jsonl"), [{
+                "hit_id": "H-000010",
+                "alert_id": "A-000010",
+                "match_score": 91,
+                "entity_type": "Individual",
+                "name": "Smith, Ada",
+                "aliases": [],
+                "dobs": ["1990"],
+                "nationality": [],
+                "citizenship": [],
+                "countries": ["Ireland"],
+                "addresses": [],
+                "categories": ["PEP"],
+                "primary_category": "PEP",
+                "profile_notes": None,
+                "life_status": "Alive",
+                "deceased_date": None,
+            }])
+            _write_jsonl(os.path.join(data, "search_results.jsonl"), [])
             output = os.path.join(folder, "summary.json")
             env = dict(os.environ)
             env["SANCTIONS_CACHE"] = cache
             env["USE_LLM_NOTES"] = "0"
+            env["USE_LLM_HITS"] = "0"
+            env["SANCTIONS_LLM"] = "0"
             completed = subprocess.run(
                 [os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "run"), data, output],
                 check=False,
@@ -463,13 +484,19 @@ class RunTests(unittest.TestCase):
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertTrue(os.path.isfile(os.path.join(cache, "person_golden.jsonl")))
+            self.assertTrue(os.path.isfile(os.path.join(cache, "record_view.jsonl")))
             self.assertTrue(os.path.isfile(os.path.join(cache, "index_record_id.json")))
+            self.assertTrue(os.path.isfile(os.path.join(cache, "hit_golden.jsonl")))
             self.assertFalse(os.path.exists(os.path.join(folder, "output", "dev.jsonl")))
             with open(output, encoding="utf-8") as handle:
                 summary = json.loads(handle.read())
-            self.assertEqual(summary["stage"], 1)
+            self.assertEqual(summary["stage"], 2)
+            self.assertEqual(summary["stages"], [1, 2])
             self.assertEqual(summary["records"], 1)
             self.assertEqual(summary["persons"], 1)
+            self.assertEqual(summary["hits"], 1)
+            self.assertFalse(summary["llm_enabled"])
+            self.assertEqual(summary["llm_calls"], 0)
 
 
 def _check(check_id, applicant, result, dob, document, checked_at, name="ALICE SMITH", country="Nigeria", document_type="passport"):
