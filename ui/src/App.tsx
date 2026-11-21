@@ -5,7 +5,7 @@ import { Audit } from '@/Audit'
 import { Overview } from '@/Overview'
 import { Queue } from '@/Queue'
 import { Card, CardContent } from '@/components/ui/card'
-import { buildModel, buildRepro, EMPTY, loadSample, type Loaded } from '@/lib/data'
+import { buildModel, buildRepro, EMPTY, loadSample, type Loaded, type SampleKind } from '@/lib/data'
 import { STATUS_LABELS, statusFromSlug } from '@/lib/labels'
 import { isDecision, type RollupStatus } from '@/lib/policy'
 import { cn } from '@/lib/utils'
@@ -32,8 +32,8 @@ interface Nav {
   filters: AuditFilters
 }
 
-/** ?sample=1 (everything), ?sample=trace (trace only), ?sample=summaries (trace + alerts.trace.jsonl); &repro=flipped. */
-type SampleMode = { mode: 'full' | 'trace' | 'summaries'; repro: 'stable' | 'flipped' } | null
+/** ?sample=1 (everything), ?sample=trace (trace only; alias summaries), ?sample=pipeline (real stage4 trace); &repro=flipped. */
+type SampleMode = { mode: SampleKind; repro: 'stable' | 'flipped' } | null
 
 function readNav(): Nav {
   const q = new URLSearchParams(window.location.search)
@@ -58,7 +58,7 @@ function readNav(): Nav {
 function readSample(): SampleMode {
   const q = new URLSearchParams(window.location.search)
   const v = q.get('sample')
-  const mode = v === '1' ? 'full' : v === 'trace' || v === 'summaries' ? v : null
+  const mode = v === '1' ? 'full' : v === 'trace' || v === 'summaries' || v === 'pipeline' ? v : null
   return mode ? { mode, repro: q.get('repro') === 'flipped' ? 'flipped' : 'stable' } : null
 }
 

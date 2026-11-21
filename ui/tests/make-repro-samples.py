@@ -12,7 +12,11 @@ from pathlib import Path
 
 UI = Path(__file__).resolve().parent.parent
 REPO = Path(sys.argv[1] if len(sys.argv) > 1 else os.environ.get("REPRO_REPO", "/workspace/review_repo"))
-BASE = [json.loads(l) for l in (UI / "fixtures/trace.sample.jsonl").read_text().splitlines() if l.strip()]
+# Hit lines only (the trace also carries Stage 4 alert summaries), and only the 11 hits the
+# repro cases were written for, so the repro fixtures are unchanged by later sample hits.
+REPRO_HITS = {f"H-SYN{n:03d}" for n in range(1, 13)}
+BASE = [r for r in (json.loads(l) for l in (UI / "fixtures/trace.sample.jsonl").read_text().splitlines() if l.strip())
+        if r.get("hit_id") in REPRO_HITS]
 HEADER = {
     "run_id": None, "git_sha": "0000000000000000000000000000000000000001", "rules_version": "r1.0",
     "hashes": {"policy": "policy-hash-1", "name_variants": "variants-hash-1",

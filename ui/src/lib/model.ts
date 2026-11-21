@@ -14,7 +14,7 @@ export interface LoadedTrace {
   name: string
   result: TraceParseResult
 }
-/** An alerts-style file. The same parser serves alerts.jsonl and alerts.trace.jsonl. */
+/** An alerts-style file. The same parser serves alerts.jsonl and a (legacy) separate summaries file. */
 export interface LoadedAlerts {
   name: string
   result: AlertsParseResult
@@ -28,7 +28,7 @@ export interface Loaded {
   trace: LoadedTrace | null
   /** alerts.jsonl: the only source that makes an alert "Cleared". */
   alerts: LoadedAlerts | null
-  /** alerts.trace.jsonl: pipeline summaries, a cross-check only. */
+  /** Legacy separate summaries file (alerts.trace.jsonl). Optional: Stage 4 appends its summaries to trace.jsonl. Cross-check only. */
   summaries: LoadedAlerts | null
   repro: LoadedRepro | null
 }
@@ -39,6 +39,8 @@ export interface Model {
   verified: boolean
   /** Where the alert list came from. */
   alertSource: 'alerts' | 'summaries' | 'trace'
+  /** Where the pipeline's alert summaries (cross-check only) came from: lines inside trace.jsonl or a separate file. */
+  summarySource: 'trace' | 'file' | null
   /** Unreadable lines in alerts.jsonl. While above 0, clears are withheld (shown as Not verified). */
   badAlertLines: number
   /** Alerts whose alerts.jsonl lines conflict (hit lists combined; never cleared). */
@@ -54,7 +56,11 @@ export function buildModel(l: Loaded): Model | null {
   if (!l.trace) return null
   const hits = l.trace.result.hits
   const alertRefs = l.alerts?.result.alerts ?? []
-  const pipeline = l.summaries?.result.summaries ?? []
+  // A separately loaded summaries file (legacy) takes the place of the summary lines inside the trace.
+  const fileSummaries = l.summaries?.result.summaries ?? []
+  const traceSummaries = l.trace.result.summaries?.summaries ?? []
+  const pipeline = fileSummaries.length ? fileSummaries : traceSummaries
+  const summarySource = fileSummaries.length ? 'file' : traceSummaries.length ? 'trace' : null
   // Only alerts.jsonl verifies. Unreadable alert lines withhold every clear (an alert could be missing).
   const badAlertLines = l.alerts?.result.bad_lines ?? 0
   const verified = alertRefs.length > 0 && badAlertLines === 0
@@ -64,6 +70,7 @@ export function buildModel(l: Loaded): Model | null {
   return {
     verified,
     alertSource,
+    summarySource,
     badAlertLines,
     conflictingAlerts: summaries.filter((s) => s.conflicting_lines).map((s) => ({ alert_id: s.alert_id, lines: s.conflicting_lines! })),
     summaries,

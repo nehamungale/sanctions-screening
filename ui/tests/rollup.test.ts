@@ -19,7 +19,7 @@ import {
 import { parseAlerts, parseTraceJsonl } from '../src/lib/parse.ts'
 import { HIT_NOT_DECIDED, REASON_CODES, ROLLUP_STATUSES } from '../src/lib/policy.ts'
 import { alertsFromHits, crossCheckSummaries, overviewCounts, rollUpAlerts } from '../src/lib/rollup.ts'
-import { readComparison, readDecidingDims, readIdentity, unknownFacts } from '../src/lib/trace-view.ts'
+import { factStatus, noComparisonReason, readComparison, readDecidingDims, readIdentity, unknownFacts } from '../src/lib/trace-view.ts'
 import { buildModel, buildRepro, type Loaded } from '../src/lib/model.ts'
 import {
   getUnstableHitIds, instabilityLabel, isDecisionFlip, isDecisionStable, isFlippedClear, isJudgesStable, isMissingOutput, isReasonOnlyChange, missingRuns, parseRepro, reproMetrics,
@@ -27,6 +27,12 @@ import {
 import { allHitRows, filterRows, NO_FILTERS, queueGroups, whatsMissingLine } from '../src/lib/worklist.ts'
 
 const fixture = (name: string) => readFileSync(new URL(`../fixtures/${name}`, import.meta.url), 'utf8')
+/** The alert summary lines stage4 appends to trace.jsonl, as a separate (legacy alerts.trace.jsonl) file. */
+const summaryLines = (name = 'trace.sample.jsonl') =>
+  fixture(name)
+    .split('\n')
+    .filter((l) => l.includes('"alert_status"'))
+    .join('\n')
 
 const rec = (hit_id: string, decision: string, reason_code: string, alert_id = 'A-1', extra: object = {}) => ({
   trace_schema: 1,
@@ -48,7 +54,7 @@ function loadFixtures(o: { alerts?: boolean; summaries?: boolean }): Loaded {
   return {
     trace: { name: 't', result: parseTraceJsonl(fixture('trace.sample.jsonl')) },
     alerts: o.alerts ? { name: 'a', result: parseAlerts(fixture('alerts.sample.jsonl')) } : null,
-    summaries: o.summaries ? { name: 's', result: parseAlerts(fixture('alerts-trace.sample.jsonl')) } : null,
+    summaries: o.summaries ? { name: 's', result: parseAlerts(summaryLines()) } : null,
     repro: null,
   }
 }
@@ -150,30 +156,68 @@ test('bad lines are reported, not thrown', () => {
   assert.deepEqual([...r.rejected.keys()].sort(), ['H-1', 'H-2'])
 })
 
-// --- B2: alerts.trace.jsonl (Stage 4 alert summaries) ---
+// --- B2: Stage 4 alert summaries (appended to trace.jsonl) ---
 
-test('alerts.trace.jsonl is recognised as summaries; hit list includes undecided ids', () => {
-  const a = parseAlerts(fixture('alerts-trace.sample.jsonl'))
-  assert.equal(a.kind, 'summaries')
-  assert.deepEqual([a.issues, a.alerts], [[], []])
-  const a5 = a.summaries.find((x) => x.alert_id === 'A-SYN005')
-  assert.deepEqual(a5?.hit_ids.sort(), ['H-SYN008', 'H-SYN009'])
+const A9_DISAGREES = [{ kind: 'status', alert_id: 'A-SYN009', pipeline: 'CLEARED', ui: 'NEEDS_REVIEW' }]
+
+test('summary lines inside trace.jsonl are split from hit lines; hit list includes undecided ids', () => {
+  const t = parseTraceJsonl(fixture('trace.sample.jsonl'))
+  assert.deepEqual(t.issues, [])
+  assert.equal(t.hits.length, 14)
+  assert.equal(t.skipped, 9)
+  const s = t.summaries!
+  assert.equal(s.kind, 'summaries')
+  assert.deepEqual([s.issues, s.alerts, s.bad_lines], [[], [], 0])
+  assert.equal(s.summaries.length, 9)
+  assert.deepEqual(s.summaries.find((x) => x.alert_id === 'A-SYN005')?.hit_ids.sort(), ['H-SYN008', 'H-SYN009'])
+  // a bad summary line is reported with its real line number in the trace, and is not a hit
+  const bad = parseTraceJsonl(`${line('H-1', 'DIFFERENT_ENTITY', 'DOB_MISMATCH')}\n{"alert_id":"A-1","alert_status":"WEIRD","hits":[]}\n`)
+  assert.equal(bad.hits.length, 1)
+  assert.equal(bad.summaries?.issues[0]?.line, 2)
 })
 
-test('B1: alerts.trace.jsonl alone never shows Cleared (Not verified instead)', () => {
-  const m = buildModel(loadFixtures({ summaries: true }))!
+test('B1: the trace alone (with its summary lines) never shows Cleared (Not verified instead)', () => {
+  const m = buildModel(loadFixtures({}))!
   assert.equal(m.verified, false)
   assert.equal(m.alertSource, 'summaries')
+  assert.equal(m.summarySource, 'trace')
   assert.equal(m.counts.alerts.CLEARED, 0)
   assert.equal(m.counts.alerts.NOT_VERIFIED, 2)
-  // pipeline CLEARED vs UI Not verified is not a disagreement
-  assert.deepEqual(m.crossCheck?.problems, [])
+  // pipeline CLEARED vs UI Not verified is not a disagreement; the broken A-SYN009 summary is
+  assert.deepEqual(m.crossCheck?.problems, A9_DISAGREES)
 })
 
-test('B1: with alerts.jsonl + summaries, Cleared shows and the cross-check agrees', () => {
-  const m = buildModel(loadFixtures({ alerts: true, summaries: true }))!
+test('B1: with alerts.jsonl, Cleared shows and the cross-check flags only the broken summary', () => {
+  const m = buildModel(loadFixtures({ alerts: true }))!
   assert.equal(m.counts.alerts.CLEARED, 2)
-  assert.deepEqual(m.crossCheck?.problems, [])
+  assert.deepEqual(m.crossCheck?.problems, A9_DISAGREES)
+})
+
+test('MUST KEEP: a pipeline summary that says CLEARED never makes an alert Cleared', () => {
+  for (const alerts of [false, true]) {
+    const m = buildModel(loadFixtures({ alerts }))!
+    assert.equal(m.summariesById.get('A-SYN009')!.alert_status, 'NEEDS_REVIEW')
+    assert.deepEqual(m.summariesById.get('A-SYN009')!.undecided_hit_ids, ['H-SYN014'])
+  }
+  // summaries only, every hit missing from the trace: still not Cleared
+  const t = parseTraceJsonl('{"alert_id":"A-1","alert_status":"CLEARED","blocking_hit_ids":[],"hits":[{"hit_id":"H-1","decision":"DIFFERENT_ENTITY"}],"undecided_hit_ids":[]}')
+  const m = buildModel({ trace: { name: 't', result: t }, alerts: null, summaries: null, repro: null })!
+  assert.equal(m.summariesById.get('A-1')!.alert_status, 'NEEDS_REVIEW')
+  assert.equal(m.counts.alerts.CLEARED, 0)
+})
+
+test('back-compat: a separate summaries file takes the place of the trace’s summary lines', () => {
+  const m = buildModel(loadFixtures({ alerts: true, summaries: true }))!
+  assert.equal(m.summarySource, 'file')
+  assert.equal(m.counts.alerts.CLEARED, 2)
+  assert.deepEqual(m.crossCheck?.problems, A9_DISAGREES)
+})
+
+test('not_decided: true in a trace record counts as no decision, not as REVIEW', () => {
+  const s = roll([line('H-1', 'DIFFERENT_ENTITY', 'DOB_MISMATCH'), line('H-2', 'REVIEW', 'INSUFFICIENT_DATA', 'A-1', { not_decided: true })], ['H-1', 'H-2'])
+  assert.equal(s.alert_status, 'NEEDS_REVIEW')
+  assert.deepEqual(s.undecided_hit_ids, ['H-2'])
+  assert.deepEqual(s.hits[1].undecided, { kind: 'not_decided' })
 })
 
 test('cross-check flags a pipeline status or hit list that disagrees', () => {
@@ -218,7 +262,7 @@ test('every reason code has a plain-English label', () => {
   for (const c of codes) assert.ok(REASON_LABELS[c] && REASON_LABELS[c].length > 5, c)
   assert.equal(reasonLabel(HIT_NOT_DECIDED), 'hit has no decision')
   for (const t of Object.values(REASON_LABELS)) assert.doesNotMatch(t, INTERNAL)
-  for (const k of [{ kind: 'missing' }, { kind: 'invalid' }, { kind: 'conflict' }, { kind: 'alert_mismatch', trace_alert_id: 'A-2' }] as const) {
+  for (const k of [{ kind: 'missing' }, { kind: 'invalid' }, { kind: 'conflict' }, { kind: 'alert_mismatch', trace_alert_id: 'A-2' }, { kind: 'not_decided' }] as const) {
     assert.doesNotMatch(undecidedText(k), INTERNAL)
   }
   for (const c of REASON_CODES.DIFFERENT_ENTITY) assert.ok(DECIDING_DIMS[c]?.length, c)
@@ -241,18 +285,30 @@ test('sample fixtures roll up as documented', () => {
       ['A-SYN005', 'NEEDS_REVIEW'],
       ['A-SYN006', 'CLEARED'],
       ['A-SYN007', 'ESCALATED'],
+      ['A-SYN008', 'NEEDS_REVIEW'],
+      ['A-SYN009', 'NEEDS_REVIEW'],
     ],
   )
   const c = overviewCounts(sums, t.hits, true)
-  assert.deepEqual(c.hitsByDecision, { DIFFERENT_ENTITY: 6, SAME_ENTITY: 2, REVIEW: 3 })
-  assert.equal(c.hitsUndecided, 1)
+  assert.deepEqual(c.hitsByDecision, { DIFFERENT_ENTITY: 7, SAME_ENTITY: 2, REVIEW: 4 })
+  assert.equal(c.hitsDecided, 13)
+  assert.equal(c.hitsUndecided, 2)
 })
 
-test('panel readers: comparison has 6 dims, AMBIGUOUS lists candidates, unknowns named', () => {
+test('panel readers: comparison has 6 dims (or none, with a reason), AMBIGUOUS lists candidates, unknowns named', () => {
   const t = parseTraceJsonl(fixture('trace.sample.jsonl'))
-  for (const h of t.hits) assert.equal(readComparison(h.raw).length, 6, h.hit_id)
+  const noCmp = ['H-SYN013', 'H-SYN014']
+  for (const h of t.hits) assert.equal(readComparison(h.raw).length, noCmp.includes(h.hit_id) ? 0 : 6, h.hit_id)
+  const byId = (id: string) => t.hits.find((h) => h.hit_id === id)!
+  assert.match(noComparisonReason(byId('H-SYN013').raw, null)!, /no matching customer record/)
+  assert.match(noComparisonReason(byId('H-SYN014').raw, null)!, /has no decision/)
+  assert.equal(noComparisonReason(byId('H-SYN001').raw, 'CUS-SYN001'), null)
+  assert.deepEqual(readIdentity(byId('H-SYN013').raw).facts, [])
   const amb = t.hits.find((h) => h.verdict.customer_record_id === 'AMBIGUOUS')!
-  assert.equal(readIdentity(amb.raw).candidates.length, 2)
+  const cands = readIdentity(amb.raw).candidates
+  assert.equal(cands.length, 2)
+  assert.deepEqual([cands[1].name, cands[1].dob, cands[1].country], [null, null, null])
+  assert.equal(cands[0].country, 'GB, IE')
   const rev = t.hits.find((h) => h.hit_id === 'H-SYN004')!
   assert.deepEqual(unknownFacts(readComparison(rev.raw)).map((u) => `${u.dim}:${u.side}`), [
     'dob:hit',
@@ -283,7 +339,28 @@ test('4: missing values are phrased plainly by side', () => {
 
 // --- 5: deciding dims ---
 
+test('identity.facts: dob says verified/declared; name never says "verified" (it only means a comparison was computed)', () => {
+  for (const name of ['trace.sample.jsonl', 'trace-pipeline.sample.jsonl']) {
+    for (const h of parseTraceJsonl(fixture(name)).hits) {
+      const facts = readIdentity(h.raw).facts
+      for (const f of facts) {
+        assert.ok(['dob', 'name', 'entity_type'].includes(f.name), `${h.hit_id} ${f.name}`)
+        if (f.name === 'name') assert.doesNotMatch(factStatus(f), /verified/i, h.hit_id)
+      }
+    }
+  }
+  assert.equal(factStatus({ name: 'name', value: 'X', verified: true, source_id: null }), 'compared with the hit')
+  assert.equal(factStatus({ name: 'dob', value: 'X', verified: true, source_id: null }), 'verified')
+  assert.equal(factStatus({ name: 'dob', value: 'X', verified: false, source_id: null }), 'declared')
+  assert.equal(factStatus({ name: 'entity_type', value: 'X', verified: null, source_id: null }), '—')
+})
+
 test('5: explicit deciding_dims wins; invalid falls back to the reason code; REVIEW has none', () => {
+  // stage4 writes deciding_dims at the top level, [] for REVIEW codes
+  for (const h of parseTraceJsonl(fixture('trace.sample.jsonl')).hits) {
+    if (h.verdict.decision === 'REVIEW') assert.deepEqual(h.raw.deciding_dims, [], h.hit_id)
+    else assert.equal(readDecidingDims(h.raw, h.verdict.reason_code).source, 'trace', h.hit_id)
+  }
   assert.deepEqual(readDecidingDims({ deciding_dims: ['dob'] }, 'NAME_DOB_MATCH'), { dims: ['dob'], source: 'trace' })
   assert.deepEqual(readDecidingDims({ deciding_dims: ['nope'] }, 'NAME_DOB_MATCH'), { dims: ['name', 'dob'], source: 'derived' })
   assert.deepEqual(readDecidingDims({}, 'DOB_MISMATCH'), { dims: ['dob'], source: 'derived' })
@@ -380,8 +457,8 @@ test('queue: REVIEW, then no decision, then SAME_ENTITY, each with a one-line wh
   const m = buildModel(loadFixtures({ alerts: true }))!
   const g = queueGroups(m)
   assert.deepEqual(g.map((x) => [x.id, x.rows.map((r) => r.hit_id)]), [
-    ['review', ['H-SYN004', 'H-SYN006', 'H-SYN007']],
-    ['undecided', ['H-SYN009']],
+    ['review', ['H-SYN004', 'H-SYN006', 'H-SYN007', 'H-SYN013']],
+    ['undecided', ['H-SYN009', 'H-SYN014']],
     ['same', ['H-SYN003', 'H-SYN012']],
   ])
   const lines = Object.fromEntries(g.flatMap((x) => x.rows).map((r) => [r.hit_id, whatsMissingLine(r)]))
@@ -389,6 +466,8 @@ test('queue: REVIEW, then no decision, then SAME_ENTITY, each with a one-line wh
   assert.match(lines['H-SYN006'], /declared, not verified/)
   assert.match(lines['H-SYN007'], /2 customers fit \(CUS-SYN004, CUS-SYN005\)/)
   assert.equal(lines['H-SYN009'], 'No record for this hit in the trace')
+  assert.match(lines['H-SYN013'], /^No comparison: no matching customer record/)
+  assert.match(lines['H-SYN014'], /not decided/)
   assert.equal(lines['H-SYN003'], 'Confirmed on name, date of birth; nothing contradicts')
   for (const l of Object.values(lines)) assert.doesNotMatch(l, INTERNAL)
 })
@@ -396,15 +475,15 @@ test('queue: REVIEW, then no decision, then SAME_ENTITY, each with a one-line wh
 test('audit: all hits incl. undecided; filters combine; unstable uses the repro set', () => {
   const m = buildModel(loadFixtures({ alerts: true }))!
   const rows = allHitRows(m)
-  assert.equal(rows.length, 12)
+  assert.equal(rows.length, 15)
   const unstable = new Set(getUnstableHitIds(parseRepro(fixture('repro.sample.json')).report))
-  assert.equal(filterRows(rows, NO_FILTERS, unstable).length, 12)
-  assert.deepEqual(filterRows(rows, { ...NO_FILTERS, verdict: 'REVIEW' }, unstable).map((r) => r.hit_id), ['H-SYN004', 'H-SYN006', 'H-SYN007'])
-  assert.deepEqual(filterRows(rows, { ...NO_FILTERS, verdict: 'none' }, unstable).map((r) => r.hit_id), ['H-SYN009'])
+  assert.equal(filterRows(rows, NO_FILTERS, unstable).length, 15)
+  assert.deepEqual(filterRows(rows, { ...NO_FILTERS, verdict: 'REVIEW' }, unstable).map((r) => r.hit_id), ['H-SYN004', 'H-SYN006', 'H-SYN007', 'H-SYN013'])
+  assert.deepEqual(filterRows(rows, { ...NO_FILTERS, verdict: 'none' }, unstable).map((r) => r.hit_id), ['H-SYN009', 'H-SYN014'])
   assert.deepEqual(filterRows(rows, { ...NO_FILTERS, code: 'DOB_MISMATCH' }, unstable).map((r) => r.hit_id), ['H-SYN001'])
   assert.deepEqual(filterRows(rows, { ...NO_FILTERS, unstable: true }, unstable).map((r) => r.hit_id), ['H-SYN002', 'H-SYN006', 'H-SYN007'])
   assert.deepEqual(filterRows(rows, { ...NO_FILTERS, llm: 'yes' }, unstable).map((r) => r.hit_id), ['H-SYN006'])
-  assert.equal(filterRows(rows, { ...NO_FILTERS, fragility: 'thin', verdict: 'DIFFERENT_ENTITY' }, unstable).length, 3)
+  assert.equal(filterRows(rows, { ...NO_FILTERS, fragility: 'thin', verdict: 'DIFFERENT_ENTITY' }, unstable).length, 4)
 })
 
 // --- security review fixes ---
@@ -455,7 +534,7 @@ test('Q1: conflicting duplicate lines + a SAME_ENTITY hit stay "Goes to complian
 })
 
 test('MUST-FIX 2: only alerts.jsonl lines verify; a summaries file in the alerts slot does not', () => {
-  const summariesFile = { name: 'alerts.trace.jsonl', result: parseAlerts(fixture('alerts-trace.sample.jsonl')) }
+  const summariesFile = { name: 'alerts.trace.jsonl', result: parseAlerts(summaryLines()) }
   const m = buildModel({ ...loadFixtures({}), alerts: summariesFile })!
   assert.equal(m.verified, false)
   assert.equal(m.counts.alerts.CLEARED, 0)
@@ -470,4 +549,62 @@ test('unreadable alert lines withhold every clear', () => {
   assert.equal(m.badAlertLines, 2)
   assert.equal(m.counts.alerts.CLEARED, 0)
   assert.equal(m.counts.alerts.NOT_VERIFIED, 2)
+})
+
+// --- real stage4 trace shape ---
+
+const keys = (o: unknown) => Object.keys(o as object).sort().join(',')
+
+test('real pipeline trace (written by system/run on synthetic data) loads cleanly and agrees with its own summaries', () => {
+  const t = parseTraceJsonl(fixture('trace-pipeline.sample.jsonl'))
+  const a = parseAlerts(fixture('alerts-pipeline.sample.jsonl'))
+  assert.deepEqual([t.issues, a.issues, t.summaries?.issues], [[], [], []])
+  assert.equal(t.hits.length, 8)
+  assert.equal(t.summaries?.summaries.length, 5)
+  const m = buildModel({ trace: { name: 't', result: t }, alerts: { name: 'a', result: a }, summaries: null, repro: null })!
+  assert.deepEqual(
+    m.summaries.map((s) => [s.alert_id, s.alert_status]),
+    [['A-SYN101', 'CLEARED'], ['A-SYN102', 'ESCALATED'], ['A-SYN103', 'NEEDS_REVIEW'], ['A-SYN104', 'NEEDS_REVIEW'], ['A-SYN105', 'NEEDS_REVIEW']],
+  )
+  assert.deepEqual(m.crossCheck?.problems, [])
+  assert.deepEqual(m.summariesById.get('A-SYN105')!.undecided_hit_ids, ['H-SYN109'])
+  const h7 = m.hitsById.get('H-SYN107')!
+  assert.match(noComparisonReason(h7.raw, h7.verdict.customer_record_id)!, /no matching customer record/)
+  assert.deepEqual(m.hitsById.get('H-SYN105')!.raw.deciding_dims, [])
+  for (const h of t.hits) assert.equal(h.badges?.rules_version, 'stage4-r1')
+})
+
+test('hand-written sample hits use exactly the field names the stage4 emitter writes', () => {
+  const real = parseTraceJsonl(fixture('trace-pipeline.sample.jsonl')).hits[0].raw as Record<string, any>
+  const sample = parseTraceJsonl(fixture('trace.sample.jsonl')).hits.map((h) => h.raw as Record<string, any>)
+  for (const h of sample) {
+    assert.equal(keys(h), keys(real), h.hit_id)
+    for (const k of ['verdict', 'badges', 'identity']) assert.equal(keys(h[k]), keys(real[k]), `${h.hit_id} ${k}`)
+    for (const r of h.comparison) assert.equal(keys(r), keys(real.comparison[0]), h.hit_id)
+    for (const s of h.steps) assert.equal(keys(s), keys(real.steps[0]), h.hit_id)
+    for (const c of h.identity.candidates) assert.equal(keys(c), keys(real.identity.candidates[0]), h.hit_id)
+    for (const r of h.comparison) assert.ok(['agree', 'contradict', 'unknown'].includes(r.status), h.hit_id)
+    assert.deepEqual(h.llm_calls, [])
+  }
+})
+
+test('live: system/run output loads (set STAGE4_REPO to a checkout to run the pipeline)', { skip: !process.env.STAGE4_REPO }, async () => {
+  const { execFileSync } = await import('node:child_process')
+  const { mkdtempSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const dir = mkdtempSync(join(tmpdir(), 'stage4-trace-'))
+  try {
+    execFileSync('python3', [new URL('./make-real-trace.py', import.meta.url).pathname, process.env.STAGE4_REPO!, dir])
+    const raw = parseTraceJsonl(readFileSync(join(dir, 'trace.raw.jsonl'), 'utf8'))
+    const a = parseAlerts(readFileSync(join(dir, 'data', 'alerts.jsonl'), 'utf8'))
+    assert.deepEqual([raw.issues, a.issues], [[], []])
+    const m = buildModel({ trace: { name: 't', result: raw }, alerts: { name: 'a', result: a }, summaries: null, repro: null })!
+    assert.deepEqual(m.crossCheck?.problems, [])
+    assert.equal(m.counts.alerts.CLEARED, 1)
+    // the committed fixture is this run with the IDs rewritten
+    assert.equal(readFileSync(join(dir, 'trace.jsonl'), 'utf8'), fixture('trace-pipeline.sample.jsonl'))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

@@ -294,23 +294,18 @@
       ],
       "evidence_per_run": [
         [
-          "H-SYN001#dobs",
           "KYC-SYN101"
         ],
         [
-          "H-SYN001#dobs",
           "KYC-SYN101"
         ],
         [
-          "H-SYN001#dobs",
           "KYC-SYN101"
         ],
         [
-          "H-SYN001#dobs",
           "KYC-SYN101"
         ],
         [
-          "H-SYN001#dobs",
           "KYC-SYN101"
         ]
       ],
@@ -387,24 +382,19 @@
       ],
       "evidence_per_run": [
         [
-          "CUS-SYN001",
-          "H-SYN002"
+          "CUS-SYN001"
         ],
         [
-          "CUS-SYN001",
-          "H-SYN002"
+          "CUS-SYN001"
         ],
         [
-          "CUS-SYN001",
-          "H-SYN002"
+          "CUS-SYN001"
         ],
         [
-          "CUS-SYN001",
-          "H-SYN002"
+          "CUS-SYN001"
         ],
         [
-          "CUS-SYN001",
-          "H-SYN002"
+          "CUS-SYN001"
         ]
       ],
       "first_divergent_fact": null,
@@ -480,28 +470,18 @@
       ],
       "evidence_per_run": [
         [
-          "H-SYN003#dobs",
-          "H-SYN003#names",
           "KYC-SYN203"
         ],
         [
-          "H-SYN003#dobs",
-          "H-SYN003#names",
           "KYC-SYN203"
         ],
         [
-          "H-SYN003#dobs",
-          "H-SYN003#names",
           "KYC-SYN203"
         ],
         [
-          "H-SYN003#dobs",
-          "H-SYN003#names",
           "KYC-SYN203"
         ],
         [
-          "H-SYN003#dobs",
-          "H-SYN003#names",
           "KYC-SYN203"
         ]
       ],
@@ -578,25 +558,20 @@
       ],
       "evidence_per_run": [
         [
-          "CUS-SYN002",
-          "H-SYN004#names"
+          "CUS-SYN002"
+        ],
+        [
+          "CUS-SYN002"
         ],
         [
           "CUS-SYN002",
-          "H-SYN004#names"
-        ],
-        [
-          "CUS-SYN002",
-          "H-SYN004#names",
           "H-SYN004#sources"
         ],
         [
-          "CUS-SYN002",
-          "H-SYN004#names"
+          "CUS-SYN002"
         ],
         [
-          "CUS-SYN002",
-          "H-SYN004#names"
+          "CUS-SYN002"
         ]
       ],
       "first_divergent_fact": null,
@@ -672,23 +647,18 @@
       ],
       "evidence_per_run": [
         [
-          "H-SYN005#sources",
           "KYC-SYN305"
         ],
         [
-          "H-SYN005#sources",
           "KYC-SYN305"
         ],
         [
-          "H-SYN005#sources",
           "KYC-SYN305"
         ],
         [
-          "H-SYN005#sources",
           "KYC-SYN305"
         ],
         [
-          "H-SYN005#sources",
           "KYC-SYN305"
         ]
       ],
@@ -765,24 +735,19 @@
       ],
       "evidence_per_run": [
         [
-          "CUS-SYN003",
-          "H-SYN006#dobs"
+          "CUS-SYN003"
         ],
         [
-          "CUS-SYN003",
-          "H-SYN006#dobs"
+          "CUS-SYN003"
         ],
         [
-          "CUS-SYN003",
-          "H-SYN006#dobs"
+          "CUS-SYN003"
         ],
         [
-          "CUS-SYN003",
-          "H-SYN006#dobs"
+          "CUS-SYN003"
         ],
         [
-          "CUS-SYN003",
-          "H-SYN006#dobs"
+          "CUS-SYN003"
         ]
       ],
       "first_divergent_fact": null,
@@ -859,24 +824,20 @@
       "evidence_per_run": [
         [
           "CUS-SYN004",
-          "CUS-SYN005",
-          "H-SYN007"
+          "CUS-SYN005"
         ],
         [
           "CUS-SYN004",
-          "CUS-SYN005",
-          "H-SYN007"
+          "CUS-SYN005"
         ],
         null,
         [
           "CUS-SYN004",
-          "CUS-SYN005",
-          "H-SYN007"
+          "CUS-SYN005"
         ],
         [
           "CUS-SYN004",
-          "CUS-SYN005",
-          "H-SYN007"
+          "CUS-SYN005"
         ]
       ],
       "first_divergent_fact": null,
@@ -951,23 +912,18 @@
       ],
       "evidence_per_run": [
         [
-          "H-SYN008#countries",
           "KYC-SYN508"
         ],
         [
-          "H-SYN008#countries",
           "KYC-SYN508"
         ],
         [
-          "H-SYN008#countries",
           "KYC-SYN508"
         ],
         [
-          "H-SYN008#countries",
           "KYC-SYN508"
         ],
         [
-          "H-SYN008#countries",
           "KYC-SYN508"
         ]
       ],
@@ -1043,19 +999,11 @@
         "CUS-SYN007"
       ],
       "evidence_per_run": [
-        [
-          "H-SYN010#deceased"
-        ],
-        [
-          "H-SYN010#deceased"
-        ],
-        [
-          "H-SYN010#deceased"
-        ],
+        [],
+        [],
+        [],
         null,
-        [
-          "H-SYN010#deceased"
-        ]
+        []
       ],
       "first_divergent_fact": null,
       "first_divergent_step": null,
@@ -1129,23 +1077,18 @@
       ],
       "evidence_per_run": [
         [
-          "H-SYN011#names",
           "KYC-SYN711"
         ],
         [
-          "H-SYN011#names",
           "KYC-SYN711"
         ],
         [
-          "H-SYN011#names",
           "KYC-SYN711"
         ],
         [
-          "H-SYN011#names",
           "KYC-SYN711"
         ],
         [
-          "H-SYN011#names",
           "KYC-SYN711"
         ]
       ],
@@ -1222,29 +1165,19 @@
       ],
       "evidence_per_run": [
         [
-          "CUS-SYN008",
-          "H-SYN012#countries",
-          "H-SYN012#names"
+          "CUS-SYN008"
         ],
         [
-          "CUS-SYN008",
-          "H-SYN012#countries",
-          "H-SYN012#names"
+          "CUS-SYN008"
         ],
         [
-          "CUS-SYN008",
-          "H-SYN012#countries",
-          "H-SYN012#names"
+          "CUS-SYN008"
         ],
         [
-          "CUS-SYN008",
-          "H-SYN012#countries",
-          "H-SYN012#names"
+          "CUS-SYN008"
         ],
         [
-          "CUS-SYN008",
-          "H-SYN012#countries",
-          "H-SYN012#names"
+          "CUS-SYN008"
         ]
       ],
       "first_divergent_fact": null,

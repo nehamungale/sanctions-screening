@@ -64,6 +64,8 @@ export function undecidedText(r: UndecidedReason): string {
       return r.trace_alert_id
         ? `the trace record belongs to alert ${r.trace_alert_id}, not this one`
         : 'the trace record has no alert_id'
+    case 'not_decided':
+      return 'the pipeline marked this hit as not decided (not_decided in the trace)'
   }
 }
 
@@ -119,11 +121,11 @@ export function missingSideText(side: 'hit' | 'customer' | 'both'): string {
   return `${MISSING_TEXT.hit}, and ${MISSING_TEXT.customer}`
 }
 
-/** Cross-check problems between alerts.trace.jsonl and the UI roll-up, in plain words. */
+/** Cross-check problems between the pipeline's alert summaries and the UI roll-up, in plain words. */
 export function crossCheckText(p: CrossCheckProblem): string {
   switch (p.kind) {
     case 'status':
-      return `${p.alert_id}: the pipeline says “${STATUS_LABELS[p.pipeline].label}”, this view says “${STATUS_LABELS[p.ui].label}”`
+      return `${p.alert_id}: the pipeline says “${STATUS_LABELS[p.pipeline].label}”, this view says “${STATUS_LABELS[p.ui].label}”${p.pipeline === 'CLEARED' ? ' (a pipeline summary never clears an alert here)' : ''}`
     case 'hit_ids': {
       const parts = []
       if (p.only_in_summary.length) parts.push(`only in the summary: ${p.only_in_summary.join(', ')}`)

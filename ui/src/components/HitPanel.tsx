@@ -9,7 +9,9 @@ import { comparisonStatusLabel, DIM_LABELS, DIMS, MISSING_TEXT, missingSideText,
 import { HIT_NOT_DECIDED, isDecision } from '@/lib/policy'
 import {
   formatValue,
+  factStatus,
   isEmpty,
+  noComparisonReason,
   readComparison,
   readDecidingDims,
   readIdentity,
@@ -42,7 +44,16 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
           <p className="mt-2 text-sm">{capitalise(undecided ? undecidedText(undecided) : 'no record for this hit in the trace')}.</p>
           <p className="mt-1 text-sm text-muted-foreground">This hit blocks the alert from being cleared.</p>
         </Section>
-        {hit ? <Collapsed title="Raw trace (record found under another alert)">{<RawJson value={hit.raw} />}</Collapsed> : null}
+        {hit && undecided?.kind === 'not_decided' ? (
+          <Section title="Comparison">
+            <NoComparison reason={noComparisonReason(hit.raw, hit.verdict.customer_record_id) ?? 'the hit has no decision'} />
+          </Section>
+        ) : null}
+        {hit ? (
+          <Collapsed title={undecided?.kind === 'not_decided' ? 'Raw trace' : 'Raw trace (record found under another alert)'}>
+            <RawJson value={hit.raw} />
+          </Collapsed>
+        ) : null}
       </PanelShell>
     )
   }
@@ -59,10 +70,12 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
   const ambiguous = v.customer_record_id === 'AMBIGUOUS'
   const byDim = new Map(comparison.map((r) => [r.dim, r]))
   const rows: ComparisonRow[] = [
-    ...DIMS.map((d) => byDim.get(d) ?? { dim: d, customer: null, hit: null, status: 'unknown', src: [] }),
+    ...DIMS.map((d) => byDim.get(d) ?? { dim: d, customer: null, hit: null, status: 'unknown', src: [], llm_used: false }),
     ...comparison.filter((r) => !(DIMS as readonly string[]).includes(r.dim)),
   ]
-  const unknown = unknownFacts(rows)
+  const noCmp = noComparisonReason(hit.raw, v.customer_record_id)
+  const unknown = noCmp ? [] : unknownFacts(rows)
+  const firstCandidate = ambiguous ? identity.candidates[0]?.customer_record_id : undefined
 
   return (
     <PanelShell>
@@ -108,16 +121,16 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
                   <div key={c.customer_record_id} className="rounded-lg border p-4 text-sm">
                     <div className="flex items-center justify-between gap-2">
                       <Id>{c.customer_record_id}</Id>
-                      {c.would_decide?.decision && isDecision(c.would_decide.decision) ? (
-                        <DecisionBadge decision={c.would_decide.decision} />
-                      ) : null}
+                      {c.would_decide?.decision && isDecision(c.would_decide.decision) ? <DecisionBadge decision={c.would_decide.decision} /> : null}
                     </div>
-                    <div className="mt-2 font-medium">{c.name ?? '—'}</div>
+                    <div className={cn('mt-2 font-medium', !c.name && 'font-normal text-muted-foreground italic')}>
+                      {c.name ?? 'name not in the trace'}
+                    </div>
                     <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
                       <dt className="text-muted-foreground">Date of birth</dt>
-                      <dd>{c.dob ?? '—'}</dd>
+                      <dd className={cn(!c.dob && 'text-muted-foreground italic')}>{c.dob ?? 'not in the trace'}</dd>
                       <dt className="text-muted-foreground">Country</dt>
-                      <dd>{c.country ?? '—'}</dd>
+                      <dd className={cn(!c.country && 'text-muted-foreground italic')}>{c.country ?? 'not in the trace'}</dd>
                     </dl>
                     {c.why_fits ? <p className="mt-2 text-xs text-muted-foreground">{c.why_fits}</p> : null}
                     {c.would_decide?.reason_code ? (
@@ -153,85 +166,106 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
       <Section
         title="Comparison"
         aside={
-          decidingInfo.source === 'trace'
-            ? 'Highlighted: the deciding row(s) named in the trace'
-            : decidingInfo.source === 'derived'
-              ? 'Highlighted: the row(s) this reason code rests on'
-              : undefined
+          noCmp
+            ? undefined
+            : decidingInfo.source === 'trace'
+              ? 'Highlighted: the deciding row(s) named in the trace'
+              : decidingInfo.source === 'derived'
+                ? 'Highlighted: the row(s) this reason code rests on'
+                : undefined
         }
       >
-        {/* Narrow screens: one card per fact, nothing to scroll sideways. */}
-        <ul className="flex flex-col gap-2 sm:hidden" aria-label="Comparison">
-          {rows.map((r) => {
-            const isDeciding = deciding.has(r.dim)
-            return (
-              <li key={r.dim} className={cn('rounded-lg border p-3 text-sm', isDeciding && 'border-l-4 border-l-sky-500 bg-sky-50')}>
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className={cn(isDeciding && 'font-medium')}>
-                    {DIM_LABELS[r.dim] ?? r.dim}
-                    {isDeciding ? <span className="ml-2 text-[11px] font-normal text-sky-700">deciding</span> : null}
-                  </span>
-                  <StatusText status={r.status} />
-                </div>
-                <dl className="mt-2 grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
-                  <dt className="text-muted-foreground">Customer</dt>
-                  <dd className={cn('break-words', isEmpty(r.customer) && 'text-muted-foreground italic')}>
-                    {isEmpty(r.customer) ? (ambiguous ? MISSING_TEXT.ambiguousCustomer : MISSING_TEXT.customer) : formatValue(r.customer)}
-                  </dd>
-                  <dt className="text-muted-foreground">Hit</dt>
-                  <dd className={cn('break-words', isEmpty(r.hit) && 'text-muted-foreground italic')}>{isEmpty(r.hit) ? MISSING_TEXT.hit : formatValue(r.hit)}</dd>
-                  <dt className="text-muted-foreground">Records</dt>
-                  <dd className="flex flex-wrap gap-1">{r.src.length ? r.src.map((x) => <Id key={x}>{x}</Id>) : <span className="text-muted-foreground">—</span>}</dd>
-                </dl>
-              </li>
-            )
-          })}
-        </ul>
-        <div className="hidden overflow-x-auto rounded-lg border sm:block">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 font-medium">Fact</th>
-                <th className="px-3 py-2 font-medium">Customer</th>
-                <th className="px-3 py-2 font-medium">Hit</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 font-medium">Records cited</th>
-              </tr>
-            </thead>
-            <tbody>
+        {noCmp ? (
+          <NoComparison reason={noCmp} />
+        ) : (
+          <>
+            {firstCandidate ? (
+              <p className="mb-2 text-xs text-muted-foreground">
+                The customer column shows the first candidate, {firstCandidate}. Each candidate’s own outcome is listed above.
+              </p>
+            ) : null}
+            {/* Narrow screens: one card per fact, nothing to scroll sideways. */}
+            <ul className="flex flex-col gap-2 sm:hidden" aria-label="Comparison">
               {rows.map((r) => {
                 const isDeciding = deciding.has(r.dim)
                 return (
-                  <tr key={r.dim} className={cn('border-t align-top', isDeciding && 'bg-sky-50')}>
-                    <td className={cn('px-3 py-2.5 whitespace-nowrap', isDeciding && 'border-l-4 border-l-sky-500 font-medium')}>
-                      {DIM_LABELS[r.dim] ?? r.dim}
-                      {isDeciding ? <span className="ml-2 text-[11px] font-normal text-sky-700">deciding</span> : null}
-                    </td>
-                    <td className={cn('min-w-36 px-3 py-2.5', isEmpty(r.customer) && 'text-muted-foreground italic')}>
-                      {isEmpty(r.customer) ? (ambiguous ? MISSING_TEXT.ambiguousCustomer : MISSING_TEXT.customer) : formatValue(r.customer)}
-                    </td>
-                    <td className={cn('min-w-36 px-3 py-2.5', isEmpty(r.hit) && 'text-muted-foreground italic')}>
-                      {isEmpty(r.hit) ? MISSING_TEXT.hit : formatValue(r.hit)}
-                    </td>
-                    <td className="px-3 py-2.5 whitespace-nowrap">
-                      <StatusText status={r.status} />
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex flex-wrap gap-1">
-                        {r.src.length ? r.src.map((s) => <Id key={s}>{s}</Id>) : <span className="text-muted-foreground">—</span>}
-                      </div>
-                    </td>
-                  </tr>
+                  <li key={r.dim} className={cn('rounded-lg border p-3 text-sm', isDeciding && 'border-l-4 border-l-sky-500 bg-sky-50')}>
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <span className={cn(isDeciding && 'font-medium')}>
+                        {DIM_LABELS[r.dim] ?? r.dim}
+                        {isDeciding ? <span className="ml-2 text-[11px] font-normal text-sky-700">deciding</span> : null}
+                      </span>
+                      <StatusText status={r.status} llm={r.llm_used} />
+                    </div>
+                    <dl className="mt-2 grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+                      <dt className="text-muted-foreground">Customer</dt>
+                      <dd className={cn('break-words', isEmpty(r.customer) && 'text-muted-foreground italic')}>
+                        {isEmpty(r.customer) ? (ambiguous ? MISSING_TEXT.ambiguousCustomer : MISSING_TEXT.customer) : formatValue(r.customer)}
+                      </dd>
+                      <dt className="text-muted-foreground">Hit</dt>
+                      <dd className={cn('break-words', isEmpty(r.hit) && 'text-muted-foreground italic')}>
+                        {isEmpty(r.hit) ? MISSING_TEXT.hit : formatValue(r.hit)}
+                      </dd>
+                      <dt className="text-muted-foreground">Records</dt>
+                      <dd className="flex flex-wrap gap-1">
+                        {r.src.length ? r.src.map((x) => <Id key={x}>{x}</Id>) : <span className="text-muted-foreground">—</span>}
+                      </dd>
+                    </dl>
+                  </li>
                 )
               })}
-            </tbody>
-          </table>
-        </div>
+            </ul>
+            <div className="hidden overflow-x-auto rounded-lg border sm:block">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Fact</th>
+                    <th className="px-3 py-2 font-medium">Customer</th>
+                    <th className="px-3 py-2 font-medium">Hit</th>
+                    <th className="px-3 py-2 font-medium">Status</th>
+                    <th className="px-3 py-2 font-medium">Records cited</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => {
+                    const isDeciding = deciding.has(r.dim)
+                    return (
+                      <tr key={r.dim} className={cn('border-t align-top', isDeciding && 'bg-sky-50')}>
+                        <td className={cn('px-3 py-2.5 whitespace-nowrap', isDeciding && 'border-l-4 border-l-sky-500 font-medium')}>
+                          {DIM_LABELS[r.dim] ?? r.dim}
+                          {isDeciding ? <span className="ml-2 text-[11px] font-normal text-sky-700">deciding</span> : null}
+                        </td>
+                        <td className={cn('min-w-36 px-3 py-2.5', isEmpty(r.customer) && 'text-muted-foreground italic')}>
+                          {isEmpty(r.customer) ? (ambiguous ? MISSING_TEXT.ambiguousCustomer : MISSING_TEXT.customer) : formatValue(r.customer)}
+                        </td>
+                        <td className={cn('min-w-36 px-3 py-2.5', isEmpty(r.hit) && 'text-muted-foreground italic')}>
+                          {isEmpty(r.hit) ? MISSING_TEXT.hit : formatValue(r.hit)}
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          <StatusText status={r.status} llm={r.llm_used} />
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex flex-wrap gap-1">
+                            {r.src.length ? r.src.map((s) => <Id key={s}>{s}</Id>) : <span className="text-muted-foreground">—</span>}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </Section>
 
       {/* 4. What would change it / What's missing */}
       <Section title={isReview ? 'What’s missing' : 'What would change it'}>
-        {tipping ? <p className="text-sm leading-relaxed">{tipping}</p> : <p className="text-sm text-muted-foreground">No tipping point recorded in the trace.</p>}
+        {tipping ? (
+          <p className="text-sm leading-relaxed">{tipping}</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">No tipping point recorded in the trace.</p>
+        )}
         {isReview && unknown.length ? (
           <ul className="mt-3 flex flex-col gap-1 text-sm">
             {unknown.map((u) => (
@@ -295,20 +329,17 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
                 <tr>
                   <th className="py-1 pr-3 font-medium">Fact</th>
                   <th className="py-1 pr-3 font-medium">Value</th>
-                  <th className="py-1 pr-3 font-medium">Verified</th>
+                  <th className="py-1 pr-3 font-medium">Status</th>
                   <th className="py-1 pr-3 font-medium">Source</th>
                 </tr>
               </thead>
               <tbody>
                 {identity.facts.map((f) => (
-                  <tr key={f.name} className="border-t">
+                  <tr key={f.name} className="border-t" data-fact={f.name}>
                     <td className="py-1.5 pr-3 font-mono text-xs">{f.name}</td>
                     <td className="py-1.5 pr-3">{f.value}</td>
-                    <td className="py-1.5 pr-3">{f.verified === null ? '—' : f.verified ? 'verified' : 'declared'}</td>
-                    <td className="py-1.5 pr-3">
-                      {f.source_id ? <Id>{f.source_id}</Id> : '—'}
-                      {f.source_kind ? <span className="ml-2 text-xs text-muted-foreground">{f.source_kind}</span> : null}
-                    </td>
+                    <td className="py-1.5 pr-3">{factStatus(f)}</td>
+                    <td className="py-1.5 pr-3">{f.source_id ? <Id>{f.source_id}</Id> : '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -341,10 +372,9 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
           <RawJson value={hit.raw} />
         </Collapsed>
 
-        <Collapsed title="LLM calls" count={llmCalls.length}>
-          {llmCalls.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No LLM calls for this hit.</p>
-          ) : (
+        {/* stage4 writes llm_calls: [] (model off by default): the section only appears when there are calls. */}
+        {llmCalls.length > 0 ? (
+          <Collapsed title="LLM calls" count={llmCalls.length}>
             <div className="flex flex-col gap-3">
               {llmCalls.map((c, i) => (
                 <dl key={i} className="grid grid-cols-[10rem_1fr] gap-x-4 gap-y-1 rounded-lg border p-3 text-sm">
@@ -357,8 +387,8 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
                 </dl>
               ))}
             </div>
-          )}
-        </Collapsed>
+          </Collapsed>
+        ) : null}
       </div>
     </PanelShell>
   )
@@ -423,7 +453,16 @@ function fragilityTone(f: string | undefined): string | undefined {
   return undefined
 }
 
-function StatusText({ status }: { status: string }) {
+function NoComparison({ reason }: { reason: string }) {
+  return (
+    <div className="rounded-lg border border-dashed px-4 py-3 text-sm" data-testid="no-comparison">
+      <span className="font-medium">No comparison</span>
+      <span className="text-muted-foreground">: {reason}.</span>
+    </div>
+  )
+}
+
+function StatusText({ status, llm }: { status: string; llm?: boolean }) {
   const tone =
     status === 'agree'
       ? 'text-emerald-700'
@@ -435,6 +474,7 @@ function StatusText({ status }: { status: string }) {
   return (
     <span className={cn('text-xs', tone)} title={`raw: ${status}`}>
       {comparisonStatusLabel(status)}
+      {llm ? <span className="ml-1 text-[10px] text-muted-foreground">(model-read)</span> : null}
     </span>
   )
 }

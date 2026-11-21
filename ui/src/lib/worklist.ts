@@ -3,7 +3,7 @@
 import type { Model } from './model.ts'
 import { DIM_LABELS, MISSING_TEXT, undecidedText } from './labels.ts'
 import { HIT_NOT_DECIDED, type Decision } from './policy.ts'
-import { readComparison, readDecidingDims, readIdentity, unknownFacts } from './trace-view.ts'
+import { noComparisonReason, readComparison, readDecidingDims, readIdentity, unknownFacts } from './trace-view.ts'
 import type { TraceHit, UndecidedReason } from './types.ts'
 
 export interface HitRow {
@@ -42,14 +42,15 @@ export function allHitRows(model: Model): HitRow[] {
   }
   for (const hit of model.hitsById.values()) {
     if (listed.has(hit.hit_id)) continue
+    const nd = hit.not_decided
     rows.push({
       hit_id: hit.hit_id,
       alert_id: hit.alert_id,
-      decision: hit.verdict.decision,
-      reason_code: hit.verdict.reason_code,
-      undecided: null,
-      fragility: hit.badges?.fragility ?? null,
-      llm_used: hit.badges?.llm_used ?? null,
+      decision: nd ? null : hit.verdict.decision,
+      reason_code: nd ? HIT_NOT_DECIDED : hit.verdict.reason_code,
+      undecided: nd ? { kind: 'not_decided' } : null,
+      fragility: nd ? null : (hit.badges?.fragility ?? null),
+      llm_used: nd ? null : (hit.badges?.llm_used ?? null),
       hit,
     })
   }
@@ -58,7 +59,7 @@ export function allHitRows(model: Model): HitRow[] {
 
 export const QUEUE_GROUPS = [
   { id: 'review', title: 'REVIEW', note: 'The evidence cannot settle it. An analyst decides.' },
-  { id: 'undecided', title: 'Hit has no decision', note: 'Missing, conflicting or filed under another alert. Blocks the alert; fix the run or decide by hand.' },
+  { id: 'undecided', title: 'Hit has no decision', note: 'Missing, not decided by the pipeline, conflicting or filed under another alert. Blocks the alert; fix the run or decide by hand.' },
   { id: 'same', title: 'SAME_ENTITY', note: 'Goes to the compliance team. Check the confirmation before it is passed on.' },
 ] as const
 export type QueueGroupId = (typeof QUEUE_GROUPS)[number]['id']
@@ -87,6 +88,8 @@ export function whatsMissingLine(row: HitRow): string {
     return c.length ? `${c.length} customers fit (${c.join(', ')}); need a link to one of them` : 'More than one customer fits; need a link to one of them'
   }
   if (row.decision === 'REVIEW') {
+    const none = noComparisonReason(raw, row.hit.verdict.customer_record_id)
+    if (none) return capital(`no comparison: ${none}`)
     const u = unknownFacts(readComparison(raw))
     const hitSide = u.filter((x) => x.side === 'hit' || x.side === 'both').map((x) => x.dim).filter((d) => d !== 'death')
     const custSide = u.filter((x) => x.side === 'customer').map((x) => x.dim)

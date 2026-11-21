@@ -8,9 +8,14 @@ export interface TraceParseResult {
   issues: ParseIssue[]
   /** Hits with no usable record: invalid line(s) or conflicting duplicates. */
   rejected: Map<string, UndecidedReason>
-  /** Run headers and alert summaries are valid trace lines but not hits. */
+  /** Alert summary lines (and any legacy run header) are valid trace lines but not hits. */
   skipped: number
   lines: number
+  /**
+   * Stage 4 appends its alert summaries to the same trace.jsonl. They are split off here and
+   * parsed like a summaries file: a cross-check only, never a source of Cleared. Null if none.
+   */
+  summaries: AlertsParseResult | null
 }
 
 const isObj = (x: unknown): x is Record<string, unknown> =>
@@ -65,6 +70,7 @@ function validateHit(rec: Record<string, unknown>): string | TraceHit {
       llm_used: typeof badges.llm_used === 'boolean' ? badges.llm_used : undefined,
       rules_version: typeof badges.rules_version === 'string' ? badges.rules_version : undefined,
     },
+    not_decided: rec.not_decided === true,
     raw: rec,
   }
 }
@@ -79,8 +85,12 @@ export function parseTraceJsonl(text: string): TraceParseResult {
   const groups = new Map<string, { firstLine: number; valid: TraceHit[]; invalid: number }>()
   let skipped = 0
   let lines = 0
+  const all = splitLines(text)
+  // Summary lines keep their line numbers: every other line is blanked before parsing them.
+  const summaryText: string[] = all.map(() => '')
+  let summaryLines = 0
 
-  splitLines(text).forEach((rawLine, i) => {
+  all.forEach((rawLine, i) => {
     const line = i + 1
     if (rawLine.trim() === '') return
     lines++
@@ -95,7 +105,13 @@ export function parseTraceJsonl(text: string): TraceParseResult {
       issues.push({ line, message: 'not a JSON object' })
       return
     }
-    if (isAlertSummaryRecord(rec) || (!('hit_id' in rec) && 'run_id' in rec)) {
+    if (isAlertSummaryRecord(rec)) {
+      skipped++
+      summaryLines++
+      summaryText[i] = rawLine
+      return
+    }
+    if (!('hit_id' in rec) && 'run_id' in rec) {
       skipped++
       return
     }
@@ -132,7 +148,8 @@ export function parseTraceJsonl(text: string): TraceParseResult {
     if (n > 1) issues.push({ line: g.firstLine, message: `${id}: ${n} identical records, kept one`, severity: 'info' })
     hits.push(g.valid[0])
   }
-  return { hits, issues, rejected, skipped, lines }
+  const summaries = summaryLines ? parseAlerts(summaryText.join('\n')) : null
+  return { hits, issues, rejected, skipped, lines, summaries }
 }
 
 interface Group {
@@ -145,7 +162,7 @@ interface Group {
 export interface AlertsParseResult {
   /** From alerts.jsonl lines (alert_id + hit_ids): the source of truth for which hits an alert has. */
   alerts: AlertRef[]
-  /** From alerts.trace.jsonl lines (Stage 4 summaries, with pipeline_status). A cross-check only. */
+  /** From Stage 4 alert summary lines (with pipeline_status), e.g. split off trace.jsonl. A cross-check only. */
   summaries: AlertRef[]
   issues: ParseIssue[]
   lines: number
@@ -171,7 +188,7 @@ function toAlert(rec: unknown, line: number, issues: ParseIssue[]): AlertRef | n
     }
     return { alert_id: rec.alert_id, hit_ids: rec.hit_ids as string[] }
   }
-  // alerts.trace.jsonl line: alert summary. Its hit list is hits[] plus any undecided/blocking ids.
+  // Stage 4 alert summary line (appended to trace.jsonl). Its hit list is hits[] plus any undecided/blocking ids.
   if ('alert_status' in rec) {
     if (!isAlertStatus(rec.alert_status) || !Array.isArray(rec.hits)) {
       issues.push({ line, message: `${rec.alert_id}: alert summary needs a known alert_status and hits[]` })
@@ -189,7 +206,7 @@ function toAlert(rec: unknown, line: number, issues: ParseIssue[]): AlertRef | n
   return null
 }
 
-/** Accepts alerts.jsonl, alerts.trace.jsonl (alert summaries), or a JSON array of either. */
+/** Accepts alerts.jsonl, a file of Stage 4 alert summaries (legacy alerts.trace.jsonl), or a JSON array of either. */
 export function parseAlerts(text: string): AlertsParseResult {
   const issues: ParseIssue[] = []
   // Never drop a line. Lines for the same alert_id are merged: identical ones silently (with a note);
