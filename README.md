@@ -20,7 +20,7 @@ The hard part is that the customer's identity is spread over five systems that s
 
 ## Architecture
 
-Three stages. Each one is deterministic and emits a record-level trace, so every final decision can be replayed step by step.
+Four stages. Stages 1–3 are in `system/` and are deterministic. They do not decide hits. Stage 4 will apply the SOP and write one line per hit. `system/run` today runs stages 1–3 and writes a summary JSON, not `output/dev.jsonl`.
 
 ```mermaid
 flowchart LR
@@ -35,25 +35,35 @@ flowchart LR
         H[(Hits + search results)]:::src
     end
 
-    S1["Stage 1<br/>Customer golden record<br/>(person_id)"]:::query
-    S2["Stage 2<br/>Alert → person<br/>resolution"]:::query
-    HP["Hit golden profile<br/>(hit facts)"]:::parse
-    M["Matching engine<br/>SOP rules → decision,<br/>reason code, evidence"]:::query
+    S1["Stage 1<br/>Customer golden record"]:::query
+    S2["Stage 2<br/>Hit golden profile"]:::parse
+    S3["Stage 3<br/>Alert → person"]:::query
+    S4["Stage 4<br/>Decision rules"]:::query
     O[["output/dev.jsonl"]]:::out
 
-    C --> S1 --> S2
-    A --> S2
-    H --> HP
-    S2 --> M
-    HP --> M
-    M --> O
+    C --> S1 --> S3
+    A --> S3
+    H --> S2 --> S4
+    S3 --> S4
+    S4 --> O
 ```
 
 | Stage | What it does | Status |
 |---|---|---|
-| **1. Customer golden record** | Normalises customer data, groups records that are the same person into a `person_id`, and picks each fact (legal name, date of birth, countries, …) with its source record ID. | 📐 Designed: [docs/stage1-customer-golden-record.md](docs/stage1-customer-golden-record.md) · [docs/stage2-hit-golden-profile.md](docs/stage2-hit-golden-profile.md) · [docs/stage3-alert-resolution.md](docs/stage3-alert-resolution.md) |
-| **2. Alert → person resolution** | Follows the alert's link (account, login, email) or searches by the screened details to find the person(s) behind each alert. | Next |
-| **Hit profile + matching** | Collects each hit's facts (names, aliases, birth dates, countries, dated reports), then applies the screening SOP to produce the decision. | Planned |
+| **1. Customer golden record** | Normalises customer data, groups records that are the same person into a `person_id`, and picks each fact (legal name, date of birth, countries) with its source record ID. | Built. [docs/stage1-customer-golden-record.md](docs/stage1-customer-golden-record.md) |
+| **2. Hit golden profile** | Collects each hit's names, countries, birth-date candidates, death date and earliest dated report. | Built. [docs/stage2-hit-golden-profile.md](docs/stage2-hit-golden-profile.md) |
+| **3. Alert → person resolution** | Follows the alert's link (account, login, email) or searches by the screened details to find the person or people behind each alert. | Built. [docs/stage3-alert-resolution.md](docs/stage3-alert-resolution.md) |
+| **4. Decision rules** | Compares the person with the hit and writes `DIFFERENT_ENTITY`, `SAME_ENTITY` or `REVIEW`, with a reason code and evidence. | Not built. [docs/stage4-notes.md](docs/stage4-notes.md) |
+
+### Dev run
+
+One `system/run` on the development folder, LLM off. Counts are from that run. Times are that machine only.
+
+| | |
+|---|---|
+| Stage 1 | 72,265 records → 72,142 persons (123 multi-record). Notes flagged 4 of 31,895 (`name_ambiguous` 3, `note_annotation` 1). 23.629s |
+| Stage 2 | 819 hits (702 individuals, 117 companies). DOB buckets: `dobs` only 146, `dobs` and note 6, note only 48, search 55, unknown 447. Note birth statements 54. Deceased 6, of which 2 undated. Dated reports 640 lines on 215 hits. Practice 41/41 individuals and 9/9 companies. LLM calls 0. 0.17s |
+| Stage 3 | 440 alerts: 413 `resolved_single`, 27 `ambiguous`, 0 `not_found`. Joint accounts 58/58 resolved. `resolution_clean` 307. Practice labels 50/50. 8.294s |
 
 ### Design principles
 
@@ -63,21 +73,18 @@ flowchart LR
 - **Unknown stays unknown.** Missing or unreadable data is never guessed. It is flagged, and it pushes towards `REVIEW`.
 - **Python standard library only.** An LLM is an optional, switched-off fallback for free text that regex can't read (not needed on the dev set).
 
-## Repository layout (planned)
+## Repository layout
 
 ```
 .
-├── README.md                  ← you are here
-├── docs/
-│   ├── stage1-customer-golden-record.md
-│   ├── stage2-hit-golden-profile.md
-│   └── stage3-alert-resolution.md
+├── README.md
+├── docs/                      ← stage designs and review notes
 ├── system/
-│   ├── README.md              ← how to run the system
-│   └── run                    ← entry point: reads a data folder, writes decisions
+│   ├── run                    ← stages 1–3; writes a summary, not per-hit decisions
+│   ├── stage1/  stage2/  stage3/
+│   └── shared/
 ├── tools/repro/               ← reproducibility report (repro.json)
-└── output/
-    └── dev.jsonl              ← our decisions for the development set
+└── output/                    ← per-hit decisions, once Stage 4 exists
 ```
 
 ## Reproducibility report
