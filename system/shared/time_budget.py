@@ -3,14 +3,11 @@
 PR 10 put every model call on one ``OpenRouterClient``. That client's
 ``DEFAULT_TIME_CAP_SECONDS`` is 1,200 (tested). It is one clock for the whole
 run, not a Stage 2 cap stacked on Stage 1. A separate 1,200 second Stage 2
-cap was too tight against the brief: Stage 3, Stage 4 and a veto would have
-had no slack. Sharing the clock leaves 10 minutes for the deterministic
+cap was too tight against the brief: Stages 3 and 4 would have had no slack. Sharing the clock leaves 10 minutes for the deterministic
 stages after the backstop fires.
 
 The call budget (48 for the run, 12 for one extraction) decides how much
-work is attempted. The clock only stops a stuck call. Stage 4's optional
-veto is off by default. When it is on it must use this same client, so it
-cannot start a second 1,200 second clock.
+work is attempted. The clock only stops a stuck call.
 
 ``arm_run_deadline`` is a second backstop at 25 minutes. It stays disarmed
 in unit tests. ``system/run`` arms it.
@@ -23,7 +20,6 @@ import time
 RUN_LIMIT_SECONDS = 30 * 60
 RUN_DEADLINE_SECONDS = 25 * 60
 SHARED_TIME_CAP_SECONDS = 1200.0
-VETO_MAX_HITS = 40
 
 _deadline: float | None = None
 _deadline_hit = False

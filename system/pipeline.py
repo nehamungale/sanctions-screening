@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
             os.path.join(cache_dir, "alert_resolution.jsonl"),
             cache_dir,
         )
-        stage4 = run_stage4(data_folder, cache_dir, output_file, client=client)
+        stage4 = run_stage4(data_folder, cache_dir, output_file)
     except Exception as error:  # noqa: BLE001 - any failure must still leave a valid output file
         traceback.print_exc()
         written = write_fallback(data_folder, output_file)
@@ -125,7 +125,6 @@ def _report(stage1: dict, stage2: dict, stage3: dict, stage4: dict, cache_dir: s
         "stage": 4,
         "stage4_seconds": stage4["elapsed_seconds"],
         "stages": [1, 2, 3, 4],
-        "veto": stage4["llm_veto"],
     }
     os.makedirs(cache_dir, exist_ok=True)
     summary_path = os.path.join(cache_dir, "run_summary.json")

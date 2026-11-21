@@ -8,7 +8,6 @@ that the expanded index does not drop a record the full scan would keep.
 
 from __future__ import annotations
 
-from stage3.names import record_name_agrees
 from stage3.resolve import normalise_screened
 
 
@@ -32,7 +31,10 @@ def agreeing_records(catalog, screened_parts: tuple[str, ...], entity_type: str 
         grouped.setdefault(prepared.names, []).append(prepared.record_id)
     found: set[str] = set()
     for record_names, record_ids in grouped.items():
-        if record_name_agrees(catalog.names, screened_parts, record_names):
+        if screened_parts and any(
+            parts and catalog.names.names_agree(list(screened_parts), list(parts))["agree"]
+            for _field, parts in record_names
+        ):
             found.update(record_ids)
     return found
 

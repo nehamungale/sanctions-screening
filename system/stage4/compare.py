@@ -7,11 +7,13 @@ import re
 from stage1.normalise import NameTools
 
 from stage4.dates import (
+    age_on,
     agrees,
+    as_date,
     contradicts,
     deceased_before_screening,
+    earliest_day,
     parse_parts,
-    screened_date,
     under_sixteen,
 )
 from stage4.model import AGREE, CONTRADICT, UNKNOWN, Comparison, Dim
@@ -230,11 +232,7 @@ def _one_phrase(candidate: dict) -> str:
 def _time_dim(hit: dict, person: dict, cmp: Comparison) -> Dim:
     report = hit.get("earliest_dated_report") or None
     dim = Dim(hit=(report or {}).get("date") if report else None)
-    on = screened_date({"screened_at": (report or {}).get("date")}) if report else None
-    # The report date is a full day. screened_date parses YYYY-MM-DD.
-    if report and report.get("date"):
-        from stage4.dates import as_date
-        on = as_date(report.get("date"))
+    on = as_date(report.get("date")) if report and report.get("date") else None
     if on is None:
         return dim
     detail = cmp.dob.detail
@@ -253,13 +251,11 @@ def _time_dim(hit: dict, person: dict, cmp: Comparison) -> Dim:
         fired = under_sixteen(verified, on)
         source = verified.get("source_id")
         dim.customer = verified.get("value")
-        from stage4.dates import age_on, earliest_day
         max_age = age_on(earliest_day(verified), on)
     elif detail.get("every_declared") and declared:
         fired = all(under_sixteen(item, on) for item in declared)
         source = declared[0].get("source_id")
         dim.customer = declared[0].get("value")
-        from stage4.dates import age_on, earliest_day
         max_age = min(age_on(earliest_day(item), on) for item in declared)
     if fired:
         dim.status = CONTRADICT
@@ -315,36 +311,27 @@ def _name_dim(hit: dict, person: dict, tools: NameTools, cmp: Comparison) -> Dim
         dim.detail = {"clear_status": UNKNOWN}
         return dim
     any_agree = False
-    both_agree = False
-    order_dependent = False
     non_exhaustive = False
     matched_value = None
     matched_pairs: list = []
     fuzzy = False
     for parts in left_sets:
         for entry in comparable:
-            forward = tools.names_agree(list(parts), list(entry["parts"]))
-            backward = tools.names_agree(list(entry["parts"]), list(parts))
-            if not forward.get("exhaustive", True) or not backward.get("exhaustive", True):
+            # Agreement does not depend on argument order (shared.names.agree_parts).
+            result = tools.names_agree(list(parts), list(entry["parts"]))
+            if not result.get("exhaustive", True):
                 non_exhaustive = True
-            if bool(forward.get("agree")) != bool(backward.get("agree")):
-                order_dependent = True
-            if forward.get("agree") or backward.get("agree"):
+            if result.get("agree"):
                 any_agree = True
-                if matched_value is None:
-                    matched_value = entry.get("value")
-                    matched_pairs = list(forward.get("matched_pairs") or [])
-            if forward.get("agree") and backward.get("agree"):
-                both_agree = True
                 matched_value = entry.get("value")
-                matched_pairs = list(forward.get("matched_pairs") or [])
+                matched_pairs = list(result.get("matched_pairs") or [])
                 for pair in matched_pairs:
                     left, _, right = str(pair).partition("=")
                     if left != right:
                         fuzzy = True
     verified = bool(legal.get("verified")) and legal.get("method") != "llm"
     clear_status = UNKNOWN
-    if verified and not any_agree and not non_exhaustive and comparable and not order_dependent:
+    if verified and not any_agree and not non_exhaustive and comparable:
         clear_status = CONTRADICT
         if legal.get("source_id"):
             dim.sources = [legal["source_id"]]
@@ -354,8 +341,6 @@ def _name_dim(hit: dict, person: dict, tools: NameTools, cmp: Comparison) -> Dim
         dim.status = CONTRADICT
     else:
         dim.status = UNKNOWN
-    if order_dependent:
-        cmp.issues.append("NAME_ORDER_DEPENDENT")
     if non_exhaustive:
         cmp.issues.append("NON_EXHAUSTIVE_NAME")
         if clear_status == CONTRADICT:
@@ -364,7 +349,7 @@ def _name_dim(hit: dict, person: dict, tools: NameTools, cmp: Comparison) -> Dim
             dim.sources = []
     dim.detail = {
         "clear_status": clear_status,
-        "both_agree": both_agree,
+        "both_agree": any_agree,
         "matched_hit_name": matched_value,
         "matched_pairs": matched_pairs,
         "fuzzy": fuzzy,

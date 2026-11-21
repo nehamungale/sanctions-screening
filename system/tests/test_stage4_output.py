@@ -41,7 +41,6 @@ class RerunTests(unittest.TestCase):
             env["SANCTIONS_LLM"] = "0"
             env["USE_LLM_NOTES"] = "0"
             env["USE_LLM_HITS"] = "0"
-            env["USE_LLM_VETO"] = "0"
             env.pop("OPENROUTER_API_KEY", None)
             run = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "run")
             env["SANCTIONS_CACHE"] = os.path.join(folder, "cache-a")

@@ -13,7 +13,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from stage1.normalise import NameTools, parse_date
 from stage1.normalise_text import norm_text
 from stage3.cli import main as stage3_main
-from stage3.names import agree_symmetric
 from stage3.recall import agreeing_records, unlinked_recall
 from stage3.resolve import dumps_jsonl, label_matches, resolve_alerts
 from stage3.stage1_adapter import load_catalog
@@ -989,7 +988,7 @@ class Stage3Tests(unittest.TestCase):
 
     def test_symmetric_name_agreement_accepts_either_side_when_lengths_match(self):
         # Equal part counts agree when either side is fully covered, in both
-        # argument orders. Stage 3 still requires both orders, which now match.
+        # argument orders, so Stage 3 calls the matcher once.
         names = NameTools(VARIANTS)
         left = ["abdul", "salam"]
         right = ["abdulsalam", "khan"]
@@ -997,12 +996,9 @@ class Stage3Tests(unittest.TestCase):
         backward = names.names_agree(right, left)
         self.assertTrue(forward["agree"])
         self.assertTrue(backward["agree"])
-        wrapped = agree_symmetric(names, left, right)
-        self.assertTrue(wrapped["agree"])
-        self.assertTrue(wrapped["matched_pairs"])
-        both = agree_symmetric(names, ["alice", "smith"], ["smith", "alice"])
-        self.assertTrue(both["agree"])
-        neither = agree_symmetric(names, ["alice", "smith"], ["robert", "jones"])
+        self.assertTrue(forward["matched_pairs"])
+        self.assertTrue(names.names_agree(["alice", "smith"], ["smith", "alice"])["agree"])
+        neither = names.names_agree(["alice", "smith"], ["robert", "jones"])
         self.assertFalse(neither["agree"])
         self.assertEqual(neither["matched_pairs"], [])
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
@@ -17,7 +18,6 @@ from stage4.output import dumps_jsonl, line_from
 from stage4.reasons import render
 from stage4.rollup import roll_up
 from stage4.trace import dumps_trace, hit_trace
-from stage4.veto import apply_veto, enabled as veto_enabled
 
 _COST = {
     "DIFFERENT_ENTITY": {"DIFFERENT_ENTITY": 0, "SAME_ENTITY": 3, "REVIEW": 3},
@@ -26,7 +26,7 @@ _COST = {
 }
 
 
-def run_stage4(data_folder: str, cache_dir: str, output_file: str, client=None) -> dict:
+def run_stage4(data_folder: str, cache_dir: str, output_file: str) -> dict:
     """Write the official JSONL file and a trace under the cache (or TRACE_PATH)."""
     started = time.perf_counter()
     bundle = load_stage4(data_folder, cache_dir)
@@ -63,12 +63,7 @@ def run_stage4(data_folder: str, cache_dir: str, output_file: str, client=None) 
             "resolution": resolution,
             "decision": decision,
             "hit_id": hit["hit_id"],
-            "texts": _veto_texts(hit, bundle["persons"], resolution),
         })
-    if veto_enabled():
-        apply_veto(prepared, transport=None)
-    elif client is not None and veto_enabled():
-        apply_veto(prepared, transport=None)
 
     lines = []
     traces = []
@@ -136,7 +131,6 @@ def run_stage4(data_folder: str, cache_dir: str, output_file: str, client=None) 
         "practice": _practice_public(practice),
         "rules_version": RULES_VERSION,
         "trace": trace_path,
-        "llm_veto": veto_enabled(),
         "output_sha256": _sha256(payload.encode("utf-8")),
     }
 
@@ -210,13 +204,6 @@ def _trace(item: dict, persons: dict) -> dict:
     return record
 
 
-def _veto_texts(hit: dict, persons: dict, resolution: dict | None) -> dict:
-    texts = {}
-    if hit.get("profile_notes"):
-        texts[hit["hit_id"]] = str(hit.get("profile_notes"))
-    return texts
-
-
 def _practice(data_folder: str, lines: list[dict]) -> dict | None:
     path = os.path.join(data_folder, "practice_labels.jsonl")
     if not os.path.isfile(path):
@@ -287,5 +274,4 @@ def _normalise_label(row: dict) -> dict:
 
 
 def _sha256(payload: bytes) -> str:
-    import hashlib
     return hashlib.sha256(payload).hexdigest()

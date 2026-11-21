@@ -22,7 +22,6 @@ from dataclasses import dataclass
 from stage1.countries import norm_country
 from stage1.normalise import dates_compatible, norm_email, parse_date
 from stage1.normalise_text import norm_text
-from stage3.names import agree_symmetric
 
 _FLAG_ORDER = (
     "DANGLING_LINK",
@@ -545,7 +544,7 @@ class Resolver:
         key = (left, right)
         cached = self._agree_cache.get(key)
         if cached is None:
-            result = agree_symmetric(self.catalog.names, left, right)
+            result = self.catalog.names.names_agree(list(left), list(right))
             cached = (bool(result["agree"]), tuple(result["matched_pairs"]))
             self._agree_cache[key] = cached
         return cached
