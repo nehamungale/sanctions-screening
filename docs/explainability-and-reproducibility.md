@@ -2,7 +2,7 @@
 
 Status: agreed design. The reproducibility report in `tools/repro` is built. The per-hit trace, the citation gate and the decision rules are Stage 4 and are not built. Reviewed by the Compliance & Security and Eval & Reproducibility bots. Builds on Stages 1–3.
 
-Judging order: explainability first, reproducibility second, accuracy third. Clearing a hit that is the customer costs 60; when in doubt, REVIEW.
+Scoring (brief §6): unseen-set decisions are 60% of the score, unseen-set reasons 20%, the dev set 10% and reproducibility 10%. Explainability is also what finalist judges probe in interview. Clearing a hit that is the customer costs 60; when in doubt, REVIEW.
 
 ## 1. One trace record per hit
 
@@ -93,7 +93,7 @@ Hit side, `comparison`, `steps`, `tipping_point` and `badges` come from Stage 4 
 ## 4. LLM rules
 
 - Used only for free text that regex and structured fields can't read. Regex first.
-- Temperature 0, seed, pinned provider, no fallbacks. Those are in `shared/llm_client.py`. `data_collection: deny` is not sent. **Status:** Open, Stage 4 if the trace header must record it; the request flag itself is not on main.
+- Temperature 0, seed, pinned provider, no fallbacks. Those are in `shared/llm_client.py`. `data_collection: deny` is not sent yet (open).
 - The quote must be verbatim in the source, and regex must parse the value from it.
 - Any failure (timeout, bad JSON, quote not found, budget used up) gives UNKNOWN, which leads to REVIEW.
 - **Decision (Neha): a fact the LLM read can never be the reason we clear a hit.** It can only push a hit to REVIEW or support SAME. **Status:** Stage 4 enforces this in the gate (`LLM_FACT`), including when an upstream flag says the fact may solely support a clearance. `may_solely_support_different_entity` stays false on model facts.
@@ -148,6 +148,6 @@ A static `ui/index.html` with no data in it. It loads `trace.jsonl` and `repro.j
 
 ## 8. Open items
 
-- **Status:** Fixed (on main before PRs #7 to #9). Name agreement is exhaustive (`shared.names.agree_parts`), not greedy. Dotted initials collapse to one part (`J.R.` → `jr`).
-- **Status:** Open, fix pending in PR #10. With equal part counts, `agree_parts` still requires full coverage of the left name only. Stage 3 calls it both ways and keeps a match only when both agree.
-- **Status:** Open, Stage 4. The per-hit trace, `TRACE_PATH`, the citation gate and `output/dev.jsonl` are not produced. `tools/repro` already writes `repro.json` from output and trace files when those exist. The static UI is not built.
+- **Done.** Name agreement is exhaustive (`shared.names.agree_parts`), not greedy. Dotted initials collapse to one part (`J.R.` → `jr`).
+- **Done (PR #10).** `agree_parts` is symmetric. The Stage 3 two-way wrapper is now redundant (Stage 3 doc, R3.1).
+- **Open, Stage 4.** The per-hit trace, `TRACE_PATH`, the citation gate and `output/dev.jsonl` are not produced. `tools/repro` already writes `repro.json` from output and trace files when those exist. The static UI is not built.

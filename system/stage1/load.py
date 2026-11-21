@@ -1,19 +1,8 @@
-"""JSONL loader for the customer-side tables. Reads only the given folder."""
+"""Customer-side tables, read through ``shared.io`` (optional files read as empty)."""
 
 from __future__ import annotations
 
-import json
-import os
-
-
-STAGE1_FILES = (
-    "customers.jsonl",
-    "accounts.jsonl",
-    "onboarding.jsonl",
-    "kyc_checks.jsonl",
-    "notes.jsonl",
-    "name_variants.json",
-)
+from shared.io import load_table, load_variants
 
 
 class DataStore:
@@ -22,26 +11,13 @@ class DataStore:
     def __init__(self, folder: str):
         self.folder = folder
 
-    def path(self, name: str) -> str:
-        return os.path.join(self.folder, name)
-
     def read_jsonl(self, name: str) -> list[dict]:
-        path = self.path(name)
-        if not os.path.isfile(path):
-            raise FileNotFoundError(path)
-        rows: list[dict] = []
-        with open(path, encoding="utf-8") as handle:
-            for line in handle:
-                if line.strip():
-                    rows.append(json.loads(line))
-        return rows
+        return load_table(self.folder, name)
 
     def read_json(self, name: str) -> dict:
-        path = self.path(name)
-        if not os.path.isfile(path):
-            raise FileNotFoundError(path)
-        with open(path, encoding="utf-8") as handle:
-            return json.load(handle)
+        if name != "name_variants.json":
+            raise ValueError(name)
+        return load_variants(self.folder)
 
     def load_stage1(self) -> dict:
         return {
@@ -50,5 +26,5 @@ class DataStore:
             "onboarding": self.read_jsonl("onboarding.jsonl"),
             "kyc_checks": self.read_jsonl("kyc_checks.jsonl"),
             "notes": self.read_jsonl("notes.jsonl"),
-            "name_variants": self.read_json("name_variants.json"),
+            "name_variants": load_variants(self.folder),
         }

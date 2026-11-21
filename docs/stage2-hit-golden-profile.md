@@ -4,6 +4,13 @@
 >
 > Part of the 4-stage architecture: **1** customer golden record · **2** hit golden profile (this doc) · **3** alert → person resolution · **4** decision rules.
 
+| | |
+|---|---|
+| **Status** | ✅ Built (`system/stage2/`, PR #8; fixes in PR #10). |
+| **Dev run** | 819 hits (702 individuals, 117 companies). DOB source: `dobs` only 146, `dobs` + note 6, note only 48, search 55, unknown 447. Dated reports 640 lines on 215 hits. Practice labels: 41/41 individuals and 9/9 companies agree. 0 LLM calls. <1 s. |
+| **Code map** | [§9](#9-code-map) |
+| **Planned refactor** | [§11](#11-refactor-plan-to-be-done). Not started. |
+
 ---
 
 ## 1. Why this stage exists
@@ -140,7 +147,7 @@ For every value in `countries`, `nationality`, `citizenship`, `addresses` and `p
 3. Normalise with the Stage 1 country table (codes, names, nationality adjectives → one canonical name).
 4. Drop "International" and "Europe". Territories stay their own country.
 
-Values the table doesn't know are kept raw with flag `UNMAPPED_COUNTRY`. On dev there are three such surface forms (a special administrative region, a partially recognised state, a non-English spelling); they will be added to the table.
+Values the table doesn't know are kept raw with flag `UNMAPPED_COUNTRY`. The three such forms seen on dev (a special administrative region, a partially recognised state, a non-English spelling) have been added to the table.
 
 ### 4.4 Birth-date candidates
 
@@ -235,7 +242,7 @@ and says the form is worded the same in the unseen set. One line-anchored regex 
 - Input is the hit name plus **the first paragraph only**.
 - **Quote check:** `quote` must be a non-empty verbatim substring of the paragraph. An empty or null quote does not count. Age and dates must re-parse *from the quote* with our deterministic parsers. Birth years are computed by our code, never by the model. A `none` answer does not clear `NOTE_DOB_UNRESOLVED`.
 - **Three independent calls must agree exactly**, otherwise the fact is `UNKNOWN`.
-- Responses are **cached** by hash of (model, provider, prompt version, paragraph), so reruns are identical and offline.
+- **Nothing is cached** in the code on main (the shared client keeps no cache). A cache would not exist on the judges' machine anyway, so reproducibility must not rely on it.
 - Every LLM-derived candidate carries `method: "llm"`. **An LLM fact can never contribute to a `DIFFERENT_ENTITY` clearance**, not only when it would be the sole ground. It can only push a hit to `REVIEW` or support a `SAME_ENTITY` confirmation. A weak regex age (`rule_strength: "weak"`, from "was N", ", N,", or "reached") likewise cannot be the only ground for a clearance.
 
 ---
@@ -321,3 +328,40 @@ and says the form is worded the same in the unseen set. One line-anchored regex 
 - `entity_type` → entity-type mismatch.
 - `method: "llm"` facts → never contribute to a `DIFFERENT_ENTITY` clearance. `rule_strength: "weak"` ages cannot be the only ground for one either.
 - Accepted search-result IDs → cited as evidence when they supplied the deciding DOB.
+
+---
+
+## 9. Code map
+
+| File | Lines | What it does |
+|---|---|---|
+| `system/stage2/build.py` | ~340 | `build_hit` assembles one profile (§4.4 tiers, death, reports); `build_profiles` runs every hit in `hit_id` order; `run_stage2` writes `hit_golden.jsonl` and returns stats (including the practice-label check) |
+| `system/stage2/names.py` | ~90 | `hit_names`: name, aliases, best-matching and structured names → parts via Stage 1 `NameTools` (§4.1) |
+| `system/stage2/listing.py` | ~35 | `listing`: category → listing phrase (§4.2) |
+| `system/stage2/countries.py` | ~55 | `hit_countries`: last comma part of each country field via Stage 1 `norm_country` (§4.3) |
+| `system/stage2/notes.py` | ~250 | `parse_note_dob` (first-paragraph birth and age sentences), `parse_dated_reports` (§4.4 tier 1b, §4.6) |
+| `system/stage2/search.py` | ~100 | `evaluate_search`: tier 2 search-result acceptance and age/year extraction |
+| `system/stage2/llm.py` | ~215 | `NoteFallback`: optional LLM for unresolved birth sentences (§5) |
+| `system/stage2/practice.py` | ~90 | Checks profiles against `practice_labels.jsonl` (evaluation, not pipeline logic) |
+
+Tests: `system/tests/test_stage2.py`, `test_stage2_repro.py` (dev folder, skipped when absent).
+
+## 10. Known gaps
+
+| Gap | Effect |
+|---|---|
+| The age-sentence rules were written from dev wording. The brief says unseen free text is worded differently | Coverage on unseen data is unknown. Unresolved sentences become `NOTE_DOB_UNRESOLVED` (safe: no clear on DOB, no search results) |
+| Re-check counts and coverage on the **updated dataset** | The figures in §1 and the header are from the old dev folder |
+| The weak-age rule (`rule_strength: "weak"`) and the LLM-fact rule are recorded on each candidate but enforced only in Stage 4 | Stage 4 must read them |
+
+## 11. Refactor plan (to be done)
+
+Same output, byte for byte. When a step lands, change its status to **Done** and add the commit.
+
+| ID | Change | Why | Status |
+|---|---|---|---|
+| R2.1 | Import names, dates and countries from `system/shared/` after the Stage 1 move (Stage 1 doc, R1.1) | No stage should import another stage's internals | To do |
+| R2.2 | Remove the duplicate `_age_years` (in both `notes.py` and `llm.py`): keep one in `notes.py` and import it | Same rule in two places can drift | To do |
+| R2.3 | Use the shared quote check: `llm.py` has its own `_quoted`, and `shared/llm_client.py` has another. Keep the shared one, plus the Stage 2-specific "non-empty quote" rule as a small wrapper | One validation rule | To do |
+| R2.4 | Move `practice.py` and the practice call in `run_stage2` into the evaluation tool (shared doc, RS.5) | The pipeline produces answers; evaluation is separate | To do |
+| R2.5 | Use the shared JSONL reader and the single LLM switch helper (shared doc, RS.2, RS.3) | One reader, one switch | To do |

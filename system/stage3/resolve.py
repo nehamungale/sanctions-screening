@@ -15,6 +15,7 @@ date of birth, or no city, is kept: unknown is not a mismatch.
 from __future__ import annotations
 
 import json
+import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
@@ -120,7 +121,14 @@ def resolve_alerts(alerts: list[dict], catalog) -> list[dict]:
     """Resolve every alert. Output order is ``alert_id``, independent of input order."""
     resolver = Resolver(catalog)
     ordered = sorted(alerts, key=lambda item: str(item.get("alert_id") or ""))
-    return [resolver.resolve(alert) for alert in ordered]
+    rows = []
+    for alert in ordered:
+        try:
+            rows.append(resolver.resolve(alert))
+        except Exception as error:
+            # No resolution: Stage 4 marks the alert's hits not decided (REVIEW).
+            print(f"warning: stage 3 skipped {alert.get('alert_id')}: {type(error).__name__}", file=sys.stderr)
+    return rows
 
 
 def summarise(rows: list[dict]) -> dict:

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import os
 import time
 from collections import defaultdict
 from itertools import combinations
 
 from stage1.countries import norm_country
+from shared.io import write_json, write_jsonl
 from stage1.load import DataStore
 from stage1.normalise import (
     NameTools,
@@ -19,7 +19,7 @@ from stage1.normalise import (
     parse_date,
 )
 from stage1.normalise_text import norm_text
-from stage1.notes import parse_note
+from stage1.notes import safe_parse_note
 
 _PRECISION_RANK = {"day": 3, "month": 2, "year": 1}
 
@@ -51,11 +51,11 @@ class UnionFind:
 
 def build_from_tables(tables: dict, use_llm: bool | None = None, client=None) -> tuple[list[dict], dict, dict]:
     """Return ``(people, indexes, stats)`` from already-loaded tables."""
-    customers = list(tables.get("customers") or [])
+    customers = [row for row in tables.get("customers") or [] if row.get("record_id")]
     accounts = list(tables.get("accounts") or [])
     onboarding = list(tables.get("onboarding") or [])
-    checks = list(tables.get("kyc_checks") or [])
-    notes = list(tables.get("notes") or [])
+    checks = [row for row in tables.get("kyc_checks") or [] if row.get("applicant_id")]
+    notes = [row for row in tables.get("notes") or [] if row.get("note_id")]
     names = NameTools(tables.get("name_variants"))
 
     customers_by_id = {}
@@ -102,7 +102,7 @@ def build_from_tables(tables: dict, use_llm: bool | None = None, client=None) ->
     }
     flag_counts: dict[str, int] = defaultdict(int)
     for note in sorted(notes, key=lambda row: row.get("note_id") or ""):
-        parsed = parse_note(note, use_llm=use_llm, client=client)
+        parsed = safe_parse_note(note, use_llm=use_llm, client=client)
         parsed_by_id[note["note_id"]] = parsed
         email = norm_email(note.get("requester_email"))
         if email:
@@ -203,17 +203,17 @@ def run_stage1(data_folder: str, cache_dir: str, use_llm: bool | None = None, cl
     tables = DataStore(data_folder).load_stage1()
     people, indexes, stats = build_from_tables(tables, use_llm=use_llm, client=client)
     os.makedirs(cache_dir, exist_ok=True)
-    _write_jsonl(os.path.join(cache_dir, "person_golden.jsonl"), people)
-    _write_json(os.path.join(cache_dir, "index_record_id.json"), indexes["record_id"])
-    _write_json(os.path.join(cache_dir, "index_account_id.json"), indexes["account_id"])
-    _write_json(os.path.join(cache_dir, "index_login_handle.json"), indexes["login_handle"])
-    _write_json(os.path.join(cache_dir, "index_email.json"), indexes["email"])
-    _write_json(os.path.join(cache_dir, "index_name.json"), indexes["name"])
-    _write_jsonl(os.path.join(cache_dir, "record_view.jsonl"), indexes["record_views"])
-    _write_json(os.path.join(cache_dir, "index_account_record_id.json"), indexes["account_record_id"])
-    _write_json(os.path.join(cache_dir, "index_login_record_id.json"), indexes["login_record_id"])
-    _write_json(os.path.join(cache_dir, "index_email_record_id.json"), indexes["email_record_id"])
-    _write_json(os.path.join(cache_dir, "index_name_part_record_id.json"), indexes["name_part_record_id"])
+    write_jsonl(os.path.join(cache_dir, "person_golden.jsonl"), people)
+    write_json(os.path.join(cache_dir, "index_record_id.json"), indexes["record_id"])
+    write_json(os.path.join(cache_dir, "index_account_id.json"), indexes["account_id"])
+    write_json(os.path.join(cache_dir, "index_login_handle.json"), indexes["login_handle"])
+    write_json(os.path.join(cache_dir, "index_email.json"), indexes["email"])
+    write_json(os.path.join(cache_dir, "index_name.json"), indexes["name"])
+    write_jsonl(os.path.join(cache_dir, "record_view.jsonl"), indexes["record_views"])
+    write_json(os.path.join(cache_dir, "index_account_record_id.json"), indexes["account_record_id"])
+    write_json(os.path.join(cache_dir, "index_login_record_id.json"), indexes["login_record_id"])
+    write_json(os.path.join(cache_dir, "index_email_record_id.json"), indexes["email_record_id"])
+    write_json(os.path.join(cache_dir, "index_name_part_record_id.json"), indexes["name_part_record_id"])
     stats["elapsed_seconds"] = round(time.perf_counter() - started, 3)
     stats["cache_dir"] = cache_dir
     return stats
@@ -344,7 +344,7 @@ def _assemble_person(
     for note in attached_notes:
         parsed = parsed_by_id.get(note["note_id"])
         if parsed is None:
-            parsed = parse_note(note)
+            parsed = safe_parse_note(note)
         if parsed["flags"]:
             flags.append(f"NOTE_FLAGGED:{note['note_id']}")
             flags.append("BLOCK_LOCATION_MISMATCH")
@@ -965,15 +965,3 @@ def _indexes(people: list[dict]) -> dict:
         },
     }
 
-
-def _write_json(path: str, payload) -> None:
-    with open(path, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-        handle.write("\n")
-
-
-def _write_jsonl(path: str, rows: list[dict]) -> None:
-    with open(path, "w", encoding="utf-8") as handle:
-        for row in rows:
-            handle.write(json.dumps(row, ensure_ascii=False, separators=(",", ":"), sort_keys=True))
-            handle.write("\n")

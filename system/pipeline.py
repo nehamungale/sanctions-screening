@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import os
 import sys
+import traceback
 
+from shared.io import load_table
 from shared.llm_client import OpenRouterClient
 from shared.time_budget import SHARED_TIME_CAP_SECONDS, arm_run_deadline, deadline_fired
 from stage1.build import run_stage1
@@ -15,6 +17,7 @@ from stage2.build import run_stage2
 from stage2.llm import llm_enabled as hits_llm_enabled
 from stage3.cli import run_stage3
 from stage4.build import run_stage4
+from stage4.output import dumps_jsonl, line_from
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -28,8 +31,8 @@ def main(argv: list[str] | None = None) -> int:
     # The shared cap is 1,200s (20 minutes). The run deadline at 25 minutes
     # is the last stop before the brief's 30 minutes.
     arm_run_deadline()
-    client = OpenRouterClient() if notes_llm_enabled() or hits_llm_enabled() else None
     try:
+        client = OpenRouterClient() if notes_llm_enabled() or hits_llm_enabled() else None
         stage1 = run_stage1(data_folder, cache_dir, client=client)
         stage2 = run_stage2(data_folder, cache_dir, client=client)
         stage3 = run_stage3(
@@ -38,9 +41,58 @@ def main(argv: list[str] | None = None) -> int:
             cache_dir,
         )
         stage4 = run_stage4(data_folder, cache_dir, output_file, client=client)
-    except FileNotFoundError as error:
-        print(f"missing input: {error}", file=sys.stderr)
-        return 2
+    except Exception as error:  # noqa: BLE001 - any failure must still leave a valid output file
+        traceback.print_exc()
+        written = write_fallback(data_folder, output_file)
+        if written is None:
+            print(f"ERROR: {type(error).__name__}: {error}. No output written.", file=sys.stderr)
+            return 2
+        print(
+            f"ERROR: {type(error).__name__}: {error}. Wrote {written} REVIEW lines to {output_file} "
+            "so that no hit is cleared without a decision.",
+            file=sys.stderr,
+        )
+        return 0
+    try:
+        _report(stage1, stage2, stage3, stage4, cache_dir, output_file)
+    except Exception:  # noqa: BLE001 - the output file is already complete
+        traceback.print_exc()
+    return 0
+
+
+def write_fallback(data_folder: str, output_file: str) -> int | None:
+    """One REVIEW line per hit, used only when a stage failed. ``None`` if hits cannot be read."""
+    try:
+        hits = load_table(data_folder, "hits.jsonl")
+    except Exception:  # noqa: BLE001
+        return None
+    lines = []
+    seen = set()
+    for hit in hits:
+        hit_id = hit.get("hit_id")
+        if not hit_id or hit_id in seen:
+            continue
+        seen.add(hit_id)
+        lines.append(line_from(
+            hit_id,
+            hit.get("alert_id"),
+            "REVIEW",
+            "INSUFFICIENT_DATA",
+            None,
+            "The system could not finish processing this alert, so no comparison was made. "
+            "The hit is left for review.",
+            [hit["alert_id"]] if hit.get("alert_id") else [],
+        ))
+    parent = os.path.dirname(output_file)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(output_file, "w", encoding="utf-8") as handle:
+        handle.write(dumps_jsonl(lines))
+    return len(lines)
+
+
+def _report(stage1: dict, stage2: dict, stage3: dict, stage4: dict, cache_dir: str, output_file: str) -> None:
+    """Write ``run_summary.json`` to the cache and print the run's counts."""
     summary = {
         "alert_resolution": _alert_resolution(stage3),
         "artefacts": list(STAGE1_ARTEFACTS) + ["hit_golden.jsonl", "alert_resolution.jsonl"],
@@ -135,7 +187,6 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"notes flagged {notes['flagged']}/{notes['notes']}"
     )
-    return 0
 
 
 def _alert_resolution(stage3: dict) -> dict:
