@@ -469,6 +469,21 @@ class RunTests(unittest.TestCase):
                 "deceased_date": None,
             }])
             _write_jsonl(os.path.join(data, "search_results.jsonl"), [])
+            _write_jsonl(os.path.join(data, "alerts.jsonl"), [{
+                "alert_id": "A-000010",
+                "screened_at": "2026-01-01",
+                "customer": {
+                    "name": "Alice Smith",
+                    "entity_type": "Individual",
+                    "dob": "1990-01-02",
+                    "country": "GB",
+                    "city": "Oslo",
+                },
+                "account_ref": "ACC-1",
+                "login_handle": None,
+                "email": None,
+                "hit_ids": ["H-000010"],
+            }])
             output = os.path.join(folder, "summary.json")
             env = dict(os.environ)
             env["SANCTIONS_CACHE"] = cache
@@ -487,16 +502,32 @@ class RunTests(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(cache, "record_view.jsonl")))
             self.assertTrue(os.path.isfile(os.path.join(cache, "index_record_id.json")))
             self.assertTrue(os.path.isfile(os.path.join(cache, "hit_golden.jsonl")))
+            self.assertTrue(os.path.isfile(os.path.join(cache, "alert_resolution.jsonl")))
             self.assertFalse(os.path.exists(os.path.join(folder, "output", "dev.jsonl")))
             with open(output, encoding="utf-8") as handle:
                 summary = json.loads(handle.read())
-            self.assertEqual(summary["stage"], 2)
-            self.assertEqual(summary["stages"], [1, 2])
+            self.assertEqual(summary["stage"], 3)
+            self.assertEqual(summary["stages"], [1, 2, 3])
             self.assertEqual(summary["records"], 1)
             self.assertEqual(summary["persons"], 1)
             self.assertEqual(summary["hits"], 1)
             self.assertFalse(summary["llm_enabled"])
             self.assertEqual(summary["llm_calls"], 0)
+            self.assertEqual(summary["alert_resolution"]["status"], {"RESOLVED": 1})
+            self.assertIn("hit_golden.jsonl", summary["artefacts"])
+            self.assertIn("alert_resolution.jsonl", summary["artefacts"])
+            with open(os.path.join(cache, "alert_resolution.jsonl"), encoding="utf-8") as handle:
+                resolved = json.loads(handle.readline())
+            self.assertEqual(resolved["status"], "RESOLVED")
+            self.assertEqual(resolved["method"], "LINK_ACCOUNT")
+            self.assertEqual(resolved["resolution_method"], "link_account")
+            self.assertEqual(resolved["resolution_status"], "resolved_single")
+            self.assertTrue(resolved["resolution_clean"])
+            self.assertEqual(resolved["resolution_quality"], "clean_link")
+            self.assertEqual(resolved["fragility_flags"], [])
+            self.assertEqual(resolved["customer_record_id"], "CUS-000010")
+            self.assertIn("CUS-000010", resolved["evidence_ids"])
+            self.assertIn("ACC-1", resolved["evidence_ids"])
 
 
 def _check(check_id, applicant, result, dob, document, checked_at, name="ALICE SMITH", country="Nigeria", document_type="passport"):
