@@ -18,7 +18,14 @@ import json
 from stage4.model import PRIORITY, RULES_VERSION, Decision
 
 
-def hit_trace(hit: dict, alert: dict, resolution: dict | None, decision: Decision, candidates: list[dict] | None = None) -> dict:
+def hit_trace(
+    hit: dict,
+    alert: dict,
+    resolution: dict | None,
+    decision: Decision,
+    candidates: list[dict] | None = None,
+    person: dict | None = None,
+) -> dict:
     cmp = decision.cmp
     return {
         "trace_schema": 1,
@@ -42,7 +49,7 @@ def hit_trace(hit: dict, alert: dict, resolution: dict | None, decision: Decisio
         "identity": {
             "person_id": decision.person_id,
             "merged": list((cmp and []) or []),
-            "facts": _facts(cmp),
+            "facts": _facts(cmp, person),
             "flags": [],
             "ignored_checks": [],
             "candidates": candidates or [],
@@ -54,13 +61,26 @@ def hit_trace(hit: dict, alert: dict, resolution: dict | None, decision: Decisio
 
 
 def _tipping(decision: Decision) -> str | None:
+    if decision.errored or decision.not_decided or _exception_text(decision.missing):
+        return "The hit could not be decided."
     if decision.decision == "DIFFERENT_ENTITY":
-        return f"Without the {decision.reason_code} ground this would be REVIEW (INSUFFICIENT_DATA)."
+        return f"Without the {decision.reason_code} ground, this hit would be left for review."
     if decision.decision == "SAME_ENTITY":
-        return "If the agreeing name or date were missing this would be REVIEW (INSUFFICIENT_DATA)."
+        return "If the agreeing name or date were missing, this hit would be left for review."
     if decision.missing:
-        return f"Supplying {decision.missing} could change this review."
-    return None
+        text = " ".join(str(decision.missing).split()).strip().rstrip(".")
+        if not text or _exception_text(text):
+            return "The hit could not be decided."
+        return f"The hit is left for review because {text}."
+    return "The records do not settle this hit, so it is left for review."
+
+
+def _exception_text(value: object) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    head = text.split(":", 1)[0].strip()
+    return head.endswith("Error") or head.endswith("Exception")
 
 
 def _deciding(decision: Decision) -> list[str]:
@@ -93,24 +113,56 @@ def _comparison(cmp) -> list[dict]:
         ("death", cmp.death),
         ("earliest_report", cmp.time),
     ):
-        rows.append({
+        row = {
             "dim": dim,
             "customer": label.customer,
             "hit": label.hit,
             "status": label.status.lower(),
             "src": list(label.sources),
             "llm_used": bool(label.llm_used),
-        })
+        }
+        if dim == "death":
+            row["customer"] = None
+            row["screening_date"] = label.detail.get("screening_date")
+            if row["screening_date"]:
+                row["note"] = f"Screening date {row['screening_date']}."
+        elif dim == "dob" and label.detail.get("phrase"):
+            row["note"] = label.detail.get("phrase")
+        rows.append(row)
     return rows
 
 
-def _facts(cmp) -> dict:
+def _facts(cmp, person: dict | None) -> dict:
     if cmp is None:
         return {}
+    person = person or {}
+    legal = person.get("legal_name") or {}
+    name_source = legal.get("source_id")
+    name_verified = bool(
+        legal.get("verified") and legal.get("source_kind") == "kyc_check" and name_source
+    )
+    dob_raw = person.get("dob") or {}
+    dob_source = dob_raw.get("source_id")
+    dob_verified = bool(dob_raw.get("verified") and dob_source)
     return {
-        "dob": {"value": cmp.dob.customer, "verified": bool((cmp.dob.detail.get("verified") or {}).get("source_id")), "source_id": (cmp.dob.sources or [None])[0]},
-        "name": {"value": cmp.name.customer, "verified": cmp.name.detail.get("clear_status") is not None, "source_id": cmp.name.detail.get("source_id")},
-        "entity_type": {"value": cmp.entity_type.customer, "source_id": (cmp.entity_type.sources or [None])[0]},
+        "dob": {
+            "value": dob_raw.get("value") or cmp.dob.customer,
+            "verified": dob_verified,
+            "source_id": dob_source,
+            "source_kind": dob_raw.get("source_kind"),
+        },
+        "name": {
+            "value": legal.get("value") or cmp.name.customer,
+            "verified": name_verified,
+            "source_id": name_source,
+            "source_kind": legal.get("source_kind"),
+        },
+        "entity_type": {
+            "value": cmp.entity_type.customer,
+            "verified": False,
+            "source_id": (person.get("entity_type") or {}).get("source_id"),
+            "source_kind": (person.get("entity_type") or {}).get("source_kind"),
+        },
     }
 
 

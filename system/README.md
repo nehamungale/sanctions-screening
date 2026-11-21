@@ -86,8 +86,9 @@ The trace follows `ui/TRACE_CONTRACT.md`. It is not written into the official ou
 
 - `verdict` — the official line
 - `deciding_dims` — the dimensions that decided it (`name`, `dob`, `country`, `type`, `death`, `earliest_report`)
-- `tipping_point` — what would send the hit to review, or what is missing
-- `comparison` — one row per dimension, status `agree` / `contradict` / `unknown`, with `src` and `llm_used`
+- `tipping_point` — a full sentence. An errored hit says "The hit could not be decided."
+- `comparison` — one row per dimension, status `agree` / `contradict` / `unknown`, with `src` and `llm_used`. `dob.hit` is the date values and `dob.note` is the sentence. `death.customer` is null unless the customer has a death fact; `death.screening_date` is the alert date.
+- `identity.facts.name.verified` is true only for a legal name from an approved KYC check. `identity.facts.dob.verified` is true only when that fact has a `source_id`.
 - `identity.candidates` — each Stage 3 candidate, its `customer_record_id`, and `would_decide`
 - `steps` — every rule, each with `llm_used` true when an input fact was read by the model
 - `llm_calls` — empty on the default path

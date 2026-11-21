@@ -17,19 +17,42 @@ def _sentence(text: str) -> str:
 def render(decision: Decision, hit: dict, person: dict, alert: dict) -> str:
     parts = [_sentence(item) for item in _parts(decision, hit, person, alert)]
     parts = [item for item in parts if item]
+    anchor = _sentence(_anchor(decision, hit, person, alert))
+    hit_id = str(hit.get("hit_id") or "")
+    if anchor and hit_id and hit_id not in " ".join(parts):
+        parts.append(anchor)
     if len(parts) == 1:
-        parts.append(_sentence(_closer(decision)))
+        parts.append(_sentence(_closer(decision, hit)))
+    if len(parts) > 4 and anchor in parts:
+        parts = [item for item in parts if item != anchor][:3] + [anchor]
     return " ".join(parts[:4])
 
 
-def _closer(decision: Decision) -> str:
+def _closer(decision: Decision, hit: dict) -> str:
+    name = _hit_name(hit)
+    hit_id = hit.get("hit_id") or "this hit"
     if decision.decision == "DIFFERENT_ENTITY":
-        return "That contradiction is enough to treat the hit as a different entity"
+        return f"That contradiction is enough to treat {name} ({hit_id}) as a different entity"
     if decision.decision == "SAME_ENTITY":
-        return "Nothing in the records contradicts that match"
+        return f"Nothing in the records contradicts that {name} ({hit_id}) is the customer"
     if decision.missing:
-        return f"The hit is left for review because {decision.missing}"
-    return "The hit is left for review"
+        return f"{name} ({hit_id}) is left for review because {decision.missing}"
+    return f"{name} ({hit_id}) is left for review"
+
+
+def _anchor(decision: Decision, hit: dict, person: dict, alert: dict) -> str:
+    """One sentence that only this hit can share: names, the hit id, and cited records."""
+    customer = _customer_name(person, alert)
+    listed = _hit_name(hit)
+    hit_id = hit.get("hit_id") or "unknown hit"
+    record = decision.record or "none"
+    cited = ", ".join(decision.evidence) if decision.evidence else (alert.get("alert_id") or hit_id)
+    gaps = list(getattr(decision, "screened_gaps", None) or [])
+    gap = f", missing screened field {', '.join(gaps)}" if gaps else ""
+    return (
+        f"The names compared are {customer} and {listed} ({hit_id}), "
+        f"customer record {record}, records cited {cited}{gap}"
+    )
 
 
 def _parts(decision: Decision, hit: dict, person: dict, alert: dict) -> list[str]:
@@ -42,9 +65,12 @@ def _parts(decision: Decision, hit: dict, person: dict, alert: dict) -> list[str
             "No customer record was found, and the entity types alone contradict",
         ]
     if decision.kind == "not_found_review":
+        screened = _customer_name(person, alert)
+        listed = _hit_name(hit)
+        alert_id = alert.get("alert_id") or "this alert"
         return [
-            "No customer record fits the screened details of this alert, so the hit cannot be compared with the customer",
-            "The hit is left for review",
+            f"No customer record fits the screened name {screened} on {alert_id}, so {listed} ({hit.get('hit_id')}) cannot be compared with a customer",
+            f"{listed} is left for review",
         ]
     if decision.kind == "not_decided":
         return [
@@ -123,7 +149,9 @@ def _ground(code: str, cmp, hit: dict, person: dict, alert: dict) -> str:
     if code == "DOB_MISMATCH":
         dob = cmp.dob.customer or "unknown"
         source = (cmp.dob.sources or ["the customer record"])[0]
-        phrase = cmp.dob.hit or "the hit gives a different date of birth"
+        phrase = cmp.dob.detail.get("phrase") or (
+            f"the hit's date of birth is {cmp.dob.hit}" if cmp.dob.hit else "the hit gives a different date of birth"
+        )
         return f"The customer's date of birth is {dob} ({source}) but {phrase}"
     if code == "NAME_MISMATCH_VERIFIED":
         legal = (person.get("legal_name") or {}).get("value") or cmp.name.customer
@@ -132,7 +160,11 @@ def _ground(code: str, cmp, hit: dict, person: dict, alert: dict) -> str:
         return f"The customer's verified name is {legal} ({source}), which does not match the hit's name {listed}"
     countries = ", ".join(cmp.location.customer or []) or "no country"
     listed = ", ".join(cmp.location.hit or []) or "no country"
-    return f"The customer is linked only to {countries} but the hit is linked only to {listed}"
+    sources = ", ".join(cmp.location.sources) if cmp.location.sources else "the customer records"
+    hit_id = hit.get("hit_id") or "the hit"
+    return (
+        f"The customer is linked only to {countries} ({sources}) but the hit {hit_id} is linked only to {listed}"
+    )
 
 
 def _dob_sentence(cmp, person: dict) -> str:
@@ -175,6 +207,18 @@ def _agreeing_bits(cmp, hit: dict, person: dict) -> list[str]:
     if cmp.name.status == AGREE:
         bits.append(_name_sentence(cmp))
     return bits
+
+
+def _hit_name(hit: dict) -> str:
+    return _primary_name(hit) or hit.get("name") or "the listed name"
+
+
+def _customer_name(person: dict, alert: dict) -> str:
+    legal = (person.get("legal_name") or {}).get("value")
+    if legal:
+        return str(legal)
+    screened = (alert.get("customer") or {}).get("name")
+    return str(screened) if screened else "the screened customer"
 
 
 def _primary_name(hit: dict) -> str | None:

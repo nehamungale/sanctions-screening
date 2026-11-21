@@ -54,7 +54,7 @@ def run_stage4(data_folder: str, cache_dir: str, output_file: str, client=None) 
             )
             decision.errored = True
             decision.not_decided = True
-            decision.missing = type(error).__name__
+            decision.missing = "the hit could not be decided"
         _restrict(decision, known, hit, alert)
         prepared.append({
             "hit": hit,
@@ -197,8 +197,8 @@ def _trace(item: dict, persons: dict) -> dict:
                 "reason_code": (alt or {}).get("reason_code") or decision.reason_code,
             },
         })
-    record = hit_trace(item["hit"], item["alert"], resolution, decision, views)
     person = persons.get(decision.person_id) or {}
+    record = hit_trace(item["hit"], item["alert"], resolution, decision, views, person)
     record["identity"]["merged"] = [
         {"rule": edge.get("rule") or "?", "records": list(edge.get("records") or [])}
         for edge in (person.get("cluster_edges") or [])

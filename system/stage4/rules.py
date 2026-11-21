@@ -77,6 +77,8 @@ def decide_for_person(
     if fired:
         primary = fired[0]
         reasons = blocked.get(primary) or []
+        gaps = _screened_gaps(candidate)
+        note = _gate_note(reasons, gaps, alert)
         decision = Decision(
             decision="REVIEW",
             reason_code="INSUFFICIENT_DATA",
@@ -85,8 +87,9 @@ def decide_for_person(
             blocked=blocked,
             cmp=cmp,
             kind="review_gate",
-            gate_note=gate_words(reasons),
-            missing=gate_words(reasons),
+            gate_note=note,
+            missing=note,
+            screened_gaps=gaps,
             person_id=person_id,
             matched_records=matched,
         )
@@ -105,6 +108,36 @@ def decide_for_person(
         return _same("NAME_LOCATION_MATCH", cmp, person_id, matched)
 
     return _review(cmp, person_id, matched, missing=_missing(cmp), kind="review_insufficient")
+
+
+def _screened_gaps(candidate: dict | None) -> list[str]:
+    """Which screened filter was skipped, for the reason text only."""
+    found: list[str] = []
+    filters = (candidate or {}).get("filters") or {}
+    for item in filters.get("skipped_missing") or []:
+        if isinstance(item, dict) and item.get("filter"):
+            side = item.get("side") or "record"
+            label = f"{item['filter']} on the {side}"
+        elif isinstance(item, str) and item:
+            label = item
+        else:
+            continue
+        if label not in found:
+            found.append(label)
+    return found
+
+
+def _gate_note(reasons: list[str], gaps: list[str], alert: dict) -> str:
+    extras: list[str] = []
+    if "candidate_kept_on_missing_field" in reasons:
+        named = ", ".join(gaps) if gaps else "a field that was not named"
+        extras.append(f"the customer was kept despite a missing screened field ({named})")
+    if "dob_partial_only" in reasons:
+        dob = ((alert.get("customer") or {}).get("dob")) or "unknown"
+        extras.append(f"the screened date of birth {dob} matched the customer only in part")
+    if extras:
+        return "; ".join(extras)
+    return gate_words(reasons)
 
 
 def _same(code: str, cmp: Comparison, person_id: str | None, matched: list) -> Decision:

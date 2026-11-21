@@ -26,13 +26,15 @@ nothing throws. Anything that would make a hit or alert look safer than the data
 | `badges.fragility` | `solid` \| `thin` \| `borderline` | Design | `"thin"` | Shown as "unknown" |
 | `badges.llm_used` | boolean | Design | `false` | Shown as "unknown" |
 | `badges.rules_version` | string | Design | `"r1.0"` | Shown as "unknown" |
-| `tipping_point` | string \| null | Design | `"Without KYC-SYN101 this would be REVIEW (INSUFFICIENT_DATA)."` | "No tipping point recorded in the trace." |
-| `comparison[]` | `{dim, customer, hit, status, src[]}` | Design | `{"dim":"dob","customer":"1984-03-02","hit":"1961; 1962","status":"contradict","src":["KYC-SYN101"]}` | Each of the 6 dims (`name`, `dob`, `country`, `type`, `death`, `earliest_report`) is always shown; a missing row shows as can't compare. Extra dims are shown after the six |
+| `tipping_point` | string \| null | Design | `"Without the DOB_MISMATCH ground, this hit would be left for review."` | "No tipping point recorded in the trace." A full sentence. An errored or undecided hit uses "The hit could not be decided." Exception class names are never written here. |
+| `comparison[]` | `{dim, customer, hit, status, src[]}` plus optional `note`, and `screening_date` on death | Design | `{"dim":"dob","customer":"1984-03-02","hit":"1961-07-15","status":"contradict","src":["KYC-SYN101"],"note":"the hit's listed date of birth is 1961-07-15"}` | Each of the 6 dims (`name`, `dob`, `country`, `type`, `death`, `earliest_report`) is always shown; a missing row shows as can't compare. Extra dims are shown after the six |
 | `comparison[].status` | `agree` \| `contradict` \| `no_conflict` \| `unknown` | Design | `"no_conflict"` | Shown in plain English (agrees / contradicts / no conflict / can't compare); raw value in the tooltip and the raw trace. Unknown values are shown as-is |
-| `comparison[].customer` / `.hit` | any JSON | Design | `"GB"`, `["GB","IE"]`, `null` | Null/empty: "not in customer records" / "not on list profile" ("differs by candidate" for an AMBIGUOUS customer) |
+| `comparison[].customer` / `.hit` | any JSON | Design | `"GB"`, `["GB","IE"]`, `null` | Null/empty: "not in customer records" / "not on list profile" ("differs by candidate" for an AMBIGUOUS customer). `dob.hit` is the date value or values, not a sentence. `death.customer` is the customer's own death fact, or null. |
+| `comparison[].note` | string | Stage 4 | `"the hit's listed date of birth is 1961-07-15"` | Omitted when there is no prose. The dob row's sentence lives here. The death row's note is "Screening date YYYY-MM-DD." |
+| `comparison[].screening_date` | string \| null | Stage 4 | `"2026-02-01"` | Only on the death row. The alert screening date, not a customer fact. |
 | `identity.person_id` | string | Design | `"P-CUS-SYN001"` | "—" |
 | `identity.merged[]` | `{rule, records[], …}` | Design | `{"rule":"P3 phone+full DOB","records":["CUS-SYN002","CUS-SYN014"]}` | "none". Extra keys are shown as `key: value` |
-| `identity.facts` | `{name: {value, verified, source_id, source_kind}}` | Design (Stage 1 mapping) | `{"dob":{"value":"1984-03-02","verified":true,"source_id":"KYC-SYN101"}}` | Table omitted |
+| `identity.facts` | `{name: {value, verified, source_id, source_kind}}` | Design (Stage 1 mapping) | `{"dob":{"value":"1984-03-02","verified":true,"source_id":"KYC-SYN101"}}` | Table omitted. `name.verified` is true only when an approved KYC check (`source_kind` `kyc_check`) backs the legal name. `dob.verified` is true only when `source_id` is present. |
 | `identity.flags[]`, `identity.ignored_checks[]` | string[] | Design | `["UNVERIFIED"]` | "none" |
 | `steps[]` | `{rule, result, llm_used, why?}` | Design | `{"rule":"DOB_MISMATCH","result":"fired","llm_used":false}` | Empty table |
 | `llm_calls[]` | object[] | Design (content listed, field names not) | see §1b | "No LLM calls for this hit." |

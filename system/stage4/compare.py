@@ -129,13 +129,14 @@ def _dob_dim(hit: dict, person: dict, cmp: Comparison) -> Dim:
         verified, declared, every = _customer_dates(person)
         agree_pool = [verified] if verified else list(declared)
     dim = Dim(customer=(verified or (declared[0] if declared else None) or {}).get("value") if (verified or declared) else None)
-    dim.hit = _hit_date_phrase(candidates)
+    dim.hit = _hit_date_values(candidates)
     dim.detail = {
         "candidates": candidates,
         "verified": verified,
         "declared": declared,
         "every_declared": every,
         "company": company,
+        "phrase": _hit_date_phrase(candidates),
     }
     if verified and verified.get("method") == "llm":
         dim.llm_used = True
@@ -193,6 +194,26 @@ def _search_sources(candidates: list[dict]) -> list[str]:
         if candidate.get("source") == "search_result" and candidate.get("source_id"):
             found.append(candidate["source_id"])
     return found
+
+
+def _hit_date_values(candidates: list[dict]) -> str | None:
+    """Date values only, for the comparison row. Prose stays in ``phrase``."""
+    shown = []
+    for candidate in candidates:
+        years = list(candidate.get("years") or [])
+        month = candidate.get("month")
+        day = candidate.get("day")
+        if len(years) == 2:
+            shown.append(f"{years[0]} or {years[1]}")
+        elif len(years) > 2:
+            shown.append(f"{years[0]}-{years[-1]}")
+        elif len(years) == 1 and month and day:
+            shown.append(f"{int(years[0]):04d}-{int(month):02d}-{int(day):02d}")
+        elif len(years) == 1 and month:
+            shown.append(f"{int(years[0]):04d}-{int(month):02d}")
+        elif len(years) == 1:
+            shown.append(str(years[0]))
+    return ", ".join(shown) or None
 
 
 def _hit_date_phrase(candidates: list[dict]) -> str | None:
@@ -276,9 +297,13 @@ def _death_dim(hit: dict, alert: dict) -> Dim:
     deceased = hit.get("deceased") or {}
     dim = Dim(
         status=CONTRADICT if fired else UNKNOWN,
-        customer=screened.isoformat() if screened else None,
+        customer=None,
         hit=deceased.get("date"),
-        detail={"precision": deceased.get("precision"), "life_status": deceased.get("life_status")},
+        detail={
+            "precision": deceased.get("precision"),
+            "life_status": deceased.get("life_status"),
+            "screening_date": screened.isoformat() if screened else None,
+        },
     )
     if deceased.get("method") == "llm":
         dim.llm_used = True

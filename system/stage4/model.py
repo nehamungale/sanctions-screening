@@ -90,6 +90,7 @@ class Decision:
     errored: bool = False
     kind: str = "review"
     gate_note: str = ""
+    screened_gaps: list = field(default_factory=list)
     person_id: str | None = None
     matched_records: list = field(default_factory=list)
     alternatives: list = field(default_factory=list)
