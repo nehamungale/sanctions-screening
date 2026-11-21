@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from stage1.countries import norm_country
+from stage1.countries import countries_in_note, norm_country
 from stage1.normalise import NameTools, dates_compatible, dates_identical_full, levenshtein, norm_docno, norm_email, norm_phone, parse_date
 from stage1.normalise_text import norm_text
 
@@ -101,6 +101,11 @@ class CountryTests(unittest.TestCase):
         self.assertEqual(norm_country("Cote D'Ivoire")[0], "Côte d'Ivoire")
         self.assertEqual(norm_country("Côte d'Ivoire")[0], "Côte d'Ivoire")
         self.assertEqual(norm_country("Northern Mariana Islands")[0], "Northern Mariana Islands")
+        self.assertEqual(norm_country("Deutschland")[0], "Germany")
+        self.assertEqual(norm_country("Côte d Ivoire")[0], "Côte d'Ivoire")
+        self.assertEqual(norm_country("the UK")[0], "United Kingdom")
+        self.assertEqual(countries_in_note("She lived in the UK and later in Deutschland."), ["United Kingdom", "Germany"])
+        self.assertEqual(countries_in_note("Posted to Côte d Ivoire."), ["Côte d'Ivoire"])
         self.assertNotEqual(norm_country("MP")[0], "United States")
 
     def test_macao_kosovo_palestine(self):

@@ -126,22 +126,24 @@ class NoteFallback:
         if key in self.cache:
             stored = self.cache[key]
             candidate = candidate_from_model(paragraph, stored.get("value") or {}, source_id) if stored.get("ok") else None
-            flags = [] if candidate or stored.get("none") else ["NOTE_DOB_UNRESOLVED", "LLM_UNKNOWN"]
+            # A cached "none" does not clear the unresolved cue.
             if stored.get("budget"):
                 flags = ["NOTE_DOB_UNRESOLVED", "LLM_SKIPPED_BUDGET"]
+            elif candidate:
+                flags = []
+            else:
+                flags = ["NOTE_DOB_UNRESOLVED", "LLM_UNKNOWN"]
             return {"candidate": candidate, "flags": flags, "called": False}
         value, detail = self._call(name, paragraph)
         self.hits_called += 1
         candidate = candidate_from_model(paragraph, value, source_id) if value else None
-        none = bool(value and value.get("statement") == "none" and (value.get("quote") or "") in paragraph)
         budget = detail == "time_or_budget_cap"
-        self.cache[key] = {"ok": candidate is not None, "none": none and candidate is None, "budget": budget, "value": value}
+        # statement "none" is not a parsed birth fact. The cue stays unresolved.
+        self.cache[key] = {"ok": candidate is not None, "none": False, "budget": budget, "value": value}
         if candidate:
             flags = []
         elif budget:
             flags = ["NOTE_DOB_UNRESOLVED", "LLM_SKIPPED_BUDGET"]
-        elif none:
-            flags = []
         else:
             flags = ["NOTE_DOB_UNRESOLVED", "LLM_UNKNOWN"]
         return {"candidate": candidate, "flags": flags, "called": True}
@@ -195,7 +197,7 @@ class NoteFallback:
                 return None, "disagreement"
             return value, "unanimous"
         if self.client is None:
-            self.client = OpenRouterClient(call_budget=48, time_cap=1200.0)
+            self.client = OpenRouterClient()
         self.calls = self.client.calls
         extraction = self.client.extract(message, SCHEMA, schema_name="hit_note_dob")
         self.calls = self.client.calls
@@ -207,7 +209,11 @@ class NoteFallback:
 
 
 def _quoted(value: dict, paragraph: str) -> bool:
-    for key in ("quote", "born_date", "reference_date"):
+    """A quote counts only when it is a non-empty substring of the paragraph."""
+    quote = value.get("quote")
+    if not isinstance(quote, str) or quote == "" or quote not in paragraph:
+        return False
+    for key in ("born_date", "reference_date"):
         item = value.get(key)
         if isinstance(item, str) and item and item not in paragraph:
             return False

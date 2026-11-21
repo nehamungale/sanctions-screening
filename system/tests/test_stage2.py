@@ -110,6 +110,8 @@ class NameTests(unittest.TestCase):
         structured = [entry for entry in kept[0]["names"] if entry["kind"] == "structured"]
         self.assertEqual(len(structured), 1)
         self.assertEqual(structured[0]["parts"], ["ada", "belle", "quinn"])
+        self.assertEqual(structured[0]["source_id"], "H-0000AA#name")
+        self.assertNotIn("#structured", structured[0]["source_id"])
 
 
 class DateTests(unittest.TestCase):
@@ -119,7 +121,8 @@ class DateTests(unittest.TestCase):
         self.assertEqual([item["precision"] for item in candidates], ["year", "month", "day"])
         self.assertEqual(candidates[2]["day"], 4)
         self.assertEqual(candidates[0]["source_id"], "H-0000AA#dobs")
-        self.assertIn("UNKNOWN_DATE", rows[0]["flags"])
+        self.assertIn("DOBS_UNPARSED", rows[0]["flags"])
+        self.assertFalse(rows[0]["search_results"]["consulted"])
         self.assertEqual(rows[0]["dob_tier"], "tier1")
         self.assertFalse(rows[0]["search_results"]["consulted"])
 
@@ -157,12 +160,66 @@ class DateTests(unittest.TestCase):
             self.assertEqual(parsed["candidates"][0]["years"], years, text)
             self.assertEqual(parsed["candidates"][0]["precision"], "year")
             self.assertIsNone(parsed["candidates"][0]["month"])
-            self.assertTrue(parsed["candidates"][0]["may_solely_support_different_entity"])
+            weak = parsed["candidates"][0]["rule_strength"] == "weak"
+            self.assertEqual(parsed["candidates"][0]["may_solely_support_different_entity"], not weak)
 
     def test_later_paragraph_is_ignored(self):
-        parsed = parse_note_dob("No birth here.\n\nShe was born in 1952.", "H-0000AA#profile_notes")
+        parsed = parse_note_dob("Nothing about a date here.\n\nShe was born in 1952.", "H-0000AA#profile_notes")
         self.assertEqual(parsed["candidates"], [])
         self.assertFalse(parsed["unresolved"])
+        spaced = parse_note_dob("Nothing about a date here.\n \nShe was born in 1952.", "H-0000AA#profile_notes")
+        self.assertEqual(spaced["candidates"], [])
+        windows = parse_note_dob("Nothing about a date here.\r\n\r\nShe was born in 1952.", "H-0000AA#profile_notes")
+        self.assertEqual(windows["candidates"], [])
+
+    def test_birth_cues_are_case_insensitive_and_block_when_unparsed(self):
+        born = parse_note_dob("Born on 12 March 1970 in the city.", "H-0000AA#profile_notes")
+        self.assertEqual(born["candidates"][0]["years"], [1970])
+        self.assertEqual(born["candidates"][0]["precision"], "day")
+        self.assertEqual(born["candidates"][0]["day"], 12)
+        city = parse_note_dob("She was born in Paris in 1970.", "H-0000AA#profile_notes")
+        self.assertEqual(city["candidates"][0]["years"], [1970])
+        self.assertEqual(city["candidates"][0]["precision"], "year")
+        ordinal = parse_note_dob("born on 5th March 1970.", "H-0000AA#profile_notes")
+        self.assertEqual((ordinal["candidates"][0]["day"], ordinal["candidates"][0]["month"]), (5, 3))
+        ambiguous = parse_note_dob("Date of birth: 12/03/1970.", "H-0000AA#profile_notes")
+        self.assertTrue(ambiguous["unresolved"])
+        self.assertEqual(ambiguous["candidates"], [])
+        clear = parse_note_dob("Date of birth: 15/03/1970.", "H-0000AA#profile_notes")
+        self.assertEqual(clear["candidates"][0]["years"], [1970])
+        self.assertEqual(clear["candidates"][0]["day"], 15)
+        rows, _fallback = profiles([hit(profile_notes="Place of birth: Madrid, and nothing more.")], [
+            {"result_id": "SR-000040", "query": "ada quinn", "snippet": "Ada Quinn is a politically exposed person aged 40 in 2010 in Ireland.", "title": "", "source": "web"},
+        ])
+        self.assertIn("NOTE_DOB_UNRESOLVED", rows[0]["flags"])
+        self.assertFalse(rows[0]["search_results"]["consulted"])
+        self.assertEqual(rows[0]["dob_candidates"], [])
+
+    def test_relative_ages_are_skipped_and_weak_patterns_are_tagged(self):
+        kept = parse_note_dob("His son, 12, lives abroad. Ada was aged 45 in March 2019.", "H-1")
+        self.assertEqual(kept["candidates"][0]["years"], [1973, 1974])
+        self.assertEqual(kept["candidates"][0]["rule_strength"], "strong")
+        wife = parse_note_dob("His wife was 40 in March 2010.", "H-1")
+        self.assertEqual(wife["candidates"], [])
+        self.assertFalse(wife["unresolved"])
+        weak = parse_note_dob("In March 1999, at which time she was 23.", "H-1")
+        self.assertEqual(weak["candidates"][0]["years"], [1975, 1976])
+        self.assertEqual(weak["candidates"][0]["rule_strength"], "weak")
+        self.assertFalse(weak["candidates"][0]["may_solely_support_different_entity"])
+
+    def test_loose_dobs_forms_and_unparsed_blocks_search(self):
+        from stage2.build import parse_hit_dob
+        self.assertEqual(parse_hit_dob("c. 1970")[0]["years"], [1970])
+        self.assertEqual(parse_hit_dob("Mar 1970")[0]["precision"], "month")
+        self.assertEqual(parse_hit_dob("12 Mar 1970")[0]["day"], 12)
+        self.assertEqual(parse_hit_dob("1970-1972")[0]["years"], [1970, 1971, 1972])
+        self.assertEqual(parse_hit_dob("1970-00-00")[0]["precision"], "year")
+        rows, _fallback = profiles([hit(dobs=["not-a-date"])], [
+            {"result_id": "SR-000041", "query": "ada quinn", "snippet": "Ada Quinn is a politically exposed person aged 40 in 2010 in Ireland.", "title": "", "source": "web"},
+        ])
+        self.assertIn("DOBS_UNPARSED", rows[0]["flags"])
+        self.assertFalse(rows[0]["search_results"]["consulted"])
+        self.assertEqual(rows[0]["dob_candidates"], [])
 
     def test_two_ages_or_two_dates_are_unresolved(self):
         two_ages = parse_note_dob("aged 30 in March 1990 and aged 40 in June 2000.", "H-1")
@@ -429,9 +486,18 @@ class LlmTests(unittest.TestCase):
             again = second.resolve("H-0000AA", "Ada Quinn", paragraph)
         self.assertEqual(calls["n"], 3)
         self.assertIsNone(first["candidate"])
-        self.assertEqual(first["flags"], [])
+        self.assertIn("NOTE_DOB_UNRESOLVED", first["flags"])
         self.assertFalse(again["called"])
-        self.assertEqual(again["flags"], [])
+        self.assertIn("NOTE_DOB_UNRESOLVED", again["flags"])
+
+        def empty_quote(_paragraph):
+            return {"statement": "none", "born_date": None, "age": None, "reference_date": None, "quote": ""}
+
+        with tempfile.TemporaryDirectory() as cache:
+            blank = NoteFallback(cache, True, transport=empty_quote)
+            refused = blank.resolve("H-0000AA", "Ada Quinn", "A paragraph with a birth cue and no date.")
+        self.assertIsNone(refused["candidate"])
+        self.assertIn("NOTE_DOB_UNRESOLVED", refused["flags"])
 
         def explode(_request, timeout=0):
             raise AssertionError("paid model must not call the network")

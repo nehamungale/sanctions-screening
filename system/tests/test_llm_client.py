@@ -8,7 +8,14 @@ import urllib.error
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from shared.llm_client import DEFAULT_MODEL, DEFAULT_PROVIDER_ORDER, OpenRouterClient, is_free_model
+from shared.llm_client import (
+    DEFAULT_ITEM_CALL_BUDGET,
+    DEFAULT_MODEL,
+    DEFAULT_PROVIDER_ORDER,
+    DEFAULT_TIME_CAP_SECONDS,
+    OpenRouterClient,
+    is_free_model,
+)
 
 SCHEMA = {
     "type": "object",
@@ -140,6 +147,9 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(calls, [])
 
     def test_free_model_only_and_bounded_429_backoff(self):
+        self.assertEqual(DEFAULT_TIME_CAP_SECONDS, 1200.0)
+        self.assertEqual(DEFAULT_ITEM_CALL_BUDGET, 12)
+        self.assertLess(DEFAULT_TIME_CAP_SECONDS, 30 * 60)
         self.assertTrue(DEFAULT_MODEL.endswith(":free"))
         self.assertTrue(is_free_model(DEFAULT_MODEL))
         self.assertFalse(is_free_model("openai/gpt-4o-mini"))
@@ -204,6 +214,31 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(recovered.status, "ok")
         self.assertEqual(recovered.method, "llm")
         self.assertFalse(recovered.may_solely_support_different_entity)
+
+    def test_item_budget_leaves_the_run_open(self):
+        calls = {"n": 0}
+
+        def urlopen(_request, timeout=None):
+            calls["n"] += 1
+            content = {"name": "NOT PRESENT", "dob": None}
+            return _Response({"choices": [{"message": {"content": json.dumps(content)}}]})
+
+        client = OpenRouterClient(
+            urlopen=urlopen,
+            api_key="test-key",
+            clock=lambda: 0.0,
+            item_call_budget=1,
+            call_budget=4,
+            retries=3,
+        )
+        first = client.extract(SOURCE, SCHEMA)
+        self.assertEqual(first.detail, "item_call_budget")
+        self.assertFalse(client._closed)
+        used = calls["n"]
+        second = client.extract(SOURCE, SCHEMA)
+        self.assertEqual(second.detail, "item_call_budget")
+        self.assertGreater(calls["n"], used)
+        self.assertLessEqual(calls["n"], 4)
 
 
 if __name__ == "__main__":

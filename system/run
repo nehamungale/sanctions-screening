@@ -4,6 +4,12 @@
 import os
 import sys
 
+# Hash seed is fixed before any dict iteration the process will rely on.
+# Setting it after startup does not stick, so re-exec once when it is unset.
+if os.environ.get("PYTHONHASHSEED") != "0":
+    os.environ["PYTHONHASHSEED"] = "0"
+    os.execv(sys.executable, [sys.executable, *sys.argv])
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pipeline import main

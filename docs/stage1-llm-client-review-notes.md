@@ -10,7 +10,7 @@ Today the LLM is off unless `USE_LLM_NOTES=1`, so these do not bite yet. They wi
 
 ## 1. Wall-clock time cap (`DEFAULT_TIME_CAP_SECONDS = 90.0`, line 48)
 
-**Status:** Open, fix pending in PR #10.
+**Status:** Fixed (PR #10). One shared client per run, a per-extraction call budget of 12, a run budget of 48, notes and hits in sorted id order, and a single 20 minute backstop. On main at `9981431` the status was: Open, fix pending in PR #10.
 
 **Problem.** The cap starts when the client is built and applies across the whole run. Once 90 seconds have passed, every later call returns UNKNOWN (`time_or_budget_cap`). How far a run gets in 90 seconds depends on network speed, provider load and 429 backoffs, which differ between the judges' five runs. So the same hit can get a parsed fact in one run and UNKNOWN in another, and its decision or reason code flips.
 

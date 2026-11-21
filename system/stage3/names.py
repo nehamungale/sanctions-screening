@@ -1,9 +1,8 @@
 """Symmetric name agreement for Stage 3.
 
-``shared.names.agree_parts`` currently checks full coverage of the left name
-when both names have the same number of parts. A pair can therefore agree in
-one argument order and not the other. Stage 3 calls it both ways and keeps the
-match only when both calls agree. ``system/shared`` is not modified.
+``shared.names.agree_parts`` agrees when either side is fully covered and the
+part counts are equal, so the two argument orders match. Stage 3 still calls
+it both ways and keeps the match only when both calls agree.
 """
 
 from __future__ import annotations

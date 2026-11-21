@@ -10,10 +10,23 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 
 from stage1.load import DataStore
 from stage1.normalise import NameTools, parse_date
+
+_ABBR_TO_FULL = {
+    "jan": "January", "feb": "February", "mar": "March", "apr": "April",
+    "may": "May", "jun": "June", "jul": "July", "aug": "August",
+    "sep": "September", "sept": "September", "oct": "October",
+    "nov": "November", "dec": "December",
+}
+_CIRCA = re.compile(r"^(?:c\.?|ca\.?|circa)\s*(\d{4})$", re.IGNORECASE)
+_YEAR_ONLY = re.compile(r"^(\d{4})-00-00$")
+_YEAR_RANGE = re.compile(r"^(\d{4})\s*[-–—]\s*(\d{4})$")
+_ABBR_MONTH = re.compile(r"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b", re.IGNORECASE)
+_ORDINAL = re.compile(r"\b(\d{1,2})(?:st|nd|rd|th)\b", re.IGNORECASE)
 
 from stage2.countries import hit_countries
 from stage2.listing import listing
@@ -23,19 +36,61 @@ from stage2.notes import first_paragraph, parse_dated_reports, parse_note_dob
 from stage2.practice import agreement
 from stage2.search import evaluate_search, not_consulted, search_key
 
-def _dob_from_field(raw: str, hit_id: str, field: str) -> tuple[dict | None, list[str]]:
-    parsed, flags = parse_date(raw, mode="hit")
+def parse_hit_dob(raw: str) -> tuple[dict | None, list[str]]:
+    """Parse one ``dobs`` value, including circa, abbreviations, ranges, and zero months.
+
+    A year range is every year from the start through the end. ``1970-00-00``
+    and ``c. 1970`` are year precision. Anything still unread is unparsed.
+    """
+    text = str(raw).strip()
+    circa = _CIRCA.fullmatch(text)
+    if circa:
+        year = int(circa.group(1))
+        if 1000 <= year <= 2999:
+            return {"years": [year], "month": None, "day": None, "precision": "year"}, []
+        return None, ["DOBS_UNPARSED"]
+    zeroes = _YEAR_ONLY.fullmatch(text)
+    if zeroes:
+        year = int(zeroes.group(1))
+        if 1000 <= year <= 2999:
+            return {"years": [year], "month": None, "day": None, "precision": "year"}, []
+        return None, ["DOBS_UNPARSED"]
+    span = _YEAR_RANGE.fullmatch(text)
+    if span:
+        start, end = int(span.group(1)), int(span.group(2))
+        if 1000 <= start <= end <= 2999 and end - start <= 30:
+            return {"years": list(range(start, end + 1)), "month": None, "day": None, "precision": "year"}, []
+        return None, ["DOBS_UNPARSED"]
+    expanded = _ORDINAL.sub(r"\1", text)
+    expanded = _ABBR_MONTH.sub(lambda match: _ABBR_TO_FULL[match.group(1).lower()], expanded)
+    slash = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{4})", expanded)
+    if slash:
+        expanded = f"{int(slash.group(1)):02d}/{int(slash.group(2)):02d}/{slash.group(3)}"
+    parsed, flags = parse_date(expanded, mode="hit")
     if not parsed or flags:
-        return None, flags or ["UNPARSED_DATE"]
+        return None, ["DOBS_UNPARSED"]
     return {
         "years": [parsed["y"]],
         "month": parsed["m"],
         "day": parsed["d"],
         "precision": parsed["precision"],
+    }, []
+
+
+def _dob_from_field(raw: str, hit_id: str, field: str) -> tuple[dict | None, list[str]]:
+    parsed, flags = parse_hit_dob(raw)
+    if not parsed or flags:
+        return None, ["DOBS_UNPARSED"]
+    return {
+        "years": list(parsed["years"]),
+        "month": parsed["month"],
+        "day": parsed["day"],
+        "precision": parsed["precision"],
         "source": "dobs",
         "source_id": f"{hit_id}#{field}",
         "method": "regex",
-        "rule": "dobs",
+        "rule": "dobs_range" if len(parsed["years"]) > 1 else "dobs",
+        "rule_strength": "strong",
         "quote": str(raw),
         "may_solely_support_different_entity": True,
     }, []
@@ -51,6 +106,7 @@ def _search_candidate(accepted: dict) -> dict:
         "source_id": accepted["result_id"],
         "method": "regex",
         "rule": "search_result",
+        "rule_strength": "strong",
         "quote": accepted.get("quote") or "",
         "may_solely_support_different_entity": True,
         "country": accepted.get("country"),
@@ -75,9 +131,12 @@ def build_hit(hit: dict, tools: NameTools, by_query: dict[str, list[dict]], fall
         flags.extend(date_flags)
         if candidate:
             field_dates.append(candidate)
+    if "DOBS_UNPARSED" in flags:
+        block_search = True
+    else:
+        block_search = False
 
     note_candidates: list[dict] = []
-    block_search = False
     if entity_type == "Individual":
         note = parse_note_dob(hit.get("profile_notes"), f"{hit_id}#profile_notes")
         note_candidates.extend(note["candidates"])
@@ -252,7 +311,7 @@ def summarise(profiles: list[dict]) -> dict:
     }
 
 
-def run_stage2(data_folder: str, cache_dir: str, enabled: bool | None = None) -> dict:
+def run_stage2(data_folder: str, cache_dir: str, enabled: bool | None = None, client=None) -> dict:
     """Read the data folder and write ``hit_golden.jsonl`` under ``cache_dir``."""
     started = time.perf_counter()
     store = DataStore(data_folder)
@@ -260,7 +319,7 @@ def run_stage2(data_folder: str, cache_dir: str, enabled: bool | None = None) ->
     search_results = store.read_jsonl("search_results.jsonl")
     variants = store.read_json("name_variants.json")
     profiles, fallback = build_profiles(
-        hits, search_results, variants, cache_dir=cache_dir, enabled=enabled
+        hits, search_results, variants, cache_dir=cache_dir, enabled=enabled, client=client
     )
     os.makedirs(cache_dir, exist_ok=True)
     path = os.path.join(cache_dir, "hit_golden.jsonl")

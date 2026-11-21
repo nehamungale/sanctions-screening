@@ -176,18 +176,18 @@ flowchart TD
   ACC -- "none accepted" --> U
 ```
 
-**Tier 1a: `dobs` field.** Each value is parsed with the Stage 1 date parser, precision kept.
+**Tier 1a: `dobs` field.** Each value is parsed with the Stage 1 date parser, precision kept. Also accepted: `c. 1970` and `1970-00-00` (year), `Mar 1970` (month), `12 Mar 1970` (day), and `1970-1972` (every year in the range). A value that still does not parse sets `DOBS_UNPARSED` and blocks search results.
 
-**Tier 1b: profile notes (first paragraph only, as the SOP says).** Rules in order:
+**Tier 1b: profile notes (first paragraph only, as the SOP says).** The first paragraph ends at the first blank line, including a line that is only spaces or a carriage return. Rules in order:
 
 | Rule | Generic pattern | Result |
 |---|---|---|
-| Born | "born (on/in) ⟨full date · Month YYYY · YYYY⟩" | one candidate, that precision |
-| Record "as of" | "Age: N" together with "as of ⟨date⟩" (registry/prison-record style) | years `Y−N−1`, `Y−N` |
-| Age at date | exactly **one** age (from cues: "aged N", "N-year-old", "N years old", "age of N", "at age N", "was N", "reached (the age of) N", "turned N", "N years of age", ", N,") **and** exactly **one** reference date | years `Y−N−1`, `Y−N` |
-| Otherwise, with a birth/age cue | 0 or ≥2 ages or dates | flag `NOTE_DOB_UNRESOLVED` → optional LLM, else UNKNOWN |
+| Born | case-insensitive "born", "birth", "DOB", or "b." plus a date, including "Born on 12 March 1970", "born in ⟨city⟩ in 1970", "5th March 1970", and an unambiguous slash date | one candidate, that precision |
+| Record "as of" | "Age: N" together with "as of ⟨date⟩" (registry/prison-record style) | years `Y−N−1`, `Y−N`, `rule_strength: "strong"` |
+| Age at date | exactly **one** age (from cues: "aged N", "N-year-old", "N years old", "age of N", "at age N", "was N", "reached (the age of) N", "turned N", "N years of age", ", N,") **and** exactly **one** reference date. An age right after a relative word (son, daughter, wife, and the same family) is ignored. "was N", ", N,", and "reached" are `rule_strength: "weak"`; the others are `"strong"` | years `Y−N−1`, `Y−N` |
+| Otherwise, with a birth/age cue | 0 or ≥2 ages or dates, or a hit slash date with both parts 12 or under | flag `NOTE_DOB_UNRESOLVED` and do not consult search results. An optional LLM may still fill the slot; a `none` answer or an empty quote does not clear the flag |
 
-On dev: 54 first paragraphs contain a birth statement, and all 54 are extracted with no false extractions. The age-at-date statements alone use more than 17 different sentence shapes. That variety is why this is the one field with an LLM fallback.
+On dev: 56 first paragraphs contain a birth statement (50 of them with no `dobs` field), and none of those statements is unresolved. The age-at-date statements alone use more than 17 different sentence shapes. That variety is why this is the one field with an LLM fallback.
 
 **Tier 2: search results (individuals, and only if Tier 1 found nothing).**
 
@@ -230,13 +230,13 @@ and says the form is worded the same in the unseen set. One line-anchored regex 
 
 **Guardrails (agreed):**
 
-- **Off by default** (`USE_LLM_HITS=0`). **OpenRouter only**, key from `OPENROUTER_API_KEY`, never committed.
+- **Off by default** (`USE_LLM_HITS=0`). `SANCTIONS_LLM=0` forces this fallback off as well. **OpenRouter only**, key from `OPENROUTER_API_KEY`, never committed. One shared client per run: 12 calls per extraction, 48 calls for the run, and a 20 minute time backstop.
 - **Pinned model and pinned provider** (no provider fallback), **temperature 0**, **strict JSON schema**: `{statement: born|age_at_date|none, born_date, age, reference_date, quote}`.
 - Input is the hit name plus **the first paragraph only**.
-- **Quote check:** `quote` must appear verbatim in the paragraph, and the age/dates must re-parse *from the quote* with our deterministic parsers. Birth years are computed by our code, never by the model.
+- **Quote check:** `quote` must be a non-empty verbatim substring of the paragraph. An empty or null quote does not count. Age and dates must re-parse *from the quote* with our deterministic parsers. Birth years are computed by our code, never by the model. A `none` answer does not clear `NOTE_DOB_UNRESOLVED`.
 - **Three independent calls must agree exactly**, otherwise the fact is `UNKNOWN`.
 - Responses are **cached** by hash of (model, provider, prompt version, paragraph), so reruns are identical and offline.
-- Every LLM-derived candidate carries `method: "llm"`. **An LLM-only fact can never be the sole ground for `DIFFERENT_ENTITY`.** It can only push a hit to `REVIEW` or support a `SAME_ENTITY` confirmation.
+- Every LLM-derived candidate carries `method: "llm"`. **An LLM fact can never contribute to a `DIFFERENT_ENTITY` clearance**, not only when it would be the sole ground. It can only push a hit to `REVIEW` or support a `SAME_ENTITY` confirmation. A weak regex age (`rule_strength: "weak"`, from "was N", ", N,", or "reached") likewise cannot be the only ground for a clearance.
 
 ---
 
@@ -273,7 +273,7 @@ and says the form is worded the same in the unseen set. One line-anchored regex 
 }
 ```
 
-**Flags:** `NON_LATIN_ALIAS`, `UNMAPPED_COUNTRY`, `NO_COUNTRY`, `NO_DOB`, `NOTE_DOB_UNRESOLVED`, `LLM_UNKNOWN`, `DECEASED_NO_DATE`, `MULTI_SR_CONFLICT`.
+**Flags:** `NON_LATIN_ALIAS`, `UNMAPPED_COUNTRY`, `NO_COUNTRY`, `NO_DOB`, `NOTE_DOB_UNRESOLVED`, `DOBS_UNPARSED`, `LLM_UNKNOWN`, `DECEASED_NO_DATE`, `MULTI_SR_CONFLICT`. `NOTE_DOB_UNRESOLVED` and `DOBS_UNPARSED` both block search results.
 
 ---
 
@@ -319,5 +319,5 @@ and says the form is worded the same in the unseen set. One line-anchored regex 
 - `countries[]` → location mismatch only when disjoint from **all** customer countries, and never when name and DOB agree.
 - `earliest_dated_report` → temporal impossibility; `deceased.date` vs the alert's screening date → deceased.
 - `entity_type` → entity-type mismatch.
-- `method: "llm"` facts → never the sole basis for `DIFFERENT_ENTITY`.
+- `method: "llm"` facts → never contribute to a `DIFFERENT_ENTITY` clearance. `rule_strength: "weak"` ages cannot be the only ground for one either.
 - Accepted search-result IDs → cited as evidence when they supplied the deciding DOB.

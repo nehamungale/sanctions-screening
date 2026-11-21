@@ -84,7 +84,7 @@ def _structured_name(hit: dict, tools: NameTools, existing: list[dict]) -> dict 
     if not any(pieces):
         return None
     joined = " ".join(str(piece) for piece in pieces if piece)
-    entry = _entry(joined, "structured", "structured", f"{hit['hit_id']}#structured", tools, hit.get("entity_type"))
+    entry = _entry(joined, "structured", "name", f"{hit['hit_id']}#name", tools, hit.get("entity_type"))
     if entry["parts"] and any(entry["parts"] == other["parts"] for other in existing):
         return None
     return entry

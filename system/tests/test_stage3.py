@@ -987,18 +987,24 @@ class Stage3Tests(unittest.TestCase):
         self.assertIn({"filter": "country", "side": "record"}, blank["filters"]["skipped_missing"])
         self.assertNotIn("P-CUS-000030", ids)
 
-    def test_symmetric_name_agreement_rejects_one_sided_match(self):
+    def test_symmetric_name_agreement_accepts_either_side_when_lengths_match(self):
+        # Equal part counts agree when either side is fully covered, in both
+        # argument orders. Stage 3 still requires both orders, which now match.
         names = NameTools(VARIANTS)
         left = ["abdul", "salam"]
         right = ["abdulsalam", "khan"]
         forward = names.names_agree(left, right)
         backward = names.names_agree(right, left)
-        self.assertNotEqual(bool(forward["agree"]), bool(backward["agree"]))
+        self.assertTrue(forward["agree"])
+        self.assertTrue(backward["agree"])
         wrapped = agree_symmetric(names, left, right)
-        self.assertFalse(wrapped["agree"])
-        self.assertEqual(wrapped["matched_pairs"], [])
+        self.assertTrue(wrapped["agree"])
+        self.assertTrue(wrapped["matched_pairs"])
         both = agree_symmetric(names, ["alice", "smith"], ["smith", "alice"])
         self.assertTrue(both["agree"])
+        neither = agree_symmetric(names, ["alice", "smith"], ["robert", "jones"])
+        self.assertFalse(neither["agree"])
+        self.assertEqual(neither["matched_pairs"], [])
 
     def test_index_candidates_match_a_full_scan(self):
         records = [

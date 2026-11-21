@@ -6,9 +6,12 @@ import json
 import os
 import sys
 
+from shared.llm_client import OpenRouterClient
 from stage1.build import run_stage1
 from stage1.cli import ARTEFACTS as STAGE1_ARTEFACTS
+from stage1.llm import llm_enabled as notes_llm_enabled
 from stage2.build import run_stage2
+from stage2.llm import llm_enabled as hits_llm_enabled
 from stage3.cli import run_stage3
 
 
@@ -19,9 +22,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     data_folder, output_file = args
     cache_dir = os.environ.get("SANCTIONS_CACHE", "working")
+    # One client, one clock, and one run budget for every stage that calls out.
+    client = OpenRouterClient() if notes_llm_enabled() or hits_llm_enabled() else None
     try:
-        stage1 = run_stage1(data_folder, cache_dir)
-        stage2 = run_stage2(data_folder, cache_dir)
+        stage1 = run_stage1(data_folder, cache_dir, client=client)
+        stage2 = run_stage2(data_folder, cache_dir, client=client)
         stage3 = run_stage3(
             data_folder,
             os.path.join(cache_dir, "alert_resolution.jsonl"),
