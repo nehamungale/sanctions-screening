@@ -1,31 +1,30 @@
 """Optional note fallback. Off unless ``USE_LLM_NOTES=1``.
 
-The model may fill slots the regex left empty. It never overrides a regex
-value. Returned strings must appear literally in the note, and dates must
-parse with ``parse_date``. The key is read from ``OPENROUTER_API_KEY`` and is
-never hardcoded.
+Production calls go through ``shared.llm_client``. Three unanimous calls are
+required; any failure leaves the slot empty (UNKNOWN, never a clear). A test
+may pass ``transport(text) -> dict`` to inject one suggestion. Injected values
+still have to appear verbatim in the note and never override a regex slot.
+The key is read from ``OPENROUTER_API_KEY`` and is never hardcoded. There is
+no response cache.
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
 import os
-import urllib.request
 
+from shared.llm_client import OpenRouterClient
 from stage1.countries import countries_in_note
 from stage1.normalise import parse_date
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-_CACHE: dict[str, dict | None] = {}
-
-_SCHEMA_HINT = {
-    "name": None,
-    "dob": None,
-    "doc_country": None,
-    "is_successful_verification": True,
-    "residence": [],
-    "evidence_span": "",
+NOTE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["name", "dob", "doc_country"],
+    "properties": {
+        "name": {"type": ["string", "null"]},
+        "dob": {"type": ["string", "null"]},
+        "doc_country": {"type": ["string", "null"]},
+    },
 }
 
 
@@ -34,7 +33,7 @@ def llm_enabled() -> bool:
 
 
 def fill_null_slots(text: str, parsed: dict, transport=None, enabled: bool | None = None) -> dict:
-    """Fill null fields on a parser result. ``transport(text) -> dict | None``."""
+    """Fill null fields on a parser result. Regex values are left untouched."""
     if not parsed.get("flags"):
         return parsed
     if enabled is None:
@@ -42,20 +41,23 @@ def fill_null_slots(text: str, parsed: dict, transport=None, enabled: bool | Non
     if transport is None:
         if not enabled:
             return parsed
-        transport = openrouter_transport
-    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
-    if digest in _CACHE and transport is openrouter_transport:
-        suggestion = _CACHE[digest]
-    else:
-        try:
-            suggestion = transport(text)
-        except Exception:
-            parsed.setdefault("flags", []).append("llm_error")
+        client = OpenRouterClient()
+        extraction = client.extract(text, NOTE_SCHEMA, schema_name="note_slots")
+        if extraction.status != "ok" or not extraction.value:
+            parsed.setdefault("flags", []).append("llm_unknown")
             return parsed
-        if transport is openrouter_transport:
-            _CACHE[digest] = suggestion
+        return _apply_suggestion(text, parsed, extraction.value, method="llm")
+    try:
+        suggestion = transport(text)
+    except Exception:
+        parsed.setdefault("flags", []).append("llm_error")
+        return parsed
     if not suggestion:
         return parsed
+    return _apply_suggestion(text, parsed, suggestion, method="llm")
+
+
+def _apply_suggestion(text: str, parsed: dict, suggestion: dict, method: str) -> dict:
     filled: list[str] = []
     if not parsed.get("name") and suggestion.get("name"):
         name = str(suggestion["name"])
@@ -82,41 +84,7 @@ def fill_null_slots(text: str, parsed: dict, transport=None, enabled: bool | Non
             parsed["flags"].append("llm_rejected")
     if filled:
         parsed["llm_fields"] = filled
-        parsed["source_method"] = "llm"
+        parsed["source_method"] = method
+        parsed["method"] = method
+        parsed["may_solely_support_different_entity"] = False
     return parsed
-
-
-def openrouter_transport(text: str) -> dict | None:
-    key = os.environ.get("OPENROUTER_API_KEY")
-    if not key:
-        return None
-    payload = {
-        "model": os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini"),
-        "temperature": 0,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "Extract identity slots from a bank note. Reply with JSON only. "
-                    "Use null for anything not literally present. Do not infer."
-                ),
-            },
-            {
-                "role": "user",
-                "content": json.dumps({"schema": _SCHEMA_HINT, "note": text}, ensure_ascii=False),
-            },
-        ],
-    }
-    request = urllib.request.Request(
-        OPENROUTER_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        body = json.loads(response.read().decode("utf-8"))
-    content = body["choices"][0]["message"]["content"]
-    return json.loads(content)

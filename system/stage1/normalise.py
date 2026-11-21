@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from datetime import date
 
+from shared.names import agree_parts
 from stage1.normalise_text import norm_text
 
 MONTHS = {
@@ -35,66 +36,79 @@ _MONTH_Y = re.compile(r"([A-Za-z]+)\s+(\d{4})")
 _YEAR = re.compile(r"(\d{4})")
 
 
-def parse_date(value: object) -> tuple[dict | None, list[str]]:
+def parse_date(value: object, mode: str = "customer") -> tuple[dict | None, list[str]]:
     """Parse one date string.
 
-    Returns ``(parsed, flags)``. ``parsed`` is ``{y, m, d, precision, value, raw}``
-    or None. A missing value is ``(None, [])``. Anything else that does not match
-    the seven known formats is ``(None, ["UNPARSED_DATE"])``.
-    ``DD/MM/YYYY`` is always day-first.
+    ``mode='customer'`` treats ``DD/MM/YYYY`` as day-first. ``mode='hit'`` leaves a
+    slash date UNKNOWN when both numeric parts are 12 or under, because hit
+    dates are written however the provider wrote them. An unambiguous slash
+    date (one part above 12) is still parsed. Returns ``(parsed, flags)``.
+    A missing value is ``(None, [])``. An ambiguous hit slash date is
+    ``(None, ["UNKNOWN_DATE"])``. Anything else unrecognised is
+    ``(None, ["UNPARSED_DATE"])``.
     """
+    if mode not in ("customer", "hit"):
+        raise ValueError(f"unknown date mode {mode!r}")
     if value is None:
         return None, []
     raw = str(value).strip()
     if raw.lower() in _MISSING_DATES:
         return None, []
-    parsed = _parse_date_raw(raw)
+    parsed, ambiguous = _parse_date_raw(raw, mode)
+    if ambiguous:
+        return None, ["UNKNOWN_DATE"]
     if parsed is None:
         return None, ["UNPARSED_DATE"]
     parsed["raw"] = raw
     return parsed, []
 
 
-def _parse_date_raw(raw: str) -> dict | None:
+def _parse_date_raw(raw: str, mode: str = "customer") -> tuple[dict | None, bool]:
     match = _ISO_DAY.fullmatch(raw)
     if match:
-        return _full(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        return _full(int(match.group(1)), int(match.group(2)), int(match.group(3))), False
     match = _ISO_MONTH.fullmatch(raw)
     if match:
         year, month = int(match.group(1)), int(match.group(2))
         if _year_ok(year) and 1 <= month <= 12:
-            return _pack(year, month, None, "month")
-        return None
+            return _pack(year, month, None, "month"), False
+        return None, False
     match = _DMY.fullmatch(raw)
     if match:
-        day, month, year = int(match.group(1)), int(match.group(2)), int(match.group(3))
-        return _full(year, month, day)
+        first, second, year = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        if mode == "hit" and first <= 12 and second <= 12:
+            return None, True
+        if first > 12 and second > 12:
+            return None, False
+        if mode == "customer" or first > 12:
+            return _full(year, second, first), False
+        return _full(year, first, second), False
     match = _D_MONTH_Y.fullmatch(raw)
     if match:
         month = MONTHS.get(match.group(2).lower())
         if month:
-            return _full(int(match.group(3)), month, int(match.group(1)))
-        return None
+            return _full(int(match.group(3)), month, int(match.group(1))), False
+        return None, False
     match = _MONTH_D_Y.fullmatch(raw)
     if match:
         month = MONTHS.get(match.group(1).lower())
         if month:
-            return _full(int(match.group(3)), month, int(match.group(2)))
-        return None
+            return _full(int(match.group(3)), month, int(match.group(2))), False
+        return None, False
     match = _MONTH_Y.fullmatch(raw)
     if match:
         month = MONTHS.get(match.group(1).lower())
         year = int(match.group(2))
         if month and _year_ok(year):
-            return _pack(year, month, None, "month")
-        return None
+            return _pack(year, month, None, "month"), False
+        return None, False
     match = _YEAR.fullmatch(raw)
     if match:
         year = int(match.group(1))
         if _year_ok(year):
-            return _pack(year, None, None, "year")
-        return None
-    return None
+            return _pack(year, None, None, "year"), False
+        return None, False
+    return None, False
 
 
 def _year_ok(year: int) -> bool:
@@ -260,44 +274,10 @@ class NameTools:
         entity_left: str | None = "Individual",
         entity_right: str | None = "Individual",
     ) -> dict:
-        """SOP name agreement. A joined adjacent pair counts as one match."""
+        """SOP name agreement. Shared by the customer and hit tracks.
+
+        Pairing is exhaustive (see ``shared.names.agree_parts``), not greedy.
+        """
         parts_left = left if isinstance(left, list) else self.parts(left, entity_left)
         parts_right = right if isinstance(right, list) else self.parts(right, entity_right)
-        candidates_left = _candidates(parts_left)
-        candidates_right = _candidates(parts_right)
-        possible = []
-        for text_left, cover_left in candidates_left:
-            for text_right, cover_right in candidates_right:
-                if self.parts_match(text_left, text_right):
-                    possible.append((text_left, text_right, cover_left, cover_right))
-        possible.sort(key=lambda item: (-max(len(item[0]), len(item[1])), item[0], item[1]))
-        used_left: set[int] = set()
-        used_right: set[int] = set()
-        matched: list[str] = []
-        for text_left, text_right, cover_left, cover_right in possible:
-            if any(index in used_left for index in cover_left):
-                continue
-            if any(index in used_right for index in cover_right):
-                continue
-            used_left.update(cover_left)
-            used_right.update(cover_right)
-            matched.append(f"{text_left}={text_right}")
-        shorter_is_left = len(parts_left) <= len(parts_right)
-        shorter = parts_left if shorter_is_left else parts_right
-        shorter_used = used_left if shorter_is_left else used_right
-        covered = bool(shorter) and len(shorter_used) == len(shorter)
-        agree = len(matched) >= 2 or covered
-        if not agree:
-            reason = "no agree"
-        elif len(matched) >= 2:
-            reason = f"{len(matched)} parts"
-        else:
-            reason = "shorter covered"
-        return {"agree": agree, "matched_pairs": matched, "reason": reason}
-
-
-def _candidates(parts: list[str]) -> list[tuple[str, tuple[int, ...]]]:
-    found = [(part, (index,)) for index, part in enumerate(parts)]
-    for index in range(len(parts) - 1):
-        found.append((parts[index] + parts[index + 1], (index, index + 1)))
-    return found
+        return agree_parts(parts_left, parts_right, self.parts_match)

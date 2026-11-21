@@ -55,15 +55,29 @@ NOISE = {
     "Customer requested a statement for a rental application. Sent the last three months.",
 }
 _KNOWN_CHANNELS = {"kyc", "phone", "email", "app"}
+_VERIFICATION_CUE = re.compile(
+    r"\b(?:passport|national ID|driving licen[cs]e|identity verification|date of birth|born|DOB)\b",
+    re.IGNORECASE,
+)
 
 
 def parse_note(note: dict, use_llm: bool | None = None, transport=None) -> dict:
-    """Turn one note into ``noise``, ``verification``, ``residence``, or ``ignored``."""
+    """Turn one note into ``noise``, ``verification``, ``residence``, or ``ignored``.
+
+    Every result also carries ``countries`` (every mapped country in a non-noise
+    note, not only when there is exactly one), ``verification_like``,
+    ``fully_parsed_verification``, and ``location_unresolved``. Those booleans
+    are how Stage 1 decides the block flags. They are not extra note-level
+    flag strings, so the dev flag histogram stays comparable.
+    """
     text = note.get("text") or ""
     channel = (note.get("channel") or "").strip().lower()
     if channel == "kyc":
         parsed = extract_kyc(text, note.get("created_at"))
         parsed = fill_null_slots(text, parsed, transport=transport, enabled=use_llm)
+        flags = list(parsed.get("flags") or [])
+        countries = list(parsed.get("countries") or [])
+        method = "llm" if parsed.get("llm_fields") else "regex"
         event = {
             "source_id": note.get("note_id"),
             "kind": "kyc_note",
@@ -74,21 +88,32 @@ def parse_note(note: dict, use_llm: bool | None = None, transport=None) -> dict:
             "doc_country": parsed.get("doc_country"),
             "document_type": parsed.get("document_type"),
             "provider": parsed.get("provider"),
+            "method": method,
+            "may_solely_support_different_entity": method != "llm",
         }
         if parsed.get("llm_fields"):
             event["llm_fields"] = list(parsed["llm_fields"])
-        return {"kind": "verification", "event": event, "flags": list(parsed.get("flags") or [])}
+        fully = bool(
+            event["name"]
+            and event["dob"]
+            and len(countries) == 1
+            and "name_ambiguous" not in flags
+            and "dob_unresolved" not in flags
+            and "check_date_missing" not in flags
+        )
+        return _bundle("verification", event, flags, text, channel, countries, fully)
     if text in NOISE:
-        return {"kind": "noise", "event": None, "flags": []}
-    flags: list[str] = []
+        return _bundle("noise", None, [], text, channel, [], True)
+    flags = []
     if channel not in _KNOWN_CHANNELS:
         flags.append("unknown_channel")
+    countries = countries_in_note(text)
     residence, residence_flags = extract_residence(text)
     flags.extend(residence_flags)
     if residence is None or flags:
-        return {"kind": "ignored", "event": None, "flags": flags}
+        return _bundle("ignored", None, flags, text, channel, countries, False)
     residence["note_id"] = note.get("note_id")
-    return {"kind": "residence", "event": residence, "flags": []}
+    return _bundle("residence", residence, [], text, channel, countries, True)
 
 
 def extract_kyc(text: str, created_at: object) -> dict:
@@ -134,6 +159,7 @@ def extract_kyc(text: str, created_at: object) -> dict:
     else:
         out["name"] = name
     countries = countries_in_note(text or "")
+    out["countries"] = countries
     if len(countries) == 1:
         out["doc_country"] = countries[0]
     else:
@@ -141,6 +167,26 @@ def extract_kyc(text: str, created_at: object) -> dict:
     if "(Note:" in (text or ""):
         out["flags"].append("note_annotation")
     return out
+
+
+def _bundle(kind, event, flags, text, channel, countries, fully_parsed) -> dict:
+    verification_like = kind != "noise" and (channel == "kyc" or bool(_VERIFICATION_CUE.search(text or "")))
+    if kind == "noise":
+        verification_like = False
+        countries = []
+        fully_parsed = True
+    location_unresolved = kind != "noise" and (len(countries) != 1 or (kind != "verification" and bool(flags)))
+    if kind == "verification" and len(countries) != 1:
+        location_unresolved = True
+    return {
+        "kind": kind,
+        "event": event,
+        "flags": list(flags),
+        "countries": list(countries),
+        "verification_like": verification_like,
+        "fully_parsed_verification": bool(fully_parsed) and verification_like,
+        "location_unresolved": location_unresolved,
+    }
 
 
 def extract_residence(text: str) -> tuple[dict | None, list[str]]:

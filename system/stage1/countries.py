@@ -424,31 +424,31 @@ ALIASES: dict[str, str] = {
     "Viet Nam": "Vietnam",
     "Türkiye": "Turkey",
     "Turkiye": "Turkey",
+    "Palestina": "Palestine",
+    "State of Palestine": "Palestine",
+    "Palestinian Territories": "Palestine",
+    "Macao Special Administrative Region of China": "Macao",
+    "Macau Special Administrative Region of China": "Macao",
+    "Macau": "Macao",
+    "Hong Kong Special Administrative Region of China": "Hong Kong",
+    "Holland": "Netherlands",
+    "Ivory Coast": "Côte d'Ivoire",
+    "Kosovo": "Kosovo",
+    "DPRK": "North Korea",
+    "U.K": "United Kingdom",
+    "U.S.A": "United States",
+    "Burma": "Myanmar",
+    "Republic of Moldova": "Moldova",
 }
 
-# Closed lexicon for note text (names and demonyms only, not ISO codes).
-# ISO codes are omitted on purpose: "ID" is a document word, not Indonesia.
-_NOTE_NAMES = [
-    "Algeria", "Argentina", "Armenia", "Australia", "Austria", "Bangladesh", "Brazil",
-    "Canada", "Colombia", "Cote D'Ivoire", "Côte d'Ivoire", "Czech Republic", "Denmark",
-    "Dominican Republic", "Ecuador", "Finland", "France", "Germany", "Ghana", "Haiti",
-    "Hungary", "India", "Indonesia", "Ireland", "Israel", "Italy", "Jamaica", "Kenya",
-    "Lebanon", "Mexico", "Moldova", "Montenegro", "Morocco", "Netherlands", "New Zealand",
-    "Nigeria", "North Korea", "Norway", "Pakistan", "Panama", "Peru", "Poland", "Portugal",
-    "Romania", "Russia", "Serbia", "Singapore", "Slovenia", "South Africa", "Spain",
-    "Sweden", "Switzerland", "Syria", "Thailand", "United Arab Emirates", "United Kingdom",
-    "United States", "Vietnam", "Uganda", "Japan", "China", "Turkey", "Egypt", "Greece",
-    "Belgium", "Chile", "Philippines", "Malaysia", "Estonia", "Latvia", "Lithuania",
-    "Croatia", "Ukraine", "Saudi Arabia", "Qatar", "Iran", "Iraq", "Sri Lanka", "Nepal",
-    "Ethiopia", "Tanzania", "Senegal", "Cameroon", "Bolivia", "Venezuela", "Uruguay",
-    "Paraguay", "Cuba", "Iceland", "Luxembourg", "Slovakia", "Bulgaria", "Albania",
-    "Georgia", "Kazakhstan", "Afghanistan", "Tunisia", "Zimbabwe", "Zambia", "South Korea",
-    "Taiwan", "Hong Kong", "Costa Rica", "Guatemala", "Honduras", "Nicaragua",
-    "El Salvador", "Puerto Rico", "Northern Mariana Islands", "Cyprus", "Malta",
-    "Belarus", "Azerbaijan", "Uzbekistan", "Mongolia", "Cambodia", "Myanmar", "Laos",
-    "Rwanda", "Angola", "Mozambique", "Botswana", "Namibia", "Libya", "Sudan", "Jordan",
-    "Kuwait", "Bahrain", "Oman", "Yemen",
-]
+# Recognised tokens that are not countries. They are dropped, not flagged.
+NON_COUNTRIES = ("International", "Europe")
+
+# Canonical names that are not ISO alpha-2 entries but appear on watchlists.
+EXTRA_CANONICAL = ("Kosovo",)
+
+# Free-text matching uses the same alias table as norm_country. Two-letter
+# codes are left out of that regex on purpose ("ID" is a document word).
 
 
 def _build_lookup() -> dict[str, str]:
@@ -469,12 +469,33 @@ def _build_lookup() -> dict[str, str]:
         add(surface, canonical)
     for surface, canonical in ALIASES.items():
         add(surface, canonical)
+    for name in EXTRA_CANONICAL:
+        add(name, name)
+    for name in NON_COUNTRIES:
+        key = country_fold(name)
+        if key in lookup:
+            raise RuntimeError(f"non-country {name!r} collides with {lookup[key]!r}")
     return lookup
 
 
 LOOKUP: dict[str, str] = _build_lookup()
+_NON_COUNTRY_KEYS = {country_fold(name) for name in NON_COUNTRIES}
 
-_NOTE_SURFACES = sorted(set(_NOTE_NAMES) | set(DEMONYMS), key=len, reverse=True)
+def _note_surface(surface: str) -> bool:
+    # Two-letter codes stay out of free text: "ID" is a document word.
+    return re.fullmatch(r"[A-Za-z]{2}", surface) is None
+
+_NOTE_SURFACES = sorted(
+    (
+        surface
+        for surface in (
+            list(ISO2.values()) + list(DEMONYMS) + list(ALIASES) + list(EXTRA_CANONICAL) + list(NON_COUNTRIES)
+        )
+        if _note_surface(surface)
+    ),
+    key=len,
+    reverse=True,
+)
 _NOTE_RE = re.compile(r"\b(" + "|".join(re.escape(item) for item in _NOTE_SURFACES) + r")\b")
 _NOTE_PAREN = re.compile(r"\(Note:[^)]*\)")
 
@@ -495,30 +516,91 @@ def countries_in_note(text: str) -> list[str]:
     found: list[str] = []
     seen: set[str] = set()
     for match in _NOTE_RE.finditer(cleaned):
-        canonical = to_country(match.group(1))
+        surface = match.group(1)
+        if country_fold(surface) in _NON_COUNTRY_KEYS:
+            continue
+        canonical = to_country(surface)
+        if country_fold(canonical) in _NON_COUNTRY_KEYS:
+            continue
         if canonical not in seen:
             seen.add(canonical)
             found.append(canonical)
     return found
 
 
+_TAG_RE = re.compile(r"\[[^\]]*\]")
+
+
+def classify_leaf(value: object) -> tuple[str, str | None, list[str]]:
+    """Classify one country token.
+
+    Status is ``empty``, ``country``, ``non_country`` (International/Europe),
+    or ``unmapped``. Address tags such as ``[Business]`` are removed first.
+    """
+    if value is None:
+        return "empty", None, []
+    raw = _TAG_RE.sub(" ", str(value))
+    raw = re.sub(r"\s+", " ", raw).strip(" .;")
+    if not raw:
+        return "empty", None, []
+    stripped = re.sub(r"^the\s+", "", raw, count=1, flags=re.IGNORECASE).strip()
+    if country_fold(stripped) in _NON_COUNTRY_KEYS:
+        return "non_country", None, []
+    if re.fullmatch(r"[A-Za-z]{2}", stripped):
+        canonical = ISO2.get(stripped.upper())
+        if canonical:
+            return "country", canonical, []
+    canonical = LOOKUP.get(country_fold(stripped))
+    if canonical:
+        return "country", canonical, []
+    return "unmapped", norm_text(stripped), ["UNMAPPED_COUNTRY"]
+
+
 def norm_country(value: object) -> tuple[str | None, list[str]]:
     """Return ``(canonical, flags)``.
 
     Unknown non-empty values are kept as ``norm_text`` and flagged
-    ``UNMAPPED_COUNTRY``. Missing values are ``(None, [])``.
+    ``UNMAPPED_COUNTRY``. Missing values and non-countries
+    (International, Europe) are ``(None, [])`` so they cannot cause a clear.
+    """
+    status, canonical, flags = classify_leaf(value)
+    if status == "country":
+        return canonical, []
+    if status in ("empty", "non_country"):
+        return None, []
+    return canonical, flags
+
+
+def country_leaves(value: object) -> list[str]:
+    """Country candidates: the last comma-piece of each semicolon-separated value.
+
+    Hit addresses use this shape (``City, Region, Country [Business]``). Tags
+    are stripped before the split. The same helper is what the dev scan uses.
     """
     if value is None:
-        return None, []
-    raw = str(value).strip()
-    if not raw:
-        return None, []
-    stripped = re.sub(r"^the\s+", "", raw, count=1, flags=re.IGNORECASE).strip()
-    if re.fullmatch(r"[A-Za-z]{2}", stripped):
-        canonical = ISO2.get(stripped.upper())
-        if canonical:
-            return canonical, []
-    canonical = LOOKUP.get(country_fold(stripped))
-    if canonical:
-        return canonical, []
-    return norm_text(stripped), ["UNMAPPED_COUNTRY"]
+        return []
+    if isinstance(value, list):
+        leaves: list[str] = []
+        for item in value:
+            leaves.extend(country_leaves(item))
+        return leaves
+    text = _TAG_RE.sub(" ", str(value))
+    leaves = []
+    for semi in text.split(";"):
+        semi = semi.strip(" .")
+        if not semi:
+            continue
+        bits = [bit.strip(" .") for bit in semi.split(",") if bit.strip(" .")]
+        if bits:
+            leaves.append(bits[-1])
+    return leaves
+
+
+def unmapped_country_leaves(value: object) -> list[str]:
+    """Leaves that are real unmatched strings. Non-countries are not listed."""
+    bad = []
+    for leaf in country_leaves(value):
+        status, _canonical, _flags = classify_leaf(leaf)
+        if status == "unmapped":
+            bad.append(leaf)
+    return bad

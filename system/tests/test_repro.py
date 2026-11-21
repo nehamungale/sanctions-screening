@@ -12,7 +12,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from stage1.build import run_stage1
-from stage1.countries import norm_country
+from stage1.countries import countries_in_note, norm_country, unmapped_country_leaves
 from stage1.load import DataStore
 
 DEV = os.environ.get("SANCTIONS_DEV", "/cursor/stores/bot/hackathon/dev")
@@ -64,20 +64,37 @@ class DevReproTests(unittest.TestCase):
 
     def test_structured_countries_map(self):
         store = DataStore(DEV)
-        values = set()
-        for row in store.read_jsonl("customers.jsonl"):
-            values.add(row.get("nationality"))
-            values.add(row.get("residence_country"))
-        for row in store.read_jsonl("kyc_checks.jsonl"):
-            values.add(row.get("document_country"))
         unmapped = []
-        for value in sorted(values, key=lambda item: (item is None, str(item))):
-            if value is None or str(value).strip() == "":
-                continue
-            _canonical, flags = norm_country(value)
-            if "UNMAPPED_COUNTRY" in flags:
-                unmapped.append(value)
+        seen_notes = 0
+        seen_search = 0
+
+        def take(value, where):
+            for leaf in unmapped_country_leaves(value):
+                unmapped.append(f"{where}:{leaf}")
+
+        for row in store.read_jsonl("customers.jsonl"):
+            take(row.get("nationality"), "customers.nationality")
+            take(row.get("residence_country"), "customers.residence_country")
+        for row in store.read_jsonl("kyc_checks.jsonl"):
+            take(row.get("document_country"), "kyc_checks.document_country")
+        for row in store.read_jsonl("hits.jsonl"):
+            for field in ("nationality", "citizenship", "countries", "place_of_birth", "addresses"):
+                take(row.get(field), f"hits.{field}")
+        for row in store.read_jsonl("notes.jsonl"):
+            countries_in_note(row.get("text") or "")
+            seen_notes += 1
+        for row in store.read_jsonl("search_results.jsonl"):
+            countries_in_note(row.get("title") or "")
+            countries_in_note(row.get("snippet") or "")
+            seen_search += 1
+        self.assertGreater(seen_notes, 0)
+        self.assertGreater(seen_search, 0)
         self.assertEqual(unmapped, [])
+        self.assertIsNone(norm_country("International")[0])
+        self.assertEqual(norm_country("International")[1], [])
+        self.assertIsNone(norm_country("Europe")[0])
+        self.assertEqual(norm_country("Palestina")[0], "Palestine")
+        self.assertEqual(norm_country("Macao Special Administrative Region of China")[0], "Macao")
 
 
 if __name__ == "__main__":
