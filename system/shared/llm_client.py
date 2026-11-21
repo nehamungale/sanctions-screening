@@ -42,6 +42,8 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 
+from shared.time_budget import run_deadline_hit
+
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 # Price 0 on OpenRouter. Do not replace this with a paid slug.
 DEFAULT_MODEL = "google/gemma-4-31b-it:free"
@@ -267,6 +269,11 @@ class OpenRouterClient:
         self.sleeper(min(delay, remaining))
 
     def _over_cap(self) -> bool:
+        # The 1,200s client clock is the shared backstop. The run deadline
+        # (armed by system/run, disarmed in unit tests) stops a second client
+        # from pushing the process past 30 minutes.
+        if run_deadline_hit():
+            return True
         return (self.clock() - self.started) >= self.time_cap or self.calls > self.call_budget
 
     def _unknown(self, detail: str) -> Extraction:
