@@ -132,7 +132,34 @@ def _ground(code: str, cmp, hit: dict, person: dict, alert: dict) -> str:
         return f"The customer's verified name is {legal} ({source}), which does not match the hit's name {listed}"
     countries = ", ".join(cmp.location.customer or []) or "no country"
     listed = ", ".join(cmp.location.hit or []) or "no country"
-    return f"The customer is linked only to {countries} but the hit is linked only to {listed}"
+    sources = list(cmp.location.sources or [])
+    cited = ", ".join(sources[:3]) + (" and others" if len(sources) > 3 else "")
+    where = f" ({cited})" if cited else ""
+    name = _primary_name(hit)
+    hit_id = hit.get("hit_id")
+    label = f"{name} ({hit_id})" if name and hit_id else (name or hit_id)
+    subject = f"the hit {label}" if label else "the hit"
+    fields = _country_fields(hit)
+    through = f" through its {fields}" if fields else ""
+    return f"The customer is linked only to {countries}{where} but {subject} is linked only to {listed}{through}"
+
+
+_FIELD_WORDS = (
+    ("countries", "listed countries"),
+    ("nationality", "nationality"),
+    ("citizenship", "citizenship"),
+    ("addresses", "addresses"),
+    ("place_of_birth", "place of birth"),
+)
+
+
+def _country_fields(hit: dict) -> str:
+    """Which hit fields the hit's countries came from, in a fixed order."""
+    used = {entry.get("field") for entry in hit.get("countries") or [] if not entry.get("unmapped")}
+    words = [word for field, word in _FIELD_WORDS if field in used]
+    if len(words) <= 1:
+        return "".join(words)
+    return ", ".join(words[:-1]) + " and " + words[-1]
 
 
 def _dob_sentence(cmp, person: dict) -> str:
