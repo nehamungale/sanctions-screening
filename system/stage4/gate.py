@@ -121,51 +121,6 @@ def _name_short(ctx: GateContext, _code: str) -> bool:
     return any(entry.get("blocks_name_clear") for entry in (ctx.person or {}).get("names_all") or [])
 
 
-def _skipped_filters(ctx: GateContext) -> set[str]:
-    found = set()
-    filters = (ctx.candidate or {}).get("filters") or {}
-    for item in filters.get("skipped_missing") or []:
-        # An alert that never stated a country is not a missing customer country.
-        if isinstance(item, dict) and item.get("filter") and item.get("side") == "record":
-            found.add(str(item["filter"]))
-        elif isinstance(item, str):
-            found.add(item)
-    if not found and "RECORD_DOB_MISSING_KEPT" in _alert_flags(ctx):
-        found.add("dob")
-    return found
-
-
-def _kept_on_missing(ctx: GateContext, code: str) -> bool:
-    """A missing screened field is not a mismatch. Block only the dimension that was skipped."""
-    flagged = (
-        "candidate_kept_on_missing_field" in _fragility(ctx)
-        or "RECORD_DOB_MISSING_KEPT" in _alert_flags(ctx)
-    )
-    if not flagged:
-        return False
-    skipped = _skipped_filters(ctx)
-    if code in {"DOB_MISMATCH", "TEMPORAL_IMPOSSIBILITY"}:
-        return "dob" in skipped
-    if code == "LOCATION_MISMATCH":
-        return "country" in skipped
-    return False
-
-
-def _non_latin_blocks(ctx: GateContext, _code: str) -> bool:
-    """Block a name clear only when the unread aliases outnumber the Latin names.
-
-    On the measured run, blocking every non-Latin alias was the only thing
-    stopping 22 name clearances, and none of those hits is a practice label
-    marked same-person or review. A Latin form that already disagrees is enough.
-    """
-    if "NON_LATIN_ALIAS" not in _issues(ctx):
-        return False
-    names = (ctx.hit or {}).get("names") or []
-    latin = sum(1 for entry in names if entry.get("script") != "non_latin" and entry.get("parts"))
-    non_latin = sum(1 for entry in names if entry.get("script") == "non_latin" and entry.get("kind") == "alias")
-    return latin < non_latin
-
-
 def _screened_disagrees(ctx: GateContext) -> bool:
     screened = ((ctx.alert or {}).get("customer") or {}).get("entity_type")
     customer = ctx.cmp.entity_type.customer
@@ -203,20 +158,16 @@ GATE_TABLE = (
     ("NON_EXHAUSTIVE_BLOCKS_LOCATION", frozenset({"LOCATION_MISMATCH"}), lambda ctx, _code: "NON_EXHAUSTIVE_BLOCKS_LOCATION" in _issues(ctx)),
     ("NAME_ORDER_DEPENDENT", frozenset({"NAME_MISMATCH_VERIFIED"}), lambda ctx, _code: "NAME_ORDER_DEPENDENT" in _issues(ctx)),
     ("HIT_UNMAPPED_COUNTRY", frozenset({"LOCATION_MISMATCH"}), lambda ctx, _code: "HIT_UNMAPPED_COUNTRY" in _issues(ctx)),
-    ("NON_LATIN_ALIAS", frozenset({"NAME_MISMATCH_VERIFIED"}), _non_latin_blocks),
+    ("NON_LATIN_ALIAS", frozenset({"NAME_MISMATCH_VERIFIED"}), lambda ctx, _code: "NON_LATIN_ALIAS" in _issues(ctx)),
     ("SCREENED_TYPE_DISAGREES", frozenset({"ENTITY_TYPE_MISMATCH"}), lambda ctx, _code: _screened_disagrees(ctx)),
     ("LINK_SUSPECT", frozenset({ALL_C}), lambda ctx, _code: _quality(ctx) == "LINK_SUSPECT" or "link_contradicts_screened" in _fragility(ctx)),
     ("DANGLING_LINK", frozenset({ALL_C}), lambda ctx, _code: _quality(ctx) == "DANGLING_LINK_fallback" or "DANGLING_LINK" in _alert_flags(ctx)),
     ("name_match_fuzzy_only", frozenset({ALL_C}), lambda ctx, _code: "name_match_fuzzy_only" in _fragility(ctx)),
     ("resolved_via_note_country", frozenset({ALL_C}), lambda ctx, _code: "resolved_via_note_country" in _fragility(ctx)),
-    # Practice alerts that use the joint-account tie-break resolve to the
-    # labelled holder. Blocking every clearance on that flag turned true
-    # mismatches into review. The tie-break is recorded on the trace and no
-    # longer blocks a contradiction the other gates still accept.
-    ("joint_account_tiebreak", frozenset({ALL_C}), lambda ctx, _code: False),
-    ("candidate_kept_on_missing_field", frozenset({
-        "DOB_MISMATCH", "TEMPORAL_IMPOSSIBILITY", "LOCATION_MISMATCH",
-    }), _kept_on_missing),
+    ("joint_account_tiebreak", frozenset({ALL_C}), lambda ctx, _code: "joint_account_tiebreak" in _fragility(ctx)),
+    ("candidate_kept_on_missing_field", frozenset({ALL_C}), lambda ctx, _code: (
+        "candidate_kept_on_missing_field" in _fragility(ctx) or "RECORD_DOB_MISSING_KEPT" in _alert_flags(ctx)
+    )),
     ("dob_partial_only", frozenset({"DOB_MISMATCH", "TEMPORAL_IMPOSSIBILITY"}), lambda ctx, _code: "dob_partial_only" in _fragility(ctx)),
     ("SCREENED_NAME_TOO_SHORT", frozenset({"NAME_MISMATCH_VERIFIED"}), lambda ctx, _code: "NAME_TOO_SHORT" in _alert_flags(ctx)),
     ("contract_block_name", frozenset({"NAME_MISMATCH_VERIFIED"}), lambda ctx, _code: bool(

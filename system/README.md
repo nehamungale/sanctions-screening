@@ -42,11 +42,7 @@ Missing, unread, unmapped or model-read evidence can block a clearance. It canno
 
 A fact with `method: "llm"` cannot be the basis of `DIFFERENT_ENTITY`, even if an upstream flag says it may. It can support `SAME_ENTITY` or leave the hit in `REVIEW`.
 
-Other blocks, in short: unverified or too-short names cannot clear on name; a note we could not read for countries cannot clear on location; a declared date that agrees with the hit blocks a date-of-birth clear; a weak age pattern blocks a date-of-birth clear that depends on it; a fuzzy-only or note-only resolution blocks a clear. A candidate kept because a **record** had no date of birth blocks only the date and age clears. A candidate kept because a record had no country blocks only the location clear. An alert that simply did not state a country does not.
-
-`joint_account_tiebreak` does not block. On the practice alerts the tie-break selected the labelled holder, and blocking it was turning true mismatches into reviews. The flag is still on the Stage 3 row.
-
-A non-Latin alias blocks a name clear only when those aliases outnumber the Latin names. Blocking every such alias was the only bar on 22 name clearances, and none of those hits is in the practice labels.
+Other blocks, in short: unverified or too-short names cannot clear on name; a note we could not read for countries cannot clear on location; a declared date that agrees with the hit blocks a date-of-birth clear; a weak age pattern blocks a date-of-birth clear that depends on it; a fuzzy-only or note-only resolution blocks a clear. A joint-account tie-break blocks every customer-fact clear. So does a candidate that was kept because a screened field was missing, whichever field it was. Any non-Latin alias blocks a name clear.
 
 ## Determinism
 
@@ -101,4 +97,4 @@ Alert summaries follow the hit records in the same file: `alert_status` is `CLEA
 
 ## Limitations
 
-Non-Latin names are not transliterated. A weak age sentence ("was 45", "reached 45") does not clear a date of birth on its own; one practice hit stays in review for that reason, which is the safe side of the cost table. Unseen note wording that the parsers do not recognise blocks a clear instead of being guessed. The veto is implemented and tested, and left off.
+Non-Latin names are not transliterated, and any such alias blocks a name clear. A joint-account tie-break, or a candidate kept on a missing field, blocks every customer-fact clear. A weak age sentence ("was 45", "reached 45") does not clear a date of birth on its own. Those rules leave some true mismatches in review. Unseen note wording that the parsers do not recognise blocks a clear instead of being guessed. The veto is implemented and tested, and left off.

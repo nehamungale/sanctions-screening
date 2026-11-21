@@ -249,6 +249,73 @@ class LlmCannotClearTests(unittest.TestCase):
         self.assertEqual(decision.decision, "SAME_ENTITY")
         self.assertIn(decision.reason_code, {"NAME_DOB_MATCH", "NAME_DOB_LOCATION_MATCH"})
 
+    def test_joint_account_tiebreak_blocks_a_clear_and_leaves_a_match(self):
+        blocked = _resolution()
+        blocked["resolution_clean"] = False
+        blocked["candidates"][0]["fragility_flags"] = ["joint_account_tiebreak"]
+        blocked["fragility_flags"] = ["joint_account_tiebreak"]
+        decision = decide_hit(
+            _hit(), _alert_row(), blocked,
+            {"P-CUS-999991": _person()}, NameTools(VARIANTS),
+        )
+        self.assertEqual(decision.decision, "REVIEW")
+        self.assertIn("joint_account_tiebreak", decision.blocked.get("DOB_MISMATCH", []))
+        self.assertIn("joint_account_tiebreak", decision.blocked.get("LOCATION_MISMATCH", []))
+
+        person = _person()
+        person["dob"]["value"] = "1961-07-15"
+        person["declared_dobs"][0]["value"] = "1961-07-15"
+        hit = _hit()
+        hit["countries"] = [{"value": "Ireland", "unmapped": False, "field": "countries"}]
+        match = decide_hit(
+            hit, _alert_row(), blocked,
+            {"P-CUS-999991": person}, NameTools(VARIANTS),
+        )
+        self.assertEqual(match.decision, "SAME_ENTITY")
+
+    def test_any_non_latin_alias_blocks_a_name_clear(self):
+        person = _person()
+        hit = _hit()
+        # Two Latin names and one non-Latin alias, so a count-based rule would not block.
+        hit["names"] = [
+            {"value": "Oliver Fictional", "kind": "primary", "parts": ["oliver", "fictional"], "script": "latin"},
+            {"value": "Oliver Example", "kind": "alias", "parts": ["oliver", "example"], "script": "latin"},
+            {"value": "示例", "kind": "alias", "parts": [], "script": "non_latin"},
+        ]
+        hit["flags"] = ["NON_LATIN_ALIAS"]
+        hit["dob_candidates"] = []
+        hit["countries"] = [{"value": "Ireland", "unmapped": False, "field": "countries"}]
+        decision = decide_hit(
+            hit, _alert_row(), _resolution(),
+            {"P-CUS-999991": person}, NameTools(VARIANTS),
+        )
+        self.assertEqual(decision.decision, "REVIEW")
+        self.assertIn("NON_LATIN_ALIAS", decision.blocked.get("NAME_MISMATCH_VERIFIED", []))
+
+        hit["flags"] = []
+        cleared = decide_hit(
+            hit, _alert_row(), _resolution(),
+            {"P-CUS-999991": person}, NameTools(VARIANTS),
+        )
+        self.assertEqual(cleared.decision, "DIFFERENT_ENTITY")
+        self.assertEqual(cleared.reason_code, "NAME_MISMATCH_VERIFIED")
+
+    def test_missing_field_blocks_every_clearance_not_only_the_skipped_one(self):
+        # The skipped field is the date of birth. A location clear must still be blocked.
+        resolution = _resolution()
+        resolution["resolution_clean"] = False
+        resolution["candidates"][0]["fragility_flags"] = ["candidate_kept_on_missing_field"]
+        resolution["candidates"][0]["filters"] = {"skipped_missing": [{"filter": "dob", "side": "record"}]}
+        resolution["fragility_flags"] = ["candidate_kept_on_missing_field"]
+        hit = _hit()
+        hit["dob_candidates"] = []
+        decision = decide_hit(
+            hit, _alert_row(), resolution,
+            {"P-CUS-999991": _person()}, NameTools(VARIANTS),
+        )
+        self.assertEqual(decision.decision, "REVIEW")
+        self.assertIn("candidate_kept_on_missing_field", decision.blocked.get("LOCATION_MISMATCH", []))
+
     def test_one_year_apart_is_neither_agreement_nor_contradiction(self):
         customer = {"y": 1980, "m": 5, "d": 1}
         self.assertFalse(contradicts(customer, {"years": [1981], "month": None, "day": None}))
