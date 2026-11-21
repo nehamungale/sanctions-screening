@@ -105,16 +105,32 @@ class KycTests(unittest.TestCase):
         self.assertEqual(parsed["dob"], "1990-06-01")
         self.assertEqual(parsed["flags"], [])
 
-    def test_status_word_passed_is_a_second_run(self):
+    def test_status_word_passed_is_not_a_name(self):
         text = (
             "Verification PASSED for ADA LOVELACE, born June 1, 1990. "
             "Passport from Spain was checked by Veriff on 2024-01-02."
         )
         parsed = extract_kyc(text, "2024-01-02")
-        self.assertIsNone(parsed["name"])
-        self.assertIn("name_ambiguous", parsed["flags"])
+        self.assertEqual(parsed["name"], "ADA LOVELACE")
+        self.assertNotIn("name_ambiguous", parsed["flags"])
         self.assertEqual(parsed["dob"], "1990-06-01")
         self.assertEqual(parsed["doc_country"], "Spain")
+
+    def test_capitals_that_are_not_a_name_never_become_one(self):
+        # Read as a two-part verified name, "KYC APPROVED" would clear on NAME_MISMATCH_VERIFIED.
+        text = "KYC APPROVED via ONFIDO for Ada Lovelace, born June 1, 1990, UK passport, on 2024-01-02."
+        parsed = extract_kyc(text, "2024-01-02")
+        self.assertIsNone(parsed["name"])
+        self.assertIn("name_ambiguous", parsed["flags"])
+
+    def test_issue_or_expiry_date_is_not_a_birth_date(self):
+        # The birth date is in a format we do not read; the only other date is the expiry.
+        text = "Veriff checked JANE EXAMPLE on 2024-01-02, born 1st of June '90, passport from Spain expiring 2031-05-01."
+        parsed = extract_kyc(text, "2024-01-02")
+        self.assertIsNone(parsed["dob"])
+        self.assertIn("dob_unresolved", parsed["flags"])
+        recent = "Veriff checked JANE EXAMPLE on 2024-01-02 with a Spanish passport issued 2019-05-01."
+        self.assertIsNone(extract_kyc(recent, "2024-01-02")["dob"])
 
     def test_kyc_token_and_id_card(self):
         text = (

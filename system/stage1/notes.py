@@ -45,7 +45,16 @@ PROVIDERS = (
     "Veriff",
     "Persona",
 )
-STOP_TOKENS = {"ID", "DOB", "KYC"}
+# Upper-case words that are never part of a customer's name. Unseen notes may
+# write a status, a provider or an abbreviation in capitals next to (or instead
+# of) the name; read as a name, that would wrongly clear on NAME_MISMATCH_VERIFIED.
+STOP_TOKENS = {
+    "ID", "DOB", "KYC", "AML", "PEP", "PASSED", "APPROVED", "VERIFIED", "CONFIRMED", "OK",
+    "SUMSUB", "ONFIDO", "VERIFF", "PERSONA", "PASSPORT", "UK", "US", "USA", "EU", "UAE",
+}
+# A date of birth on an identity document is at least this many years before the check.
+# Anything later is an issue, expiry or other date, not the birth date.
+MIN_AGE_AT_CHECK = 10
 NOISE = {
     "Customer asked about savings interest rates and was sent the current tariff.",
     "Customer called to ask how long an international transfer takes. Gave the usual timelines.",
@@ -164,7 +173,10 @@ def extract_kyc(text: str, created_at: object) -> dict:
         out["check_date"] = created
     else:
         out["flags"].append("check_date_missing")
-    others = sorted({value for value in full_dates if value != created})
+    others = sorted({
+        value for value in full_dates
+        if value != created and _plausible_birth(value, created, out["document_type"])
+    })
     if len(others) == 1:
         out["dob"] = others[0]
         out["dob_precision"] = "day"
@@ -193,6 +205,16 @@ def extract_kyc(text: str, created_at: object) -> dict:
     if "(Note:" in (text or ""):
         out["flags"].append("note_annotation")
     return out
+
+
+def _plausible_birth(value: str, created: str | None, document_type: str | None) -> bool:
+    """A person's birth date lies well before the check. A registry extract (company) is exempt."""
+    if not created or document_type == "registry extract":
+        return True
+    try:
+        return int(value[:4]) <= int(created[:4]) - MIN_AGE_AT_CHECK and value < created
+    except ValueError:
+        return True
 
 
 def _bundle(kind, event, flags, text, channel, countries, fully_parsed) -> dict:

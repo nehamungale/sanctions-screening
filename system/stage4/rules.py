@@ -101,7 +101,8 @@ def decide_for_person(
         if cmp.name.status == AGREE and cmp.dob.status == AGREE and cmp.location.status != CONTRADICT:
             code = "NAME_DOB_LOCATION_MATCH" if cmp.location.status == AGREE else "NAME_DOB_MATCH"
             return _same(code, cmp, person_id, matched)
-    elif cmp.name.status == AGREE and cmp.location.status == AGREE and cmp.dob.status != CONTRADICT:
+    elif cmp.person_type == "Company" and cmp.name.status == AGREE and cmp.location.status == AGREE and cmp.dob.status != CONTRADICT:
+        # A customer whose type is unknown is neither a person nor a company: no confirmation.
         return _same("NAME_LOCATION_MATCH", cmp, person_id, matched)
 
     return _review(cmp, person_id, matched, missing=_missing(cmp), kind="review_insufficient")

@@ -57,14 +57,14 @@ class DevReproTests(unittest.TestCase):
         self.assertEqual(notes["kyc_dob"], 22575)
         self.assertEqual(notes["kyc_doc_country"], 22575)
         self.assertEqual(notes["kyc_check_date"], 22575)
-        self.assertEqual(notes["kyc_name"], 22572)
+        self.assertEqual(notes["kyc_name"], 22575)
         self.assertEqual(notes["kyc_document_type"], 22574)
         self.assertEqual(notes["kyc_provider"], 22573)
         # The spec's 17 flagged notes were counted before the uppercase-token fix.
-        # After that fix, three notes still have a second run ("PASSED") and one
-        # keeps the note_annotation flag. Slots the regex filled are still used.
-        self.assertEqual(notes["flagged"], 4)
-        self.assertEqual(notes["flag_counts"], {"name_ambiguous": 3, "note_annotation": 1})
+        # The three notes with a second run ("PASSED") now read: PASSED is a
+        # stop word. One note keeps the note_annotation flag.
+        self.assertEqual(notes["flagged"], 1)
+        self.assertEqual(notes["flag_counts"], {"note_annotation": 1})
         self.assertLess(first["elapsed_seconds"], 120)
 
     def test_structured_countries_map(self):
