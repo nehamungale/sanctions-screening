@@ -5,7 +5,8 @@
 //   NEEDS_REVIEW  otherwise
 //
 // A hit counts as undecided (HIT_NOT_DECIDED, blocks the clear) when it is missing from
-// the trace, its record was invalid or conflicting, or its own alert_id is not this alert.
+// the trace, its record was invalid or conflicting, its own alert_id is not this alert, or the
+// record says not_decided (the stage4 pipeline's own HIT_NOT_DECIDED).
 // An alert with no hit_ids is NEEDS_REVIEW, not vacuously CLEARED.
 // Without a verified alert list, a would-be CLEARED alert is NOT_VERIFIED instead.
 
@@ -32,6 +33,7 @@ export function rollUpAlert(
     let undecided: UndecidedReason | null = null
     if (!h) undecided = opts.rejected?.get(id) ?? { kind: 'missing' }
     else if (h.alert_id !== alert.alert_id) undecided = { kind: 'alert_mismatch', trace_alert_id: h.alert_id }
+    else if (h.not_decided) undecided = { kind: 'not_decided' }
     return h && !undecided
       ? {
           hit_id: id,
@@ -86,7 +88,7 @@ export interface OverviewCounts {
   alertsTotal: number
   alertsWithUndecided: number
   hitsByDecision: Record<Decision, number>
-  /** Decided hits counted in the totals (excludes hits filed under the wrong alert). */
+  /** Decided hits counted in the totals (excludes hits filed under the wrong alert and not_decided records). */
   hitsDecided: number
   hitsUndecided: number
   /** Hits whose own alert_id differs from the alert listing them: undecided only, not in the totals. */
@@ -108,7 +110,8 @@ export function overviewCounts(
   const misfiled = new Set(
     summaries.flatMap((s) => s.hits.filter((h) => h.undecided?.kind === 'alert_mismatch').map((h) => h.hit_id)),
   )
-  const counted = hits.filter((h) => !misfiled.has(h.hit_id))
+  // not_decided records carry a placeholder REVIEW verdict: they count as undecided, not as REVIEW.
+  const counted = hits.filter((h) => !misfiled.has(h.hit_id) && !h.not_decided)
   const hitsByDecision: Record<Decision, number> = { DIFFERENT_ENTITY: 0, SAME_ENTITY: 0, REVIEW: 0 }
   const reason = new Map<string, number>()
   for (const h of counted) {
@@ -143,7 +146,7 @@ export type CrossCheckProblem =
   | { kind: 'duplicate'; alert_id: string; lines: number[] }
 
 /**
- * Cross-check alerts.trace.jsonl (the pipeline's own roll-up) against the UI roll-up.
+ * Cross-check the pipeline's own alert summaries (summary lines in trace.jsonl) against the UI roll-up.
  * The summaries never decide anything here. A pipeline CLEARED against a UI NOT_VERIFIED
  * is not a disagreement (the UI just cannot confirm it without alerts.jsonl).
  */

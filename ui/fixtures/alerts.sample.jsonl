@@ -5,3 +5,5 @@
 {"alert_id": "A-SYN005", "hit_ids": ["H-SYN008", "H-SYN009"]}
 {"alert_id": "A-SYN006", "hit_ids": ["H-SYN010", "H-SYN011"]}
 {"alert_id": "A-SYN007", "hit_ids": ["H-SYN012"]}
+{"alert_id": "A-SYN008", "hit_ids": ["H-SYN013"]}
+{"alert_id": "A-SYN009", "hit_ids": ["H-SYN014", "H-SYN015"]}

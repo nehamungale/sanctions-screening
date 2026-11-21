@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { buildRepro, Loaded, LoadedAlerts, Model } from '@/lib/data'
 import { crossCheckText, STATUS_LABELS } from '@/lib/labels'
-import { parseAlerts, parseTraceJsonl } from '@/lib/parse'
+import { parseAlerts, parseTraceJsonl, type TraceParseResult } from '@/lib/parse'
 import { parseRepro } from '@/lib/repro'
 import { DECISIONS, HIT_NOT_DECIDED, type RollupStatus } from '@/lib/policy'
 import type { AlertSummary, ParseIssue } from '@/lib/types'
@@ -41,7 +41,7 @@ export function Overview(p: Props) {
     if (kind === 'trace') p.onLoad({ trace: { name: file.name, result: parseTraceJsonl(text) } })
     else if (kind === 'repro') p.onLoad({ repro: { name: file.name, result: parseRepro(text) } })
     else {
-      // One picker for both: alerts.jsonl lines fill the alert list, alerts.trace.jsonl lines the cross-check.
+      // One picker for both: alerts.jsonl lines fill the alert list; a separate summaries file (legacy) the cross-check.
       const f: LoadedAlerts = { name: file.name, result: parseAlerts(text) }
       const patch: Partial<Loaded> = {}
       if (f.result.kind !== 'summaries') patch.alerts = f
@@ -62,7 +62,7 @@ export function Overview(p: Props) {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Load a trace (trace.jsonl), the alert list (alerts.jsonl) and optionally alerts.trace.jsonl and repro.json.
+              Load a trace (trace.jsonl, with its alert summaries), the alert list (alerts.jsonl) and optionally repro.json.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -101,7 +101,7 @@ export function Overview(p: Props) {
               <span className="text-sm text-muted-foreground">
                 {counts.alertsTotal} alerts · click a tile to list them
                 {model.alertSource === 'summaries'
-                  ? ' · hit lists from alerts.trace.jsonl'
+                  ? ' · hit lists from the pipeline’s alert summaries'
                   : model.alertSource === 'trace'
                     ? ' · hit lists grouped from the trace, so a hit missing from the trace can’t be seen'
                     : ''}
@@ -152,7 +152,8 @@ export function Overview(p: Props) {
             {model.crossCheck ? (
               model.crossCheck.problems.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Cross-check: the pipeline’s alert summaries ({model.crossCheck.checked}) agree with this view.
+                  Cross-check: the pipeline’s alert summaries ({model.crossCheck.checked}
+                  {model.summarySource === 'trace' ? ', from the trace' : ', from the summaries file'}) agree with this view.
                 </p>
               ) : (
                 <div className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -346,6 +347,18 @@ function AlertList({
   )
 }
 
+function traceSummary(r: TraceParseResult): string {
+  const n = r.summaries?.summaries.length ?? 0
+  const other = r.skipped - (r.summaries?.lines ?? 0)
+  return [
+    `${r.hits.length} hits`,
+    n ? `${n} pipeline alert summaries (cross-check only)` : 'no alert summaries',
+    other > 0 ? `${other} other non-hit records skipped` : '',
+  ]
+    .filter(Boolean)
+    .join(', ')
+}
+
 function Sources({ loaded }: { loaded: Loaded }) {
   const { trace, alerts, summaries, repro } = loaded
   if (!trace && !alerts && !summaries && !repro) return null
@@ -354,8 +367,8 @@ function Sources({ loaded }: { loaded: Loaded }) {
       <SourceLine
         kind="Trace"
         name={trace?.name ?? 'not loaded'}
-        summary={trace ? `${trace.result.hits.length} hits${trace.result.skipped ? `, ${trace.result.skipped} non-hit records skipped` : ''}` : ''}
-        issues={trace?.result.issues ?? []}
+        summary={trace ? traceSummary(trace.result) : ''}
+        issues={trace ? [...trace.result.issues, ...(trace.result.summaries?.issues ?? [])] : []}
       />
       <SourceLine
         kind="Alerts"

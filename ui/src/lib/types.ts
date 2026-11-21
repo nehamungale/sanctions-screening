@@ -13,6 +13,8 @@ export interface TraceHit {
     customer_record_id: string | null
   }
   badges: { fragility?: string; llm_used?: boolean; rules_version?: string } | null
+  /** Top-level `not_decided` (stage4): the pipeline could not decide this hit. Counts as undecided. */
+  not_decided: boolean
   /** The full parsed record, for the hit panel and raw trace view. */
   raw: Record<string, unknown>
 }
@@ -23,12 +25,13 @@ export type UndecidedReason =
   | { kind: 'invalid' }
   | { kind: 'conflict' }
   | { kind: 'alert_mismatch'; trace_alert_id: string | null }
+  | { kind: 'not_decided' }
 
-/** One alert: from alerts.jsonl, or rebuilt from an alerts.trace.jsonl summary. */
+/** One alert: from alerts.jsonl, or rebuilt from a Stage 4 alert summary (summary lines in trace.jsonl). */
 export interface AlertRef {
   alert_id: string
   hit_ids: string[]
-  /** alert_status as written by the pipeline, when loaded from alerts.trace.jsonl. */
+  /** alert_status as written by the pipeline, when rebuilt from an alert summary line. */
   pipeline_status?: AlertStatus
   /** Set when the file had differing lines for this alert_id (their hit_ids were combined). */
   conflicting_lines?: number[]

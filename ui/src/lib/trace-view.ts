@@ -23,6 +23,8 @@ export interface ComparisonRow {
   hit: unknown
   status: string
   src: string[]
+  /** stage4: true when an input to this row was read by the model. */
+  llm_used: boolean
 }
 
 export function readComparison(raw: Record<string, unknown>): ComparisonRow[] {
@@ -33,6 +35,7 @@ export function readComparison(raw: Record<string, unknown>): ComparisonRow[] {
     hit: r.hit ?? null,
     status: str(r.status) ?? 'unknown',
     src: strs(r.src),
+    llm_used: r.llm_used === true,
   }))
 }
 
@@ -63,10 +66,30 @@ export interface Candidate {
   would_decide: { decision: string | null; reason_code: string | null } | null
 }
 
+/** identity.facts entry (stage4: dob, name, entity_type; `verified` only on dob and name; no source_kind). */
+export interface Fact {
+  name: string
+  value: string
+  verified: boolean | null
+  source_id: string | null
+}
+
+/**
+ * What the fact table says about `verified`. stage4 means different things per fact:
+ * on dob it is a verified date (check or note); on name it only means a name comparison was
+ * computed, NOT a KYC-verified legal name, so the word "verified" is never used for it.
+ */
+export function factStatus(f: Fact): string {
+  if (f.verified === null) return '—'
+  if (f.name === 'name') return f.verified ? 'compared with the hit' : 'not compared'
+  if (f.name === 'dob') return f.verified ? 'verified' : 'declared'
+  return f.verified ? 'yes' : 'no'
+}
+
 export interface Identity {
   person_id: string | null
   merged: { rule: string; records: string[]; extra: [string, string][] }[]
-  facts: { name: string; value: string; verified: boolean | null; source_id: string | null; source_kind: string | null }[]
+  facts: Fact[]
   flags: string[]
   ignored_checks: string[]
   candidates: Candidate[]
@@ -91,9 +114,8 @@ export function readIdentity(raw: Record<string, unknown>): Identity {
               value: formatValue(f.value),
               verified: typeof f.verified === 'boolean' ? f.verified : null,
               source_id: str(f.source_id),
-              source_kind: str(f.source_kind),
             }
-          : { name, value: formatValue(f), verified: null, source_id: null, source_kind: null },
+          : { name, value: formatValue(f), verified: null, source_id: null },
       )
     : []
   const candidates = Array.isArray(id.candidates)
@@ -126,6 +148,18 @@ export function readIdentity(raw: Record<string, unknown>): Identity {
 
 export function readLlmCalls(raw: Record<string, unknown>): Record<string, unknown>[] {
   return Array.isArray(raw.llm_calls) ? raw.llm_calls.filter(isObj) : []
+}
+
+/**
+ * Why a hit has no comparison rows (stage4 writes comparison [] and identity.facts {} when no
+ * customer fits the alert, or when the hit was not decided). Null when there are rows.
+ */
+export function noComparisonReason(raw: Record<string, unknown>, customerRecordId: string | null): string | null {
+  if (Array.isArray(raw.comparison) && raw.comparison.some(isObj)) return null
+  if (raw.not_decided === true) return 'the hit has no decision, so it was never compared with a customer'
+  if (!customerRecordId) return 'no matching customer record, so there is nothing to compare the hit with'
+  if (customerRecordId === 'AMBIGUOUS') return 'more than one customer fits this alert and the trace has no comparison rows'
+  return 'the trace has no comparison rows for this hit'
 }
 
 export function readTippingPoint(raw: Record<string, unknown>): string | null {
