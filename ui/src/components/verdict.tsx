@@ -1,3 +1,4 @@
+import type { RunCell } from '@/lib/repro'
 import { reasonLabel, STATUS_LABELS } from '@/lib/labels'
 import type { Decision, RollupStatus } from '@/lib/policy'
 import { cn } from '@/lib/utils'
@@ -53,6 +54,24 @@ export function ReasonCode({ code, className }: { code: string; className?: stri
     <span className={cn('inline-flex flex-wrap items-baseline gap-x-2', className)}>
       <span className="font-mono text-xs">{code}</span>
       <span className="text-xs text-muted-foreground">{reasonLabel(code)}</span>
+    </span>
+  )
+}
+
+/** One dot per run for a hit (repro.json hits[].per_run). Hollow dot: the run has no line for the hit. */
+export function RunStrip({ cells, labels }: { cells: RunCell[]; labels: string[] }) {
+  return (
+    <span className="inline-flex items-center gap-1" aria-label="Verdict in each run">
+      {cells.map((c, i) => (
+        <span
+          key={i}
+          title={`${labels[i] ?? `run ${i + 1}`}: ${c ? `${c.decision ?? '?'} · ${c.reason_code ?? '?'}` : 'no line for this hit'}`}
+          className={cn(
+            'inline-block size-2.5 rounded-full',
+            c?.decision ? DECISION_TONE[c.decision].dot : 'border border-muted-foreground/60 bg-transparent',
+          )}
+        />
+      ))}
     </span>
   )
 }

@@ -59,24 +59,24 @@ def people_of(payload):
 class ClusterTests(unittest.TestCase):
     def test_phone_dob_merges_different_formats_and_family_does_not(self):
         payload = tables([
-            customer("CUS-000010", full_name="Costa Marcos", dob="September 12, 1985", phone="+44 799097796", email="a@example.com"),
-            customer("CUS-000020", full_name="Costa Marcos", dob="1985-09-12", phone="+44799097796", email="b@example.com", residence_country="BR", nationality="Brazil"),
-            customer("CUS-000030", full_name="Costa Sister", dob="1999-01-01", phone="+44 799097796", email="c@example.com"),
+            customer("CUS-SYN010", full_name="Costa Marcos", dob="September 12, 1985", phone="+44 799097796", email="a@example.com"),
+            customer("CUS-SYN020", full_name="Costa Marcos", dob="1985-09-12", phone="+44799097796", email="b@example.com", residence_country="BR", nationality="Brazil"),
+            customer("CUS-SYN030", full_name="Costa Sister", dob="1999-01-01", phone="+44 799097796", email="c@example.com"),
         ])
         people, _indexes, stats = people_of(payload)
         self.assertEqual(stats["phone_dob_edges"], 1)
         self.assertEqual(stats["persons"], 2)
-        merged = people["P-CUS-000010"]
-        self.assertEqual(merged["record_ids"], ["CUS-000010", "CUS-000020"])
+        merged = people["P-CUS-SYN010"]
+        self.assertEqual(merged["record_ids"], ["CUS-SYN010", "CUS-SYN020"])
         self.assertEqual(merged["cluster_edges"][0]["rule"], "PHONE_DOB")
         self.assertEqual(merged["cluster_edges"][0]["dob"], "1985-09-12")
-        self.assertIn("P-CUS-000030", people)
-        self.assertEqual(people["P-CUS-000030"]["cluster_edges"], [])
+        self.assertIn("P-CUS-SYN030", people)
+        self.assertEqual(people["P-CUS-SYN030"]["cluster_edges"], [])
 
     def test_partial_dob_does_not_merge(self):
         payload = tables([
-            customer("CUS-000010", dob="1990", phone="+1 415 5550100"),
-            customer("CUS-000020", dob="1990-05-01", phone="+14155550100", email="b@example.com"),
+            customer("CUS-SYN010", dob="1990", phone="+1 415 5550100"),
+            customer("CUS-SYN020", dob="1990-05-01", phone="+14155550100", email="b@example.com"),
         ])
         _people, _indexes, stats = people_of(payload)
         self.assertEqual(stats["persons"], 2)
@@ -84,16 +84,16 @@ class ClusterTests(unittest.TestCase):
 
     def test_doc_number_merges_null_dob_and_rejected_does_not(self):
         customers = [
-            customer("CUS-000010", dob=None, phone="+1 202 5550101", email="a@example.com"),
-            customer("CUS-000020", dob="1980-04-04", phone="+1 202 5550199", email="b@example.com"),
-            customer("CUS-000030", dob="1970-01-01", phone="+1 202 5550188", email="c@example.com"),
-            customer("CUS-000040", dob="1971-01-01", phone="+1 202 5550177", email="d@example.com"),
+            customer("CUS-SYN010", dob=None, phone="+1 202 5550101", email="a@example.com"),
+            customer("CUS-SYN020", dob="1980-04-04", phone="+1 202 5550199", email="b@example.com"),
+            customer("CUS-SYN030", dob="1970-01-01", phone="+1 202 5550188", email="c@example.com"),
+            customer("CUS-SYN040", dob="1971-01-01", phone="+1 202 5550177", email="d@example.com"),
         ]
         onboarding = [
-            {"customer_id": "CUS-000010", "kyc_applicant_id": "APP-1", "account_id": "ACC-1"},
-            {"customer_id": "CUS-000020", "kyc_applicant_id": "APP-2", "account_id": "ACC-2"},
-            {"customer_id": "CUS-000030", "kyc_applicant_id": "APP-3", "account_id": "ACC-3"},
-            {"customer_id": "CUS-000040", "kyc_applicant_id": "APP-4", "account_id": "ACC-4"},
+            {"customer_id": "CUS-SYN010", "kyc_applicant_id": "APP-1", "account_id": "ACC-1"},
+            {"customer_id": "CUS-SYN020", "kyc_applicant_id": "APP-2", "account_id": "ACC-2"},
+            {"customer_id": "CUS-SYN030", "kyc_applicant_id": "APP-3", "account_id": "ACC-3"},
+            {"customer_id": "CUS-SYN040", "kyc_applicant_id": "APP-4", "account_id": "ACC-4"},
         ]
         checks = [
             _check("KYC-1000", "APP-1", "approved", "1988-01-01", "N470-106 19", "2020-01-01"),
@@ -105,35 +105,35 @@ class ClusterTests(unittest.TestCase):
         self.assertEqual(stats["doc_edges"], 1)
         self.assertEqual(stats["doc_edges_new_components"], 1)
         self.assertEqual(stats["persons"], 3)
-        merged = people["P-CUS-000010"]
-        self.assertEqual(merged["record_ids"], ["CUS-000010", "CUS-000020"])
+        merged = people["P-CUS-SYN010"]
+        self.assertEqual(merged["record_ids"], ["CUS-SYN010", "CUS-SYN020"])
         self.assertEqual(merged["cluster_edges"][0]["rule"], "DOC_NO")
         self.assertEqual(merged["cluster_edges"][0]["document_number"], "N47010619")
-        self.assertEqual(people["P-CUS-000030"]["record_ids"], ["CUS-000030"])
-        self.assertEqual(people["P-CUS-000040"]["record_ids"], ["CUS-000040"])
+        self.assertEqual(people["P-CUS-SYN030"]["record_ids"], ["CUS-SYN030"])
+        self.assertEqual(people["P-CUS-SYN040"]["record_ids"], ["CUS-SYN040"])
 
     def test_joint_account_does_not_merge(self):
         customers = [
-            customer("CUS-000010", full_name="Luca Morillo", dob="1980-01-01", phone="+34 600111111", email="luca@example.com"),
-            customer("CUS-000020", full_name="Elvira Morillo", dob="1940-01-01", phone="+34 600222222", email="elvira@example.com"),
+            customer("CUS-SYN010", full_name="Luca Morillo", dob="1980-01-01", phone="+34 600111111", email="luca@example.com"),
+            customer("CUS-SYN020", full_name="Elvira Morillo", dob="1940-01-01", phone="+34 600222222", email="elvira@example.com"),
         ]
         accounts = [
-            {"account_id": "ACC-JOINT", "customer_id": "CUS-000010", "login_handle": "luca", "phone": "+34 600111111"},
-            {"account_id": "ACC-JOINT", "customer_id": "CUS-000020", "login_handle": "elvira", "phone": "+34 600222222"},
-            {"account_id": "ACC-ONLY", "customer_id": "CUS-000010", "login_handle": "luca2", "phone": "+34 600111111"},
+            {"account_id": "ACC-JOINT", "customer_id": "CUS-SYN010", "login_handle": "luca", "phone": "+34 600111111"},
+            {"account_id": "ACC-JOINT", "customer_id": "CUS-SYN020", "login_handle": "elvira", "phone": "+34 600222222"},
+            {"account_id": "ACC-ONLY", "customer_id": "CUS-SYN010", "login_handle": "luca2", "phone": "+34 600111111"},
         ]
         people, indexes, stats = people_of(tables(customers, accounts=accounts))
         self.assertEqual(stats["persons"], 2)
-        self.assertEqual(indexes["account_id"]["ACC-JOINT"], ["P-CUS-000010", "P-CUS-000020"])
-        self.assertEqual(indexes["account_id"]["ACC-ONLY"], ["P-CUS-000010"])
-        self.assertEqual(indexes["login_handle"]["luca"], ["P-CUS-000010"])
-        self.assertEqual(indexes["email"]["luca@example.com"], ["P-CUS-000010"])
-        self.assertEqual(indexes["record_id"]["CUS-000020"], "P-CUS-000020")
+        self.assertEqual(indexes["account_id"]["ACC-JOINT"], ["P-CUS-SYN010", "P-CUS-SYN020"])
+        self.assertEqual(indexes["account_id"]["ACC-ONLY"], ["P-CUS-SYN010"])
+        self.assertEqual(indexes["login_handle"]["luca"], ["P-CUS-SYN010"])
+        self.assertEqual(indexes["email"]["luca@example.com"], ["P-CUS-SYN010"])
+        self.assertEqual(indexes["record_id"]["CUS-SYN020"], "P-CUS-SYN020")
 
     def test_record_view_and_record_indexes(self):
         customers = [
             customer(
-                "CUS-000020",
+                "CUS-SYN020",
                 full_name="J.R. Example",
                 preferred_name="Jay",
                 dob="September 12, 1985",
@@ -146,7 +146,7 @@ class ClusterTests(unittest.TestCase):
                 phone="+44 7700 900123",
             ),
             customer(
-                "CUS-000010",
+                "CUS-SYN010",
                 full_name="Elvira Morillo",
                 dob=None,
                 city=None,
@@ -156,20 +156,20 @@ class ClusterTests(unittest.TestCase):
             ),
         ]
         accounts = [
-            {"account_id": "ACC-JOINT", "customer_id": "CUS-000020", "login_handle": "  jr  "},
-            {"account_id": "ACC-JOINT", "customer_id": "CUS-000010", "login_handle": "elvira"},
-            {"account_id": "ACC-ONLY", "customer_id": "CUS-000020", "login_handle": "jr2"},
+            {"account_id": "ACC-JOINT", "customer_id": "CUS-SYN020", "login_handle": "  jr  "},
+            {"account_id": "ACC-JOINT", "customer_id": "CUS-SYN010", "login_handle": "elvira"},
+            {"account_id": "ACC-ONLY", "customer_id": "CUS-SYN020", "login_handle": "jr2"},
         ]
         _people, indexes, _stats = people_of(tables(customers, accounts=accounts))
         views = {row["record_id"]: row for row in indexes["record_views"]}
-        self.assertEqual(list(views), ["CUS-000010", "CUS-000020"])
-        first = views["CUS-000010"]
-        self.assertEqual(first["person_id"], "P-CUS-000010")
+        self.assertEqual(list(views), ["CUS-SYN010", "CUS-SYN020"])
+        first = views["CUS-SYN010"]
+        self.assertEqual(first["person_id"], "P-CUS-SYN010")
         self.assertEqual(first["entity_type"]["value"], "Individual")
         self.assertIsNone(first["dob"]["value"])
         self.assertEqual(first["dob"]["role"], "declared")
         self.assertFalse(first["dob"]["comparable"])
-        self.assertEqual(first["dob"]["source_id"], "CUS-000010")
+        self.assertEqual(first["dob"]["source_id"], "CUS-SYN010")
         self.assertIsNone(first["postcode"])
         self.assertIsNone(first["city"]["raw"])
         self.assertIsNone(first["address"]["raw"])
@@ -178,12 +178,12 @@ class ClusterTests(unittest.TestCase):
         self.assertEqual(first["login_name"]["parts"], [])
         self.assertEqual(first["account_ids"], ["ACC-JOINT"])
         self.assertEqual(first["login_handles"], ["elvira"])
-        second = views["CUS-000020"]
-        self.assertEqual(second["person_id"], "P-CUS-000020")
+        second = views["CUS-SYN020"]
+        self.assertEqual(second["person_id"], "P-CUS-SYN020")
         self.assertEqual(second["full_name"]["parts"], ["jr", "example"])
         self.assertEqual(second["preferred_name"]["parts"], ["jay"])
         self.assertEqual(second["login_name"]["parts"], [])
-        self.assertEqual(second["full_name"]["source_id"], "CUS-000020")
+        self.assertEqual(second["full_name"]["source_id"], "CUS-SYN020")
         self.assertNotIn("verified_name", second)
         self.assertEqual(second["dob"]["value"], "1985-09-12")
         self.assertEqual(second["dob"]["precision"], "day")
@@ -199,21 +199,21 @@ class ClusterTests(unittest.TestCase):
         self.assertEqual(second["email"]["value"], "jr@example.com")
         self.assertEqual(second["account_ids"], ["ACC-JOINT", "ACC-ONLY"])
         self.assertEqual(second["login_handles"], ["jr", "jr2"])
-        self.assertEqual(indexes["account_record_id"]["ACC-JOINT"], ["CUS-000010", "CUS-000020"])
-        self.assertEqual(indexes["account_record_id"]["ACC-ONLY"], ["CUS-000020"])
-        self.assertEqual(indexes["login_record_id"]["jr"], ["CUS-000020"])
-        self.assertEqual(indexes["login_record_id"]["elvira"], ["CUS-000010"])
-        self.assertEqual(indexes["email_record_id"]["jr@example.com"], ["CUS-000020"])
-        self.assertEqual(indexes["name_part_record_id"]["jr"], ["CUS-000020"])
-        self.assertEqual(indexes["name_part_record_id"]["example"], ["CUS-000020"])
-        self.assertEqual(indexes["name_part_record_id"]["jay"], ["CUS-000020"])
-        self.assertEqual(indexes["name_part_record_id"]["elvira"], ["CUS-000010"])
+        self.assertEqual(indexes["account_record_id"]["ACC-JOINT"], ["CUS-SYN010", "CUS-SYN020"])
+        self.assertEqual(indexes["account_record_id"]["ACC-ONLY"], ["CUS-SYN020"])
+        self.assertEqual(indexes["login_record_id"]["jr"], ["CUS-SYN020"])
+        self.assertEqual(indexes["login_record_id"]["elvira"], ["CUS-SYN010"])
+        self.assertEqual(indexes["email_record_id"]["jr@example.com"], ["CUS-SYN020"])
+        self.assertEqual(indexes["name_part_record_id"]["jr"], ["CUS-SYN020"])
+        self.assertEqual(indexes["name_part_record_id"]["example"], ["CUS-SYN020"])
+        self.assertEqual(indexes["name_part_record_id"]["jay"], ["CUS-SYN020"])
+        self.assertEqual(indexes["name_part_record_id"]["elvira"], ["CUS-SYN010"])
         self.assertNotIn("yusuf", indexes["name_part_record_id"])
-        self.assertEqual(indexes["account_id"]["ACC-JOINT"], ["P-CUS-000010", "P-CUS-000020"])
+        self.assertEqual(indexes["account_id"]["ACC-JOINT"], ["P-CUS-SYN010", "P-CUS-SYN020"])
 
     def test_company_record_dob_is_incorporation_date(self):
         company = customer(
-            "CUS-000030",
+            "CUS-SYN030",
             entity_type="Company",
             full_name="TD Bank, N.A. GmbH",
             dob="February 1968",
@@ -222,7 +222,7 @@ class ClusterTests(unittest.TestCase):
             nationality=None,
             residence_country="NL",
         )
-        onboarding = [{"customer_id": "CUS-000030", "kyc_applicant_id": "APP-CO", "account_id": "ACC-CO"}]
+        onboarding = [{"customer_id": "CUS-SYN030", "kyc_applicant_id": "APP-CO", "account_id": "ACC-CO"}]
         checks = [
             _check(
                 "KYC-CO", "APP-CO", "approved", "2013-02", None, "2022-03-03",
@@ -238,7 +238,7 @@ class ClusterTests(unittest.TestCase):
         self.assertEqual(view["dob"]["source_id"], "KYC-CO")
         self.assertEqual(view["dob"]["source_kind"], "registry_extract")
         self.assertEqual(view["full_name"]["parts"], ["td", "bank"])
-        self.assertEqual(indexes["name_part_record_id"]["td"], ["CUS-000030"])
+        self.assertEqual(indexes["name_part_record_id"]["td"], ["CUS-SYN030"])
         self.assertNotIn("gmbh", indexes["name_part_record_id"])
         self.assertNotIn("na", indexes["name_part_record_id"])
 
@@ -246,19 +246,19 @@ class ClusterTests(unittest.TestCase):
 class FactTests(unittest.TestCase):
     def test_verified_beats_declared_and_newer_rejected_is_ignored(self):
         customers = [
-            customer("CUS-000010", full_name="Jacob Johnson", dob="1963-12-02", phone="+1 415 5550001", email="a@example.com", city="Oslo", nationality="American", residence_country="US"),
-            customer("CUS-000020", full_name="Jacob Johnson", dob="02/12/1963", phone="+14155550001", email="b@example.com", nationality="US", residence_country="SG"),
+            customer("CUS-SYN010", full_name="Jacob Johnson", dob="1963-12-02", phone="+1 415 5550001", email="a@example.com", city="Oslo", nationality="American", residence_country="US"),
+            customer("CUS-SYN020", full_name="Jacob Johnson", dob="02/12/1963", phone="+14155550001", email="b@example.com", nationality="US", residence_country="SG"),
         ]
         onboarding = [
-            {"customer_id": "CUS-000010", "kyc_applicant_id": "APP-1", "account_id": "ACC-1"},
-            {"customer_id": "CUS-000020", "kyc_applicant_id": "APP-2", "account_id": "ACC-2"},
+            {"customer_id": "CUS-SYN010", "kyc_applicant_id": "APP-1", "account_id": "ACC-1"},
+            {"customer_id": "CUS-SYN020", "kyc_applicant_id": "APP-2", "account_id": "ACC-2"},
         ]
         checks = [
             _check("KYC-OLD", "APP-1", "approved", "1968-02-17", "DOC1", "2019-01-01", name="SARAH JOHNSON", country="United States"),
             _check("KYC-NEW", "APP-1", "expired", "1999-09-09", "DOC9", "2024-01-01", name="OTHER PERSON", country="France"),
         ]
         people, _indexes, _stats = people_of(tables(customers, onboarding=onboarding, checks=checks))
-        person = people["P-CUS-000010"]
+        person = people["P-CUS-SYN010"]
         self.assertEqual(person["legal_name"]["value"], "SARAH JOHNSON")
         self.assertTrue(person["legal_name"]["verified"])
         self.assertEqual(person["legal_name"]["source_id"], "KYC-OLD")
@@ -275,8 +275,8 @@ class FactTests(unittest.TestCase):
         self.assertIsNone(person["incorporation_date"])
 
     def test_no_verification_and_kyc_note_and_residence(self):
-        bare = customer("CUS-000010", full_name="No Check Person", dob="1981-03-03", email="bare@example.com", nationality="Spain", residence_country="ES")
-        noted = customer("CUS-000020", full_name="Note Person", dob="1970-01-01", email="note@example.com", phone="+49 1510000002", nationality="Germany", residence_country="DE")
+        bare = customer("CUS-SYN010", full_name="No Check Person", dob="1981-03-03", email="bare@example.com", nationality="Spain", residence_country="ES")
+        noted = customer("CUS-SYN020", full_name="Note Person", dob="1970-01-01", email="note@example.com", phone="+49 1510000002", nationality="Germany", residence_country="DE")
         text = (
             "Sumsub completed identity verification for NOTE PERSON, born December 1, 1975, "
             "using a passport issued in Italy on 2024-05-05."
@@ -288,14 +288,14 @@ class FactTests(unittest.TestCase):
             {"note_id": "NOTE-C", "requester_email": "bare@example.com", "created_at": "2024-06-02", "channel": "app", "text": "Customer reported a lost card. Card frozen and a replacement ordered to the address on file."},
         ]
         people, indexes, _stats = people_of(tables([bare, noted], notes=notes))
-        unverified = people["P-CUS-000010"]
+        unverified = people["P-CUS-SYN010"]
         self.assertIn("UNVERIFIED", unverified["flags"])
         self.assertFalse(unverified["legal_name"]["verified"])
         self.assertEqual(unverified["legal_name"]["value"], "No Check Person")
-        self.assertEqual(unverified["dob"]["source_id"], "CUS-000010")
+        self.assertEqual(unverified["dob"]["source_id"], "CUS-SYN010")
         self.assertEqual(unverified["note_ids_residence"], [])
 
-        verified = people["P-CUS-000020"]
+        verified = people["P-CUS-SYN020"]
         self.assertEqual(verified["legal_name"]["value"], "NOTE PERSON")
         self.assertEqual(verified["legal_name"]["source_kind"], "kyc_note")
         self.assertEqual(verified["dob"]["value"], "1975-12-01")
@@ -309,24 +309,24 @@ class FactTests(unittest.TestCase):
             "value": "Ghana",
             "years": [2014, 2021],
         }])
-        self.assertIn("P-CUS-000020", indexes["name"]["by_part"]["note"])
+        self.assertIn("P-CUS-SYN020", indexes["name"]["by_part"]["note"])
         self.assertNotIn("oslo", indexes["name"]["by_part"])
 
     def test_two_approved_events_keep_both_countries_and_latest_wins(self):
         customers = [
-            customer("CUS-000010", dob=None, phone="+1 2025550101", email="a@example.com", full_name="Same Person", nationality="Canada", residence_country="CA"),
-            customer("CUS-000020", dob="1980-01-01", phone="+44 7700900999", email="b@example.com", full_name="Same Person", nationality="United States", residence_country="US"),
+            customer("CUS-SYN010", dob=None, phone="+1 2025550101", email="a@example.com", full_name="Same Person", nationality="Canada", residence_country="CA"),
+            customer("CUS-SYN020", dob="1980-01-01", phone="+44 7700900999", email="b@example.com", full_name="Same Person", nationality="United States", residence_country="US"),
         ]
         onboarding = [
-            {"customer_id": "CUS-000010", "kyc_applicant_id": "APP-1", "account_id": "ACC-1"},
-            {"customer_id": "CUS-000020", "kyc_applicant_id": "APP-2", "account_id": "ACC-2"},
+            {"customer_id": "CUS-SYN010", "kyc_applicant_id": "APP-1", "account_id": "ACC-1"},
+            {"customer_id": "CUS-SYN020", "kyc_applicant_id": "APP-2", "account_id": "ACC-2"},
         ]
         checks = [
             _check("KYC-EARLY", "APP-1", "approved", "1980-01-01", "X74734409", "2020-01-01", name="SAME PERSON", country="Canada"),
             _check("KYC-LATE", "APP-2", "approved", "1982-02-02", "X74734409", "2023-01-01", name="OTHER HUMAN", country="United States"),
         ]
         people, _indexes, _stats = people_of(tables(customers, onboarding=onboarding, checks=checks))
-        person = people["P-CUS-000010"]
+        person = people["P-CUS-SYN010"]
         self.assertEqual(person["legal_name"]["source_id"], "KYC-LATE")
         self.assertEqual(person["dob"]["value"], "1982-02-02")
         self.assertIn("MULTI_VERIFICATION_CONFLICT", person["flags"])
@@ -334,8 +334,8 @@ class FactTests(unittest.TestCase):
         self.assertEqual(doc_countries, ["Canada", "United States"])
 
     def test_tie_breaks_kyc_over_note_then_source_id(self):
-        row = customer("CUS-000010", email="a@example.com")
-        onboarding = [{"customer_id": "CUS-000010", "kyc_applicant_id": "APP-1", "account_id": "ACC-1"}]
+        row = customer("CUS-SYN010", email="a@example.com")
+        onboarding = [{"customer_id": "CUS-SYN010", "kyc_applicant_id": "APP-1", "account_id": "ACC-1"}]
         checks = [
             _check("KYC-B", "APP-1", "approved", "1990-01-02", "D1", "2020-01-01", name="FROM CHECK B"),
             _check("KYC-A", "APP-1", "approved", "1991-01-01", "D2", "2020-01-01", name="FROM CHECK A"),
@@ -343,20 +343,20 @@ class FactTests(unittest.TestCase):
         text = "Onfido confirmed passport for FROM NOTE, born 1992-02-02, in Spain on 2020-01-01."
         notes = [{"note_id": "NOTE-A", "requester_email": "a@example.com", "created_at": "2020-01-01", "channel": "kyc", "text": text}]
         people, _indexes, _stats = people_of(tables([row], onboarding=onboarding, checks=checks, notes=notes))
-        person = people["P-CUS-000010"]
+        person = people["P-CUS-SYN010"]
         self.assertEqual(person["legal_name"]["source_id"], "KYC-A")
         self.assertEqual(person["legal_name"]["value"], "FROM CHECK A")
 
     def test_placeholder_short_name_and_unmapped(self):
         row = customer(
-            "CUS-000010",
+            "CUS-SYN010",
             full_name="PAWEŁ N/A N/A",
             nationality="Atlantis",
             residence_country="ES",
             dob="yesterday",
         )
         people, _indexes, _stats = people_of(tables([row]))
-        person = people["P-CUS-000010"]
+        person = people["P-CUS-SYN010"]
         self.assertEqual(person["legal_name"]["parts"], ["pawel"])
         self.assertIn("NAME_TOO_SHORT", person["flags"])
         self.assertIn("PLACEHOLDER_NAME", person["flags"])
@@ -370,7 +370,7 @@ class FactTests(unittest.TestCase):
 
     def test_company_incorporation_dates(self):
         full = customer(
-            "CUS-000010",
+            "CUS-SYN010",
             entity_type="Company",
             full_name="TD Bank, N.A. GmbH",
             dob="08/02/1985",
@@ -380,7 +380,7 @@ class FactTests(unittest.TestCase):
             email="co@example.com",
         )
         partial = customer(
-            "CUS-000020",
+            "CUS-SYN020",
             entity_type="Company",
             full_name="Partial Mills Ltd",
             dob="February 1968",
@@ -390,40 +390,40 @@ class FactTests(unittest.TestCase):
             nationality=None,
         )
         onboarding = [
-            {"customer_id": "CUS-000010", "kyc_applicant_id": "APP-1", "account_id": "ACC-1"},
-            {"customer_id": "CUS-000020", "kyc_applicant_id": "APP-2", "account_id": "ACC-2"},
+            {"customer_id": "CUS-SYN010", "kyc_applicant_id": "APP-1", "account_id": "ACC-1"},
+            {"customer_id": "CUS-SYN020", "kyc_applicant_id": "APP-2", "account_id": "ACC-2"},
         ]
         checks = [
             _check("KYC-CO", "APP-1", "approved", "1985-02-08", None, "2022-02-02", name="TD BANK", country="Netherlands", document_type="registry extract"),
             _check("KYC-PART", "APP-2", "approved", "2013-02", None, "2022-03-03", name="PARTIAL MILLS", country="Netherlands", document_type="registry extract"),
         ]
         people, _indexes, _stats = people_of(tables([full, partial], onboarding=onboarding, checks=checks))
-        company = people["P-CUS-000010"]
+        company = people["P-CUS-SYN010"]
         self.assertEqual(company["legal_name"]["parts"], ["td", "bank"])
         self.assertEqual(company["incorporation_date"]["value"], "1985-02-08")
         self.assertEqual(company["incorporation_date"]["precision"], "day")
         self.assertTrue(company["incorporation_date"]["verified"])
         self.assertEqual(company["dob"]["value"], "1985-02-08")
         self.assertEqual(company["registration_numbers"], ["REG-1"])
-        partial_person = people["P-CUS-000020"]
+        partial_person = people["P-CUS-SYN020"]
         self.assertEqual(partial_person["incorporation_date"]["value"], "2013-02")
         self.assertEqual(partial_person["incorporation_date"]["precision"], "month")
         self.assertEqual(partial_person["declared_dobs"][0]["value"], "1968-02")
 
     def test_type_conflict(self):
         customers = [
-            customer("CUS-000010", entity_type="Individual", dob="1985-09-12", phone="+44 799097796"),
-            customer("CUS-000020", entity_type="Company", full_name="Acme Ltd", dob="1985-09-12", phone="+44799097796", email="b@example.com"),
+            customer("CUS-SYN010", entity_type="Individual", dob="1985-09-12", phone="+44 799097796"),
+            customer("CUS-SYN020", entity_type="Company", full_name="Acme Ltd", dob="1985-09-12", phone="+44799097796", email="b@example.com"),
         ]
         people, _indexes, _stats = people_of(tables(customers))
-        person = people["P-CUS-000010"]
+        person = people["P-CUS-SYN010"]
         self.assertIsNone(person["entity_type"]["value"])
         self.assertIn("TYPE_CONFLICT", person["flags"])
 
     def test_byte_identical_on_synthetic(self):
         payload = tables([
-            customer("CUS-000002", full_name="Zed Alpha"),
-            customer("CUS-000001", full_name="Amy Beta", email="amy@example.com", phone="+1 2025550199"),
+            customer("CUS-SYN002", full_name="Zed Alpha"),
+            customer("CUS-SYN001", full_name="Amy Beta", email="amy@example.com", phone="+1 2025550199"),
         ])
         first, indexes_a, _stats = build_from_tables(payload)
         second, indexes_b, _stats = build_from_tables(payload)
@@ -432,7 +432,7 @@ class FactTests(unittest.TestCase):
             json.dumps(second, sort_keys=True, ensure_ascii=False),
         )
         self.assertEqual(indexes_a, indexes_b)
-        self.assertEqual([person["person_id"] for person in first], ["P-CUS-000001", "P-CUS-000002"])
+        self.assertEqual([person["person_id"] for person in first], ["P-CUS-SYN001", "P-CUS-SYN002"])
 
 
 class RunTests(unittest.TestCase):
@@ -441,9 +441,9 @@ class RunTests(unittest.TestCase):
             data = os.path.join(folder, "data")
             cache = os.path.join(folder, "cache")
             os.makedirs(data)
-            _write_jsonl(os.path.join(data, "customers.jsonl"), [customer("CUS-000010")])
+            _write_jsonl(os.path.join(data, "customers.jsonl"), [customer("CUS-SYN010")])
             _write_jsonl(os.path.join(data, "accounts.jsonl"), [
-                {"account_id": "ACC-1", "customer_id": "CUS-000010", "login_handle": "alice", "phone": "+44 7700 900123"},
+                {"account_id": "ACC-1", "customer_id": "CUS-SYN010", "login_handle": "alice", "phone": "+44 7700 900123"},
             ])
             _write_jsonl(os.path.join(data, "onboarding.jsonl"), [])
             _write_jsonl(os.path.join(data, "kyc_checks.jsonl"), [])
@@ -451,7 +451,7 @@ class RunTests(unittest.TestCase):
             with open(os.path.join(data, "name_variants.json"), "w", encoding="utf-8") as handle:
                 json.dump(VARIANTS, handle)
             _write_jsonl(os.path.join(data, "hits.jsonl"), [{
-                "hit_id": "H-000010",
+                "hit_id": "H-SYN010",
                 "alert_id": "A-000010",
                 "match_score": 91,
                 "entity_type": "Individual",
@@ -482,7 +482,7 @@ class RunTests(unittest.TestCase):
                 "account_ref": "ACC-1",
                 "login_handle": None,
                 "email": None,
-                "hit_ids": ["H-000010"],
+                "hit_ids": ["H-SYN010"],
             }])
             output = os.path.join(folder, "summary.json")
             env = dict(os.environ)
@@ -537,8 +537,8 @@ class RunTests(unittest.TestCase):
             self.assertTrue(resolved["resolution_clean"])
             self.assertEqual(resolved["resolution_quality"], "clean_link")
             self.assertEqual(resolved["fragility_flags"], [])
-            self.assertEqual(resolved["customer_record_id"], "CUS-000010")
-            self.assertIn("CUS-000010", resolved["evidence_ids"])
+            self.assertEqual(resolved["customer_record_id"], "CUS-SYN010")
+            self.assertIn("CUS-SYN010", resolved["evidence_ids"])
             self.assertIn("ACC-1", resolved["evidence_ids"])
 
 

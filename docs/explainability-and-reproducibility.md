@@ -23,22 +23,22 @@ Every decision leaves a structured trace. The UI, the evals, the replay script a
 ```json
 {
   "trace_schema": 1,
-  "hit_id": "H-000123", "alert_id": "A-000045",
+  "hit_id": "H-SYN123", "alert_id": "A-000045",
   "verdict": {
     "decision": "DIFFERENT_ENTITY", "reason_code": "DOB_MISMATCH",
     "reason": "Verified DOB year 1984 (KYC-0091) contradicts every DOB on the hit (1971, 1972).",
-    "evidence": ["KYC-0091", "H-000123#dobs"],
+    "evidence": ["KYC-0091", "H-SYN123#dobs"],
     "customer_record_id": "CUS-00812"
   },
   "badges": { "fragility": "thin", "llm_used": false, "rules_version": "r1.0" },
   "tipping_point": "Without KYC-0091 this would be REVIEW (INSUFFICIENT_DATA).",
   "comparison": [
-    {"dim": "name",    "customer": "Ali Hassan", "hit": "Aly Hasan",  "status": "agree",      "src": ["KYC-0091", "H-000123#names"]},
-    {"dim": "dob",     "customer": "1984-03-02", "hit": "1971; 1972", "status": "contradict", "src": ["KYC-0091", "H-000123#dobs"]},
+    {"dim": "name",    "customer": "Ali Hassan", "hit": "Aly Hasan",  "status": "agree",      "src": ["KYC-0091", "H-SYN123#names"]},
+    {"dim": "dob",     "customer": "1984-03-02", "hit": "1971; 1972", "status": "contradict", "src": ["KYC-0091", "H-SYN123#dobs"]},
     {"dim": "country", "customer": "GB",         "hit": null,         "status": "unknown",    "src": []},
-    {"dim": "type",    "customer": "Individual", "hit": "Individual", "status": "agree",      "src": ["CUS-00812", "H-000123"]},
+    {"dim": "type",    "customer": "Individual", "hit": "Individual", "status": "agree",      "src": ["CUS-00812", "H-SYN123"]},
     {"dim": "death",   "customer": null,         "hit": null,         "status": "unknown",    "src": []},
-    {"dim": "earliest_report", "customer": null, "hit": "2009-05-01", "status": "no_conflict","src": ["H-000123#sources"]}
+    {"dim": "earliest_report", "customer": null, "hit": "2009-05-01", "status": "no_conflict","src": ["H-SYN123#sources"]}
   ],
   "identity": {
     "person_id": "P-CUS-00812",

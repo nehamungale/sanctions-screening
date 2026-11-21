@@ -2,6 +2,7 @@
 // The internal status names (ESCALATED, NEEDS_REVIEW, NOT_VERIFIED) are never shown.
 
 import { HIT_NOT_DECIDED, type Decision, type RollupStatus } from './policy.ts'
+import type { CrossCheckProblem } from './rollup.ts'
 import type { UndecidedReason } from './types.ts'
 
 export const STATUS_LABELS: Record<RollupStatus, { label: string; sub: string; slug: string }> = {
@@ -91,4 +92,49 @@ export const DECIDING_DIMS: Record<string, readonly string[]> = {
   NAME_DOB_LOCATION_MATCH: ['name', 'dob', 'country'],
   NAME_DOB_MATCH: ['name', 'dob'],
   NAME_LOCATION_MATCH: ['name', 'country'],
+}
+
+/** Plain-English comparison statuses. The raw value stays available as a tooltip and in the raw trace. */
+export const COMPARISON_STATUS_LABELS: Record<string, string> = {
+  agree: 'agrees',
+  contradict: 'contradicts',
+  no_conflict: 'no conflict',
+  unknown: 'can’t compare',
+}
+
+export function comparisonStatusLabel(raw: string): string {
+  return COMPARISON_STATUS_LABELS[raw] ?? raw
+}
+
+/** What to show when one side of a comparison row has no value. */
+export const MISSING_TEXT = {
+  hit: 'not on list profile',
+  customer: 'not in customer records',
+  ambiguousCustomer: 'differs by candidate',
+} as const
+
+export function missingSideText(side: 'hit' | 'customer' | 'both'): string {
+  if (side === 'hit') return MISSING_TEXT.hit
+  if (side === 'customer') return MISSING_TEXT.customer
+  return `${MISSING_TEXT.hit}, and ${MISSING_TEXT.customer}`
+}
+
+/** Cross-check problems between alerts.trace.jsonl and the UI roll-up, in plain words. */
+export function crossCheckText(p: CrossCheckProblem): string {
+  switch (p.kind) {
+    case 'status':
+      return `${p.alert_id}: the pipeline says “${STATUS_LABELS[p.pipeline].label}”, this view says “${STATUS_LABELS[p.ui].label}”`
+    case 'hit_ids': {
+      const parts = []
+      if (p.only_in_summary.length) parts.push(`only in the summary: ${p.only_in_summary.join(', ')}`)
+      if (p.only_in_alerts.length) parts.push(`only in alerts.jsonl: ${p.only_in_alerts.join(', ')}`)
+      return `${p.alert_id}: hit lists differ (${parts.join('; ')})`
+    }
+    case 'no_summary':
+      return `${p.alert_id}: no pipeline summary for this alert`
+    case 'unknown_alert':
+      return `${p.alert_id}: summary for an alert that is not in the alert list`
+    case 'duplicate':
+      return `${p.alert_id}: conflicting summary lines ${p.lines.join(', ')}`
+  }
 }

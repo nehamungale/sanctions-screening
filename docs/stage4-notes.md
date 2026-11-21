@@ -37,10 +37,10 @@ Before computing the status, compare the alert's `hit_ids` (from `alerts.jsonl`)
   "alert_id": "A-000001",
   "alert_status": "NEEDS_REVIEW",
   "hits": [
-    {"hit_id": "H-000001", "decision": "DIFFERENT_ENTITY", "reason_code": "DOB_MISMATCH", "fragility": "solid"},
-    {"hit_id": "H-000002", "decision": "REVIEW", "reason_code": "INSUFFICIENT_DATA", "missing": "no birth date on hit"}
+    {"hit_id": "H-SYN001", "decision": "DIFFERENT_ENTITY", "reason_code": "DOB_MISMATCH", "fragility": "solid"},
+    {"hit_id": "H-SYN002", "decision": "REVIEW", "reason_code": "INSUFFICIENT_DATA", "missing": "no birth date on hit"}
   ],
-  "blocking_hit_ids": ["H-000002"],
+  "blocking_hit_ids": ["H-SYN002"],
   "undecided_hit_ids": []
 }
 ```
@@ -65,7 +65,7 @@ The overview counts alerts as well as hits (cleared, escalated, needs review). T
 
 > **Status: designed, not built.** This section is a self-contained brief for the agent that builds Stage 4. Read it top to bottom before writing code. Section 1 above (alert roll-up) still stands. §2.10 says how it plugs in.
 >
-> **Hard rule for anything you write in this repo:** it is public. Never paste real values from `dev/` (names, record IDs, dates of birth, note text) into code, tests, docs or commit messages. Use invented fixtures like the ones in this guide (`CUS-999991`, `H-0000AA`, "Jane Example"). Aggregate counts are fine.
+> **Hard rule for anything you write in this repo:** it is public. Never paste real values from `dev/` (names, record IDs, dates of birth, note text) into code, tests, docs or commit messages. Use invented fixtures like the ones in this guide (`CUS-SYN991`, `H-SYN0AA`, "Jane Example"). Aggregate counts are fine.
 
 ### 2.1 What Stage 4 does, in one paragraph
 
@@ -123,7 +123,7 @@ flowchart LR
 **Output line** (exactly `output.schema.json`; field order fixed as below; lines sorted by `hit_id`):
 
 ```json
-{"hit_id": "H-0000AA", "alert_id": "A-0000A1", "decision": "DIFFERENT_ENTITY", "reason_code": "DOB_MISMATCH", "customer_record_id": "CUS-999991", "reason": "The customer's date of birth is 1990-04-02 (KYC-0000A1) but the hit's listed date of birth is 1961-07-15.", "evidence": ["KYC-0000A1"]}
+{"hit_id": "H-SYN0AA", "alert_id": "A-0000A1", "decision": "DIFFERENT_ENTITY", "reason_code": "DOB_MISMATCH", "customer_record_id": "CUS-SYN991", "reason": "The customer's date of birth is 1990-04-02 (KYC-0000A1) but the hit's listed date of birth is 1961-07-15.", "evidence": ["KYC-0000A1"]}
 ```
 
 **Deliverables Stage 4 unlocks:**
@@ -716,18 +716,18 @@ All IDs, names and dates below are invented.
 
 | # | Situation | Output |
 |---|---|---|
-| 1 | Customer "Jane Example" (KYC-0000A1, born 1990-04-02, linked to Ireland). The hit lists `dobs` 1961-07-15. | `DIFFERENT_ENTITY` / `DOB_MISMATCH` / `CUS-999991` / "The customer's date of birth is 1990-04-02 (KYC-0000A1) but the hit's listed date of birth is 1961-07-15." / `["KYC-0000A1"]` |
-| 2 | Customer "Jane Example" has records CUS-999991 (resides in Ireland) and CUS-999992 (national of Portugal), and doc country Ireland on KYC-0000A1. The hit is linked only to Canada. Name agrees; the hit has no DOB. | `DIFFERENT_ENTITY` / `LOCATION_MISMATCH` / `CUS-999991` / "The customer is linked only to Ireland, Portugal but the hit is linked only to Canada." / `["CUS-999991","CUS-999992","KYC-0000A1"]` |
+| 1 | Customer "Jane Example" (KYC-0000A1, born 1990-04-02, linked to Ireland). The hit lists `dobs` 1961-07-15. | `DIFFERENT_ENTITY` / `DOB_MISMATCH` / `CUS-SYN991` / "The customer's date of birth is 1990-04-02 (KYC-0000A1) but the hit's listed date of birth is 1961-07-15." / `["KYC-0000A1"]` |
+| 2 | Customer "Jane Example" has records CUS-SYN991 (resides in Ireland) and CUS-SYN992 (national of Portugal), and doc country Ireland on KYC-0000A1. The hit is linked only to Canada. Name agrees; the hit has no DOB. | `DIFFERENT_ENTITY` / `LOCATION_MISMATCH` / `CUS-SYN991` / "The customer is linked only to Ireland, Portugal but the hit is linked only to Canada." / `["CUS-SYN991","CUS-SYN992","KYC-0000A1"]` |
 | 3 | Customer born 2009-01-10 (KYC-0000A2). The hit's earliest dated report is "According to Example Regulator; March 03, 2021: …". | `DIFFERENT_ENTITY` / `TEMPORAL_IMPOSSIBILITY` / "The customer was born in 2009 (KYC-0000A2), so they were at most 12 when the hit's profile reports activity on 2021-03-03." / `["KYC-0000A2"]` |
 | 4 | Verified name "SAMIRA EXAMPLE" (NOTE-0000B1). The hit is "Example, Oliver Fictional". Only one part matches, and the shorter name isn't fully covered. | `DIFFERENT_ENTITY` / `NAME_MISMATCH_VERIFIED` / "The customer's verified name is SAMIRA EXAMPLE (NOTE-0000B1), which does not match the hit's name Example, Oliver Fictional." / `["NOTE-0000B1"]` |
-| 5 | The alert and customer CUS-999993 are a company ("Example Trading Ltd"). The hit is an individual. | `DIFFERENT_ENTITY` / `ENTITY_TYPE_MISMATCH` / "The customer is a company (CUS-999993) but the hit is an individual." / `["CUS-999993"]` |
+| 5 | The alert and customer CUS-SYN993 are a company ("Example Trading Ltd"). The hit is an individual. | `DIFFERENT_ENTITY` / `ENTITY_TYPE_MISMATCH` / "The customer is a company (CUS-SYN993) but the hit is an individual." / `["CUS-SYN993"]` |
 | 6 | The hit's `life_status` is Deceased, `deceased_date` 2018-06. The alert was screened on 2026-02-01. | `DIFFERENT_ENTITY` / `DECEASED` / "The hit's profile gives a date of death of 2018-06, before the customer was screened on 2026-02-01." / evidence per Q5 |
-| 7 | Customer born 1975-09-30 (KYC-0000A3), linked to Portugal (CUS-999994). The hit's profile says "aged 45 in May 2021" and links it to Portugal. Names agree. | `SAME_ENTITY` / `NAME_DOB_LOCATION_MATCH` / "The customer's date of birth 1975-09-30 (KYC-0000A3) agrees with the hit's 1975 or 1976. Both the customer and the hit are linked to Portugal. The customer's name agrees with the hit's name John Sample." / `["CUS-999994","KYC-0000A3"]` |
+| 7 | Customer born 1975-09-30 (KYC-0000A3), linked to Portugal (CUS-SYN994). The hit's profile says "aged 45 in May 2021" and links it to Portugal. Names agree. | `SAME_ENTITY` / `NAME_DOB_LOCATION_MATCH` / "The customer's date of birth 1975-09-30 (KYC-0000A3) agrees with the hit's 1975 or 1976. Both the customer and the hit are linked to Portugal. The customer's name agrees with the hit's name John Sample." / `["CUS-SYN994","KYC-0000A3"]` |
 | 8 | As example 7, but the hit has no country. | `SAME_ENTITY` / `NAME_DOB_MATCH` / "The customer's date of birth 1975-09-30 (KYC-0000A3) agrees with the hit's 1975 or 1976. The customer's name agrees with the hit's name John Sample. The hit gives no country to compare." / `["KYC-0000A3"]` |
-| 9 | Company "Example Trading Ltd" (CUS-999993, Ireland, registry extract KYC-0000A4). The hit is "Example Trading Limited", Ireland. | `SAME_ENTITY` / `NAME_LOCATION_MATCH` / "Both the customer and the hit are linked to Ireland. The customer's name agrees with the hit's name Example Trading Limited." / `["CUS-999993","KYC-0000A4"]` |
+| 9 | Company "Example Trading Ltd" (CUS-SYN993, Ireland, registry extract KYC-0000A4). The hit is "Example Trading Limited", Ireland. | `SAME_ENTITY` / `NAME_LOCATION_MATCH` / "Both the customer and the hit are linked to Ireland. The customer's name agrees with the hit's name Example Trading Limited." / `["CUS-SYN993","KYC-0000A4"]` |
 | 10 | Name agrees. Ireland is shared only through NOTE-0000B2 ("lived in Ireland 2015–2020"). The hit has no DOB. | `REVIEW` / `INSUFFICIENT_DATA` / "Both the customer and the hit are linked to Ireland. The customer's name agrees with the hit's name Jane Example. Nothing in the customer's records contradicts the hit, and the hit gives no date of birth, so the hit can be neither cleared nor confirmed." / `["NOTE-0000B2"]` |
-| 11 | No link. Two persons fit (CUS-999995 and CUS-999996). The hit's DOB agrees with CUS-999995's verified DOB (KYC-0000A5) but contradicts CUS-999996's (KYC-0000A6). | `REVIEW` / `AMBIGUOUS_CUSTOMER_RECORD` / `AMBIGUOUS` / "2 different customers fit this alert (CUS-999995, CUS-999996). The hit would be the same person for CUS-999995 but a different person for CUS-999996, so it is left for review." / `["CUS-999995","CUS-999996","KYC-0000A5","KYC-0000A6"]` |
-| 12 | As example 2, but the customer has a support note whose places didn't parse (`BLOCK_LOCATION_MISMATCH`). | `REVIEW` / `INSUFFICIENT_DATA` / "The customer is linked only to Ireland, Portugal but the hit is linked only to Canada. However, one of the customer's notes could not be read for countries, so the hit is left for review." / `["CUS-999991","CUS-999992","KYC-0000A1"]` |
+| 11 | No link. Two persons fit (CUS-SYN995 and CUS-SYN996). The hit's DOB agrees with CUS-SYN995's verified DOB (KYC-0000A5) but contradicts CUS-SYN996's (KYC-0000A6). | `REVIEW` / `AMBIGUOUS_CUSTOMER_RECORD` / `AMBIGUOUS` / "2 different customers fit this alert (CUS-SYN995, CUS-SYN996). The hit would be the same person for CUS-SYN995 but a different person for CUS-SYN996, so it is left for review." / `["CUS-SYN995","CUS-SYN996","KYC-0000A5","KYC-0000A6"]` |
+| 12 | As example 2, but the customer has a support note whose places didn't parse (`BLOCK_LOCATION_MISMATCH`). | `REVIEW` / `INSUFFICIENT_DATA` / "The customer is linked only to Ireland, Portugal but the hit is linked only to Canada. However, one of the customer's notes could not be read for countries, so the hit is left for review." / `["CUS-SYN991","CUS-SYN992","KYC-0000A1"]` |
 
 ### 2.9 How contradictions, the gate and confirmation fit together
 

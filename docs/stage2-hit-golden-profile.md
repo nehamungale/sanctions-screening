@@ -244,7 +244,7 @@ and says the form is worded the same in the unseen set. One line-anchored regex 
 
 ```json
 {
-  "hit_id": "H-0A0A0A",
+  "hit_id": "H-SYNA0A",
   "alert_id": "A-0B0B0B",
   "entity_type": "Individual",
   "match_score": 95,
@@ -260,7 +260,7 @@ and says the form is worded the same in the unseen set. One line-anchored regex 
   ],
   "dob_candidates": [
     {"years": [1979, 1980], "month": null, "day": null, "precision": "year",
-     "source": "profile_note", "source_id": "H-0A0A0A", "method": "regex",
+     "source": "profile_note", "source_id": "H-SYNA0A", "method": "regex",
      "rule": "age_at_date", "quote": "aged 40 in June 2020"}
   ],
   "dob_tier": "tier1",

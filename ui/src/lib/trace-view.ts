@@ -1,3 +1,5 @@
+import { DECIDING_DIMS, DIMS } from './labels.ts'
+
 // Defensive readers for the optional parts of a trace record (design doc section 1).
 // Anything malformed is dropped or shown as unknown; nothing here throws.
 
@@ -130,13 +132,33 @@ export function readTippingPoint(raw: Record<string, unknown>): string | null {
   return str(raw.tipping_point)
 }
 
-/** Facts the comparison marks unknown, naming which side is missing. */
-export function unknownFacts(rows: readonly ComparisonRow[]): { dim: string; missing: string }[] {
-  const empty = (v: unknown) => v === null || v === undefined || v === ''
+/** Facts the comparison marks unknown, naming which side has no value. */
+export function unknownFacts(rows: readonly ComparisonRow[]): { dim: string; side: 'hit' | 'customer' | 'both' | 'neither' }[] {
   return rows
     .filter((r) => r.status === 'unknown')
     .map((r) => ({
       dim: r.dim,
-      missing: empty(r.customer) && empty(r.hit) ? 'both sides' : empty(r.hit) ? 'hit' : empty(r.customer) ? 'customer' : 'not comparable',
+      side: isEmpty(r.customer) && isEmpty(r.hit) ? 'both' : isEmpty(r.hit) ? 'hit' : isEmpty(r.customer) ? 'customer' : 'neither',
     }))
+}
+
+export function isEmpty(v: unknown): boolean {
+  return v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0)
+}
+
+/**
+ * Which comparison rows the verdict rests on. Prefers the UI-proposed top-level
+ * `deciding_dims` field (a list of comparison dims) when it is present and valid;
+ * otherwise derives the rows from the reason code (labels.ts DECIDING_DIMS).
+ */
+export function readDecidingDims(
+  raw: Record<string, unknown>,
+  reasonCode: string,
+): { dims: string[]; source: 'trace' | 'derived' | 'none' } {
+  const d = raw.deciding_dims
+  if (Array.isArray(d) && d.length > 0 && d.every((x) => typeof x === 'string' && (DIMS as readonly string[]).includes(x))) {
+    return { dims: [...new Set(d as string[])], source: 'trace' }
+  }
+  const derived = DECIDING_DIMS[reasonCode] ?? []
+  return { dims: [...derived], source: derived.length ? 'derived' : 'none' }
 }

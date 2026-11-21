@@ -9,7 +9,7 @@
 // An alert with no hit_ids is NEEDS_REVIEW, not vacuously CLEARED.
 // Without a verified alert list, a would-be CLEARED alert is NOT_VERIFIED instead.
 
-import { DECISIONS, REASON_CODES, ROLLUP_STATUSES, type Decision, type RollupStatus } from './policy.ts'
+import { DECISIONS, REASON_CODES, ROLLUP_STATUSES, type AlertStatus, type Decision, type RollupStatus } from './policy.ts'
 import type { AlertRef, AlertSummary, RollupHit, TraceHit, UndecidedReason } from './types.ts'
 
 const byString = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
@@ -47,7 +47,7 @@ export function rollUpAlert(
 
   let status: RollupStatus
   if (hits.some((h) => h.decision === 'SAME_ENTITY')) status = 'ESCALATED'
-  else if (hits.length > 0 && blocking.length === 0) status = opts.alertsVerified ? 'CLEARED' : 'NOT_VERIFIED'
+  else if (hits.length > 0 && blocking.length === 0 && !alert.conflicting_lines) status = opts.alertsVerified ? 'CLEARED' : 'NOT_VERIFIED'
   else status = 'NEEDS_REVIEW'
 
   return {
@@ -56,7 +56,7 @@ export function rollUpAlert(
     hits,
     blocking_hit_ids: blocking,
     undecided_hit_ids: undecidedIds,
-    ...(alert.pipeline_status ? { pipeline_status: alert.pipeline_status } : {}),
+    ...(alert.conflicting_lines ? { conflicting_lines: alert.conflicting_lines } : {}),
   }
 }
 
@@ -86,12 +86,13 @@ export interface OverviewCounts {
   alertsTotal: number
   alertsWithUndecided: number
   hitsByDecision: Record<Decision, number>
+  /** Decided hits counted in the totals (excludes hits filed under the wrong alert). */
   hitsDecided: number
   hitsUndecided: number
+  /** Hits whose own alert_id differs from the alert listing them: undecided only, not in the totals. */
+  hitsMisfiled: number
   /** Hits in the trace that no alert lists (only when an alerts file is loaded). */
   hitsUnlisted: number
-  /** Alerts whose pipeline alert_status differs from this roll-up (alerts.trace.jsonl only). */
-  pipelineDisagreements: string[]
   /** Every policy reason code in POLICY order, including zero counts. */
   hitsByReason: { decision: Decision; reason_code: string; count: number }[]
 }
@@ -104,9 +105,13 @@ export function overviewCounts(
   const alerts = Object.fromEntries(ROLLUP_STATUSES.map((s) => [s, 0])) as Record<RollupStatus, number>
   for (const s of summaries) alerts[s.alert_status]++
 
+  const misfiled = new Set(
+    summaries.flatMap((s) => s.hits.filter((h) => h.undecided?.kind === 'alert_mismatch').map((h) => h.hit_id)),
+  )
+  const counted = hits.filter((h) => !misfiled.has(h.hit_id))
   const hitsByDecision: Record<Decision, number> = { DIFFERENT_ENTITY: 0, SAME_ENTITY: 0, REVIEW: 0 }
   const reason = new Map<string, number>()
-  for (const h of hits) {
+  for (const h of counted) {
     hitsByDecision[h.verdict.decision]++
     const k = `${h.verdict.decision}|${h.verdict.reason_code}`
     reason.set(k, (reason.get(k) ?? 0) + 1)
@@ -120,14 +125,57 @@ export function overviewCounts(
     alertsTotal: summaries.length,
     alertsWithUndecided: summaries.filter((s) => s.undecided_hit_ids.length > 0).length,
     hitsByDecision,
-    hitsDecided: hits.length,
+    hitsDecided: counted.length,
     hitsUndecided: undecided.size,
+    hitsMisfiled: misfiled.size,
     hitsUnlisted: alertsVerified ? hits.filter((h) => !listed.has(h.hit_id)).length : 0,
-    pipelineDisagreements: summaries
-      .filter((s) => s.pipeline_status && s.pipeline_status !== s.alert_status)
-      .map((s) => s.alert_id),
     hitsByReason: DECISIONS.flatMap((d) =>
       REASON_CODES[d].map((c) => ({ decision: d, reason_code: c, count: reason.get(`${d}|${c}`) ?? 0 })),
     ),
   }
+}
+
+export type CrossCheckProblem =
+  | { kind: 'status'; alert_id: string; pipeline: AlertStatus; ui: RollupStatus }
+  | { kind: 'hit_ids'; alert_id: string; only_in_summary: string[]; only_in_alerts: string[] }
+  | { kind: 'no_summary'; alert_id: string }
+  | { kind: 'unknown_alert'; alert_id: string }
+  | { kind: 'duplicate'; alert_id: string; lines: number[] }
+
+/**
+ * Cross-check alerts.trace.jsonl (the pipeline's own roll-up) against the UI roll-up.
+ * The summaries never decide anything here. A pipeline CLEARED against a UI NOT_VERIFIED
+ * is not a disagreement (the UI just cannot confirm it without alerts.jsonl).
+ */
+export function crossCheckSummaries(
+  computed: readonly AlertSummary[],
+  pipeline: readonly AlertRef[],
+  alertsVerified: boolean,
+): CrossCheckProblem[] {
+  const byId = new Map(computed.map((s) => [s.alert_id, s]))
+  const problems: CrossCheckProblem[] = []
+  for (const p of [...pipeline].sort((a, b) => byString(a.alert_id, b.alert_id))) {
+    if (p.conflicting_lines) problems.push({ kind: 'duplicate', alert_id: p.alert_id, lines: p.conflicting_lines })
+    const c = byId.get(p.alert_id)
+    if (!c) {
+      problems.push({ kind: 'unknown_alert', alert_id: p.alert_id })
+      continue
+    }
+    if (alertsVerified) {
+      const ui = new Set(c.hits.map((h) => h.hit_id))
+      const pl = new Set(p.hit_ids)
+      const onlyS = [...pl].filter((x) => !ui.has(x)).sort(byString)
+      const onlyA = [...ui].filter((x) => !pl.has(x)).sort(byString)
+      if (onlyS.length || onlyA.length) problems.push({ kind: 'hit_ids', alert_id: p.alert_id, only_in_summary: onlyS, only_in_alerts: onlyA })
+    }
+    const compatible = p.pipeline_status === c.alert_status || (p.pipeline_status === 'CLEARED' && c.alert_status === 'NOT_VERIFIED')
+    if (p.pipeline_status && !compatible && !p.conflicting_lines) {
+      problems.push({ kind: 'status', alert_id: p.alert_id, pipeline: p.pipeline_status, ui: c.alert_status })
+    }
+  }
+  if (alertsVerified) {
+    const have = new Set(pipeline.map((p) => p.alert_id))
+    for (const c of computed) if (!have.has(c.alert_id)) problems.push({ kind: 'no_summary', alert_id: c.alert_id })
+  }
+  return problems
 }

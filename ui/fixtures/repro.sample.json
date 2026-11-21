@@ -1,0 +1,1438 @@
+{
+  "config_check": {
+    "all_identical": {
+      "git_sha": true,
+      "input_hash": true,
+      "model": true,
+      "name_variants_hash": true,
+      "policy_hash": true,
+      "prompt_hashes": true,
+      "provider": true,
+      "python_version": true,
+      "rules_version": true
+    },
+    "available": true,
+    "runs": [
+      {
+        "git_sha": "0000000000000000000000000000000000000001",
+        "input_hash": "input-hash-1",
+        "model": "example/model-a",
+        "name_variants_hash": "variants-hash-1",
+        "policy_hash": "policy-hash-1",
+        "prompt_hashes": {
+          "read_note": "prompt-hash-1"
+        },
+        "provider": "example-provider",
+        "python_version": "3.12.3",
+        "rules_version": "r1.0",
+        "run_index": 0,
+        "run_label": "run1.jsonl"
+      },
+      {
+        "git_sha": "0000000000000000000000000000000000000001",
+        "input_hash": "input-hash-1",
+        "model": "example/model-a",
+        "name_variants_hash": "variants-hash-1",
+        "policy_hash": "policy-hash-1",
+        "prompt_hashes": {
+          "read_note": "prompt-hash-1"
+        },
+        "provider": "example-provider",
+        "python_version": "3.12.3",
+        "rules_version": "r1.0",
+        "run_index": 1,
+        "run_label": "run2.jsonl"
+      },
+      {
+        "git_sha": "0000000000000000000000000000000000000001",
+        "input_hash": "input-hash-1",
+        "model": "example/model-a",
+        "name_variants_hash": "variants-hash-1",
+        "policy_hash": "policy-hash-1",
+        "prompt_hashes": {
+          "read_note": "prompt-hash-1"
+        },
+        "provider": "example-provider",
+        "python_version": "3.12.3",
+        "rules_version": "r1.0",
+        "run_index": 2,
+        "run_label": "run3.jsonl"
+      },
+      {
+        "git_sha": "0000000000000000000000000000000000000001",
+        "input_hash": "input-hash-1",
+        "model": "example/model-a",
+        "name_variants_hash": "variants-hash-1",
+        "policy_hash": "policy-hash-1",
+        "prompt_hashes": {
+          "read_note": "prompt-hash-1"
+        },
+        "provider": "example-provider",
+        "python_version": "3.12.3",
+        "rules_version": "r1.0",
+        "run_index": 3,
+        "run_label": "run4.jsonl"
+      },
+      {
+        "git_sha": "0000000000000000000000000000000000000001",
+        "input_hash": "input-hash-1",
+        "model": "example/model-a",
+        "name_variants_hash": "variants-hash-1",
+        "policy_hash": "policy-hash-1",
+        "prompt_hashes": {
+          "read_note": "prompt-hash-1"
+        },
+        "provider": "example-provider",
+        "python_version": "3.12.3",
+        "rules_version": "r1.0",
+        "run_index": 4,
+        "run_label": "run5.jsonl"
+      }
+    ]
+  },
+  "heatmap": {
+    "decisions": [
+      [
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY"
+      ],
+      [
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY"
+      ],
+      [
+        "SAME_ENTITY",
+        "SAME_ENTITY",
+        "SAME_ENTITY",
+        "SAME_ENTITY",
+        "SAME_ENTITY"
+      ],
+      [
+        "REVIEW",
+        "REVIEW",
+        "REVIEW",
+        "REVIEW",
+        "REVIEW"
+      ],
+      [
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY"
+      ],
+      [
+        "REVIEW",
+        "REVIEW",
+        "REVIEW",
+        "REVIEW",
+        "SAME_ENTITY"
+      ],
+      [
+        "REVIEW",
+        "REVIEW",
+        "REVIEW",
+        "REVIEW",
+        "REVIEW"
+      ],
+      [
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY"
+      ],
+      [
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY"
+      ],
+      [
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY"
+      ],
+      [
+        "SAME_ENTITY",
+        "SAME_ENTITY",
+        "SAME_ENTITY",
+        "SAME_ENTITY",
+        "SAME_ENTITY"
+      ]
+    ],
+    "hit_ids": [
+      "H-SYN001",
+      "H-SYN002",
+      "H-SYN003",
+      "H-SYN004",
+      "H-SYN005",
+      "H-SYN006",
+      "H-SYN007",
+      "H-SYN008",
+      "H-SYN010",
+      "H-SYN011",
+      "H-SYN012"
+    ],
+    "reason_codes": [
+      [
+        "DOB_MISMATCH",
+        "DOB_MISMATCH",
+        "DOB_MISMATCH",
+        "DOB_MISMATCH",
+        "DOB_MISMATCH"
+      ],
+      [
+        "ENTITY_TYPE_MISMATCH",
+        "ENTITY_TYPE_MISMATCH",
+        "ENTITY_TYPE_MISMATCH",
+        "ENTITY_TYPE_MISMATCH",
+        "ENTITY_TYPE_MISMATCH"
+      ],
+      [
+        "NAME_DOB_MATCH",
+        "NAME_DOB_MATCH",
+        "NAME_DOB_MATCH",
+        "NAME_DOB_MATCH",
+        "NAME_DOB_MATCH"
+      ],
+      [
+        "INSUFFICIENT_DATA",
+        "INSUFFICIENT_DATA",
+        "INSUFFICIENT_DATA",
+        "INSUFFICIENT_DATA",
+        "INSUFFICIENT_DATA"
+      ],
+      [
+        "TEMPORAL_IMPOSSIBILITY",
+        "TEMPORAL_IMPOSSIBILITY",
+        "TEMPORAL_IMPOSSIBILITY",
+        "TEMPORAL_IMPOSSIBILITY",
+        "TEMPORAL_IMPOSSIBILITY"
+      ],
+      [
+        "INSUFFICIENT_DATA",
+        "INSUFFICIENT_DATA",
+        "INSUFFICIENT_DATA",
+        "INSUFFICIENT_DATA",
+        "NAME_DOB_MATCH"
+      ],
+      [
+        "AMBIGUOUS_CUSTOMER_RECORD",
+        "AMBIGUOUS_CUSTOMER_RECORD",
+        "AMBIGUOUS_CUSTOMER_RECORD",
+        "AMBIGUOUS_CUSTOMER_RECORD",
+        "AMBIGUOUS_CUSTOMER_RECORD"
+      ],
+      [
+        "LOCATION_MISMATCH",
+        "LOCATION_MISMATCH",
+        "LOCATION_MISMATCH",
+        "LOCATION_MISMATCH",
+        "LOCATION_MISMATCH"
+      ],
+      [
+        "DECEASED",
+        "DECEASED",
+        "DECEASED",
+        "DECEASED",
+        "DECEASED"
+      ],
+      [
+        "NAME_MISMATCH_VERIFIED",
+        "NAME_MISMATCH_VERIFIED",
+        "NAME_MISMATCH_VERIFIED",
+        "NAME_MISMATCH_VERIFIED",
+        "NAME_MISMATCH_VERIFIED"
+      ],
+      [
+        "NAME_LOCATION_MATCH",
+        "NAME_LOCATION_MATCH",
+        "NAME_LOCATION_MATCH",
+        "NAME_LOCATION_MATCH",
+        "NAME_LOCATION_MATCH"
+      ]
+    ],
+    "run_labels": [
+      "run1.jsonl",
+      "run2.jsonl",
+      "run3.jsonl",
+      "run4.jsonl",
+      "run5.jsonl"
+    ]
+  },
+  "hits": [
+    {
+      "alert_id": "A-SYN001",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": false,
+        "evidence": false,
+        "missing": false,
+        "output_trace_mismatch": false,
+        "reason_code": false,
+        "steps": false
+      },
+      "customer_record_id_per_run": [
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001"
+      ],
+      "evidence_per_run": [
+        [
+          "H-SYN001#dobs",
+          "KYC-SYN101"
+        ],
+        [
+          "H-SYN001#dobs",
+          "KYC-SYN101"
+        ],
+        [
+          "H-SYN001#dobs",
+          "KYC-SYN101"
+        ],
+        [
+          "H-SYN001#dobs",
+          "KYC-SYN101"
+        ],
+        [
+          "H-SYN001#dobs",
+          "KYC-SYN101"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": null,
+      "flip_type": "none",
+      "fragility": "thin",
+      "fragility_conflict": false,
+      "hit_id": "H-SYN001",
+      "judges_stable": true,
+      "llm_used": false,
+      "llm_used_per_run": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "missing_from_runs": [],
+      "modal_decision": "DIFFERENT_ENTITY",
+      "modal_reason_code": "DOB_MISMATCH",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "DIFFERENT_ENTITY",
+          "DOB_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "DOB_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "DOB_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "DOB_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "DOB_MISMATCH"
+        ]
+      ],
+      "stable": true,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "alert_id": "A-SYN001",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": false,
+        "evidence": false,
+        "missing": false,
+        "output_trace_mismatch": false,
+        "reason_code": false,
+        "steps": false
+      },
+      "customer_record_id_per_run": [
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001"
+      ],
+      "evidence_per_run": [
+        [
+          "CUS-SYN001",
+          "H-SYN002"
+        ],
+        [
+          "CUS-SYN001",
+          "H-SYN002"
+        ],
+        [
+          "CUS-SYN001",
+          "H-SYN002"
+        ],
+        [
+          "CUS-SYN001",
+          "H-SYN002"
+        ],
+        [
+          "CUS-SYN001",
+          "H-SYN002"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": null,
+      "flip_type": "none",
+      "fragility": "solid",
+      "fragility_conflict": false,
+      "hit_id": "H-SYN002",
+      "judges_stable": true,
+      "llm_used": false,
+      "llm_used_per_run": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "missing_from_runs": [],
+      "modal_decision": "DIFFERENT_ENTITY",
+      "modal_reason_code": "ENTITY_TYPE_MISMATCH",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "DIFFERENT_ENTITY",
+          "ENTITY_TYPE_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "ENTITY_TYPE_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "ENTITY_TYPE_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "ENTITY_TYPE_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "ENTITY_TYPE_MISMATCH"
+        ]
+      ],
+      "stable": true,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "alert_id": "A-SYN002",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": false,
+        "evidence": false,
+        "missing": false,
+        "output_trace_mismatch": false,
+        "reason_code": false,
+        "steps": false
+      },
+      "customer_record_id_per_run": [
+        "CUS-SYN002",
+        "CUS-SYN002",
+        "CUS-SYN002",
+        "CUS-SYN002",
+        "CUS-SYN002"
+      ],
+      "evidence_per_run": [
+        [
+          "H-SYN003#dobs",
+          "H-SYN003#names",
+          "KYC-SYN203"
+        ],
+        [
+          "H-SYN003#dobs",
+          "H-SYN003#names",
+          "KYC-SYN203"
+        ],
+        [
+          "H-SYN003#dobs",
+          "H-SYN003#names",
+          "KYC-SYN203"
+        ],
+        [
+          "H-SYN003#dobs",
+          "H-SYN003#names",
+          "KYC-SYN203"
+        ],
+        [
+          "H-SYN003#dobs",
+          "H-SYN003#names",
+          "KYC-SYN203"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": null,
+      "flip_type": "none",
+      "fragility": "solid",
+      "fragility_conflict": false,
+      "hit_id": "H-SYN003",
+      "judges_stable": true,
+      "llm_used": false,
+      "llm_used_per_run": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "missing_from_runs": [],
+      "modal_decision": "SAME_ENTITY",
+      "modal_reason_code": "NAME_DOB_MATCH",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "SAME_ENTITY",
+          "NAME_DOB_MATCH"
+        ],
+        [
+          "SAME_ENTITY",
+          "NAME_DOB_MATCH"
+        ],
+        [
+          "SAME_ENTITY",
+          "NAME_DOB_MATCH"
+        ],
+        [
+          "SAME_ENTITY",
+          "NAME_DOB_MATCH"
+        ],
+        [
+          "SAME_ENTITY",
+          "NAME_DOB_MATCH"
+        ]
+      ],
+      "stable": true,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "alert_id": "A-SYN002",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": false,
+        "evidence": true,
+        "missing": false,
+        "output_trace_mismatch": false,
+        "reason_code": false,
+        "steps": false
+      },
+      "customer_record_id_per_run": [
+        "CUS-SYN002",
+        "CUS-SYN002",
+        "CUS-SYN002",
+        "CUS-SYN002",
+        "CUS-SYN002"
+      ],
+      "evidence_per_run": [
+        [
+          "CUS-SYN002",
+          "H-SYN004#names"
+        ],
+        [
+          "CUS-SYN002",
+          "H-SYN004#names"
+        ],
+        [
+          "CUS-SYN002",
+          "H-SYN004#names",
+          "H-SYN004#sources"
+        ],
+        [
+          "CUS-SYN002",
+          "H-SYN004#names"
+        ],
+        [
+          "CUS-SYN002",
+          "H-SYN004#names"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": null,
+      "flip_type": "evidence",
+      "fragility": "thin",
+      "fragility_conflict": false,
+      "hit_id": "H-SYN004",
+      "judges_stable": true,
+      "llm_used": false,
+      "llm_used_per_run": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "missing_from_runs": [],
+      "modal_decision": "REVIEW",
+      "modal_reason_code": "INSUFFICIENT_DATA",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ],
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ],
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ],
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ],
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ]
+      ],
+      "stable": false,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "alert_id": "A-SYN003",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": false,
+        "evidence": false,
+        "missing": false,
+        "output_trace_mismatch": false,
+        "reason_code": false,
+        "steps": false
+      },
+      "customer_record_id_per_run": [
+        "CUS-SYN003",
+        "CUS-SYN003",
+        "CUS-SYN003",
+        "CUS-SYN003",
+        "CUS-SYN003"
+      ],
+      "evidence_per_run": [
+        [
+          "H-SYN005#sources",
+          "KYC-SYN305"
+        ],
+        [
+          "H-SYN005#sources",
+          "KYC-SYN305"
+        ],
+        [
+          "H-SYN005#sources",
+          "KYC-SYN305"
+        ],
+        [
+          "H-SYN005#sources",
+          "KYC-SYN305"
+        ],
+        [
+          "H-SYN005#sources",
+          "KYC-SYN305"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": null,
+      "flip_type": "none",
+      "fragility": "solid",
+      "fragility_conflict": false,
+      "hit_id": "H-SYN005",
+      "judges_stable": true,
+      "llm_used": false,
+      "llm_used_per_run": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "missing_from_runs": [],
+      "modal_decision": "DIFFERENT_ENTITY",
+      "modal_reason_code": "TEMPORAL_IMPOSSIBILITY",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "DIFFERENT_ENTITY",
+          "TEMPORAL_IMPOSSIBILITY"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "TEMPORAL_IMPOSSIBILITY"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "TEMPORAL_IMPOSSIBILITY"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "TEMPORAL_IMPOSSIBILITY"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "TEMPORAL_IMPOSSIBILITY"
+        ]
+      ],
+      "stable": true,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "alert_id": "A-SYN003",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": true,
+        "evidence": false,
+        "missing": false,
+        "output_trace_mismatch": false,
+        "reason_code": true,
+        "steps": false
+      },
+      "customer_record_id_per_run": [
+        "CUS-SYN003",
+        "CUS-SYN003",
+        "CUS-SYN003",
+        "CUS-SYN003",
+        "CUS-SYN003"
+      ],
+      "evidence_per_run": [
+        [
+          "CUS-SYN003",
+          "H-SYN006#dobs"
+        ],
+        [
+          "CUS-SYN003",
+          "H-SYN006#dobs"
+        ],
+        [
+          "CUS-SYN003",
+          "H-SYN006#dobs"
+        ],
+        [
+          "CUS-SYN003",
+          "H-SYN006#dobs"
+        ],
+        [
+          "CUS-SYN003",
+          "H-SYN006#dobs"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": null,
+      "flip_type": "decision",
+      "fragility": "borderline",
+      "fragility_conflict": false,
+      "hit_id": "H-SYN006",
+      "judges_stable": false,
+      "llm_used": true,
+      "llm_used_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "missing_from_runs": [],
+      "modal_decision": "REVIEW",
+      "modal_reason_code": "INSUFFICIENT_DATA",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ],
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ],
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ],
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ],
+        [
+          "SAME_ENTITY",
+          "NAME_DOB_MATCH"
+        ]
+      ],
+      "stable": false,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "alert_id": "A-SYN004",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": false,
+        "evidence": false,
+        "missing": false,
+        "output_trace_mismatch": false,
+        "reason_code": false,
+        "steps": false
+      },
+      "customer_record_id_per_run": [
+        "AMBIGUOUS",
+        "AMBIGUOUS",
+        "AMBIGUOUS",
+        "AMBIGUOUS",
+        "AMBIGUOUS"
+      ],
+      "evidence_per_run": [
+        [
+          "CUS-SYN004",
+          "CUS-SYN005",
+          "H-SYN007"
+        ],
+        [
+          "CUS-SYN004",
+          "CUS-SYN005",
+          "H-SYN007"
+        ],
+        [
+          "CUS-SYN004",
+          "CUS-SYN005",
+          "H-SYN007"
+        ],
+        [
+          "CUS-SYN004",
+          "CUS-SYN005",
+          "H-SYN007"
+        ],
+        [
+          "CUS-SYN004",
+          "CUS-SYN005",
+          "H-SYN007"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": null,
+      "flip_type": "none",
+      "fragility": "thin",
+      "fragility_conflict": false,
+      "hit_id": "H-SYN007",
+      "judges_stable": true,
+      "llm_used": false,
+      "llm_used_per_run": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "missing_from_runs": [],
+      "modal_decision": "REVIEW",
+      "modal_reason_code": "AMBIGUOUS_CUSTOMER_RECORD",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "REVIEW",
+          "AMBIGUOUS_CUSTOMER_RECORD"
+        ],
+        [
+          "REVIEW",
+          "AMBIGUOUS_CUSTOMER_RECORD"
+        ],
+        [
+          "REVIEW",
+          "AMBIGUOUS_CUSTOMER_RECORD"
+        ],
+        [
+          "REVIEW",
+          "AMBIGUOUS_CUSTOMER_RECORD"
+        ],
+        [
+          "REVIEW",
+          "AMBIGUOUS_CUSTOMER_RECORD"
+        ]
+      ],
+      "stable": true,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "alert_id": "A-SYN005",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": false,
+        "evidence": false,
+        "missing": false,
+        "output_trace_mismatch": false,
+        "reason_code": false,
+        "steps": false
+      },
+      "customer_record_id_per_run": [
+        "CUS-SYN006",
+        "CUS-SYN006",
+        "CUS-SYN006",
+        "CUS-SYN006",
+        "CUS-SYN006"
+      ],
+      "evidence_per_run": [
+        [
+          "H-SYN008#countries",
+          "KYC-SYN508"
+        ],
+        [
+          "H-SYN008#countries",
+          "KYC-SYN508"
+        ],
+        [
+          "H-SYN008#countries",
+          "KYC-SYN508"
+        ],
+        [
+          "H-SYN008#countries",
+          "KYC-SYN508"
+        ],
+        [
+          "H-SYN008#countries",
+          "KYC-SYN508"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": null,
+      "flip_type": "none",
+      "fragility": "thin",
+      "fragility_conflict": false,
+      "hit_id": "H-SYN008",
+      "judges_stable": true,
+      "llm_used": false,
+      "llm_used_per_run": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "missing_from_runs": [],
+      "modal_decision": "DIFFERENT_ENTITY",
+      "modal_reason_code": "LOCATION_MISMATCH",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "DIFFERENT_ENTITY",
+          "LOCATION_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "LOCATION_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "LOCATION_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "LOCATION_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "LOCATION_MISMATCH"
+        ]
+      ],
+      "stable": true,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "alert_id": "A-SYN006",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": false,
+        "evidence": false,
+        "missing": false,
+        "output_trace_mismatch": false,
+        "reason_code": false,
+        "steps": false
+      },
+      "customer_record_id_per_run": [
+        "CUS-SYN007",
+        "CUS-SYN007",
+        "CUS-SYN007",
+        "CUS-SYN007",
+        "CUS-SYN007"
+      ],
+      "evidence_per_run": [
+        [
+          "H-SYN010#deceased"
+        ],
+        [
+          "H-SYN010#deceased"
+        ],
+        [
+          "H-SYN010#deceased"
+        ],
+        [
+          "H-SYN010#deceased"
+        ],
+        [
+          "H-SYN010#deceased"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": null,
+      "flip_type": "none",
+      "fragility": "solid",
+      "fragility_conflict": false,
+      "hit_id": "H-SYN010",
+      "judges_stable": true,
+      "llm_used": false,
+      "llm_used_per_run": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "missing_from_runs": [],
+      "modal_decision": "DIFFERENT_ENTITY",
+      "modal_reason_code": "DECEASED",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "DIFFERENT_ENTITY",
+          "DECEASED"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "DECEASED"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "DECEASED"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "DECEASED"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "DECEASED"
+        ]
+      ],
+      "stable": true,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "alert_id": "A-SYN006",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": false,
+        "evidence": false,
+        "missing": false,
+        "output_trace_mismatch": false,
+        "reason_code": false,
+        "steps": false
+      },
+      "customer_record_id_per_run": [
+        "CUS-SYN007",
+        "CUS-SYN007",
+        "CUS-SYN007",
+        "CUS-SYN007",
+        "CUS-SYN007"
+      ],
+      "evidence_per_run": [
+        [
+          "H-SYN011#names",
+          "KYC-SYN711"
+        ],
+        [
+          "H-SYN011#names",
+          "KYC-SYN711"
+        ],
+        [
+          "H-SYN011#names",
+          "KYC-SYN711"
+        ],
+        [
+          "H-SYN011#names",
+          "KYC-SYN711"
+        ],
+        [
+          "H-SYN011#names",
+          "KYC-SYN711"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": null,
+      "flip_type": "none",
+      "fragility": "thin",
+      "fragility_conflict": false,
+      "hit_id": "H-SYN011",
+      "judges_stable": true,
+      "llm_used": false,
+      "llm_used_per_run": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "missing_from_runs": [],
+      "modal_decision": "DIFFERENT_ENTITY",
+      "modal_reason_code": "NAME_MISMATCH_VERIFIED",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "DIFFERENT_ENTITY",
+          "NAME_MISMATCH_VERIFIED"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "NAME_MISMATCH_VERIFIED"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "NAME_MISMATCH_VERIFIED"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "NAME_MISMATCH_VERIFIED"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "NAME_MISMATCH_VERIFIED"
+        ]
+      ],
+      "stable": true,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "alert_id": "A-SYN007",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": false,
+        "evidence": false,
+        "missing": false,
+        "output_trace_mismatch": false,
+        "reason_code": false,
+        "steps": false
+      },
+      "customer_record_id_per_run": [
+        "CUS-SYN008",
+        "CUS-SYN008",
+        "CUS-SYN008",
+        "CUS-SYN008",
+        "CUS-SYN008"
+      ],
+      "evidence_per_run": [
+        [
+          "CUS-SYN008",
+          "H-SYN012#countries",
+          "H-SYN012#names"
+        ],
+        [
+          "CUS-SYN008",
+          "H-SYN012#countries",
+          "H-SYN012#names"
+        ],
+        [
+          "CUS-SYN008",
+          "H-SYN012#countries",
+          "H-SYN012#names"
+        ],
+        [
+          "CUS-SYN008",
+          "H-SYN012#countries",
+          "H-SYN012#names"
+        ],
+        [
+          "CUS-SYN008",
+          "H-SYN012#countries",
+          "H-SYN012#names"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": null,
+      "flip_type": "none",
+      "fragility": "solid",
+      "fragility_conflict": false,
+      "hit_id": "H-SYN012",
+      "judges_stable": true,
+      "llm_used": false,
+      "llm_used_per_run": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "missing_from_runs": [],
+      "modal_decision": "SAME_ENTITY",
+      "modal_reason_code": "NAME_LOCATION_MATCH",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "SAME_ENTITY",
+          "NAME_LOCATION_MATCH"
+        ],
+        [
+          "SAME_ENTITY",
+          "NAME_LOCATION_MATCH"
+        ],
+        [
+          "SAME_ENTITY",
+          "NAME_LOCATION_MATCH"
+        ],
+        [
+          "SAME_ENTITY",
+          "NAME_LOCATION_MATCH"
+        ],
+        [
+          "SAME_ENTITY",
+          "NAME_LOCATION_MATCH"
+        ]
+      ],
+      "stable": true,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    }
+  ],
+  "llm_sensitivity": null,
+  "meta": {
+    "generated_at": "2026-11-21T00:00:00Z",
+    "generator": "tools/repro",
+    "run_labels": [
+      "run1.jsonl",
+      "run2.jsonl",
+      "run3.jsonl",
+      "run4.jsonl",
+      "run5.jsonl"
+    ],
+    "sources": {
+      "llm_off_output": false,
+      "outputs": true,
+      "traces": true
+    }
+  },
+  "schema_version": 1,
+  "summary": {
+    "code_only_flip_hits": 0,
+    "decision_counts_per_run": [
+      {
+        "DIFFERENT_ENTITY": 6,
+        "REVIEW": 3,
+        "SAME_ENTITY": 2
+      },
+      {
+        "DIFFERENT_ENTITY": 6,
+        "REVIEW": 3,
+        "SAME_ENTITY": 2
+      },
+      {
+        "DIFFERENT_ENTITY": 6,
+        "REVIEW": 3,
+        "SAME_ENTITY": 2
+      },
+      {
+        "DIFFERENT_ENTITY": 6,
+        "REVIEW": 3,
+        "SAME_ENTITY": 2
+      },
+      {
+        "DIFFERENT_ENTITY": 6,
+        "REVIEW": 2,
+        "SAME_ENTITY": 3
+      }
+    ],
+    "decision_flip_hits": 1,
+    "flips_by_llm_used": {
+      "llm_used": {
+        "code": 0,
+        "decision": 1,
+        "evidence": 0,
+        "other": 0
+      },
+      "not_llm_used": {
+        "code": 0,
+        "decision": 0,
+        "evidence": 1,
+        "other": 0
+      },
+      "unknown": {
+        "code": 0,
+        "decision": 0,
+        "evidence": 0,
+        "other": 0
+      }
+    },
+    "hits_missing_from_some_runs": [],
+    "judges_flip_hits": 1,
+    "judges_flips_all_llm_used": true,
+    "judges_metric": 0.9090909091,
+    "judges_stable_hits": 10,
+    "missing_hits": 0,
+    "n_hits": 11,
+    "n_runs": 5,
+    "strict_change_hit_ids": [
+      "H-SYN004"
+    ],
+    "strict_change_hits": 1
+  },
+  "ui": {
+    "decision_legend": {
+      "DIFFERENT_ENTITY": "clear",
+      "MISSING": "missing",
+      "REVIEW": "review",
+      "SAME_ENTITY": "match"
+    },
+    "filters": {
+      "code_flip": [],
+      "decision_flip": [
+        "H-SYN006"
+      ],
+      "evidence_flip": [
+        "H-SYN004"
+      ],
+      "flipped_only": [
+        "H-SYN004",
+        "H-SYN006"
+      ],
+      "llm_sensitive": [],
+      "missing": [],
+      "thin_clearances": [
+        "H-SYN001",
+        "H-SYN008",
+        "H-SYN011"
+      ],
+      "thin_or_borderline_and_llm": [
+        "H-SYN006"
+      ]
+    },
+    "flip_types": [
+      "none",
+      "decision",
+      "code",
+      "evidence",
+      "other"
+    ],
+    "run_strip": {
+      "n_runs": 5,
+      "run_labels": [
+        "run1.jsonl",
+        "run2.jsonl",
+        "run3.jsonl",
+        "run4.jsonl",
+        "run5.jsonl"
+      ]
+    }
+  }
+}

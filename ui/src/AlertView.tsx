@@ -45,6 +45,13 @@ export function AlertView({ model, summary, hitId, onHit, onBack, onStatus }: Pr
         </span>
       </div>
 
+      {summary.conflicting_lines ? (
+        <p className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+          The alerts file has conflicting lines for this alert (lines {summary.conflicting_lines.join(', ')}). Their hit lists were combined;
+          this alert can’t be cleared.
+        </p>
+      ) : null}
+
       <div className="grid items-start gap-6 lg:grid-cols-[18rem_1fr]">
         <div className="flex flex-col gap-2 lg:sticky lg:top-6">
           <div className="px-1 text-xs font-medium text-muted-foreground">Hits</div>

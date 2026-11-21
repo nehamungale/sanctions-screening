@@ -1,42 +1,53 @@
 import { useRef, type ChangeEvent } from 'react'
 
+import { ReproCard } from '@/components/ReproCard'
 import { DecisionDot, ReasonCode, StatusBadge, STATUS_TONE } from '@/components/verdict'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import type { LoadedAlerts, LoadedTrace, Model } from '@/lib/data'
-import { STATUS_LABELS } from '@/lib/labels'
+import type { buildRepro, Loaded, LoadedAlerts, Model } from '@/lib/data'
+import { crossCheckText, STATUS_LABELS } from '@/lib/labels'
 import { parseAlerts, parseTraceJsonl } from '@/lib/parse'
+import { parseRepro } from '@/lib/repro'
 import { DECISIONS, HIT_NOT_DECIDED, type RollupStatus } from '@/lib/policy'
 import type { AlertSummary, ParseIssue } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 interface Props {
-  trace: LoadedTrace | null
-  alerts: LoadedAlerts | null
+  loaded: Loaded
   model: Model | null
+  repro: ReturnType<typeof buildRepro>
   status: RollupStatus | null
-  onTrace: (t: LoadedTrace) => void
-  onAlerts: (a: LoadedAlerts) => void
+  onLoad: (patch: Partial<Loaded>) => void
   onSample: () => void
   onClear: () => void
   onStatus: (s: RollupStatus | null) => void
   onAlert: (alertId: string) => void
+  onReproHit: (hitId: string, alertId: string | null) => void
 }
 
 export function Overview(p: Props) {
-  const { trace, alerts, model, status } = p
+  const { loaded, model, status } = p
   const traceInput = useRef<HTMLInputElement>(null)
   const alertsInput = useRef<HTMLInputElement>(null)
+  const reproInput = useRef<HTMLInputElement>(null)
 
-  const pick = async (e: ChangeEvent<HTMLInputElement>, kind: 'trace' | 'alerts') => {
+  const pick = async (e: ChangeEvent<HTMLInputElement>, kind: 'trace' | 'alerts' | 'repro') => {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
     const text = await file.text()
-    if (kind === 'trace') p.onTrace({ name: file.name, result: parseTraceJsonl(text) })
-    else p.onAlerts({ name: file.name, result: parseAlerts(text) })
+    if (kind === 'trace') p.onLoad({ trace: { name: file.name, result: parseTraceJsonl(text) } })
+    else if (kind === 'repro') p.onLoad({ repro: { name: file.name, result: parseRepro(text) } })
+    else {
+      // One picker for both: alerts.jsonl lines fill the alert list, alerts.trace.jsonl lines the cross-check.
+      const f: LoadedAlerts = { name: file.name, result: parseAlerts(text) }
+      const patch: Partial<Loaded> = {}
+      if (f.result.kind !== 'summaries') patch.alerts = f
+      if (f.result.kind === 'summaries' || f.result.kind === 'mixed') patch.summaries = f
+      p.onLoad(patch)
+    }
   }
 
   const counts = model?.counts
@@ -51,7 +62,7 @@ export function Overview(p: Props) {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Load a trace (trace.jsonl) and the alert list (alerts.jsonl or alerts.trace.jsonl) to check for missing hits.
+              Load a trace (trace.jsonl), the alert list (alerts.jsonl) and optionally alerts.trace.jsonl and repro.json.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -61,8 +72,11 @@ export function Overview(p: Props) {
             <Button variant="outline" onClick={() => alertsInput.current?.click()}>
               Open alerts…
             </Button>
+            <Button variant="outline" onClick={() => reproInput.current?.click()}>
+              Open repro…
+            </Button>
             <Button onClick={p.onSample}>Load sample</Button>
-            {trace || alerts ? (
+            {loaded.trace || loaded.alerts || loaded.summaries || loaded.repro ? (
               <Button variant="ghost" onClick={p.onClear}>
                 Clear
               </Button>
@@ -70,8 +84,9 @@ export function Overview(p: Props) {
           </div>
           <input ref={traceInput} type="file" accept=".jsonl,.json,.txt,application/json" className="hidden" onChange={(e) => void pick(e, 'trace')} />
           <input ref={alertsInput} type="file" accept=".jsonl,.json,.txt,application/json" className="hidden" onChange={(e) => void pick(e, 'alerts')} />
+          <input ref={reproInput} type="file" accept=".json,application/json" className="hidden" onChange={(e) => void pick(e, 'repro')} />
         </div>
-        <Sources trace={trace} alerts={alerts} />
+        <Sources loaded={loaded} />
       </section>
 
       {!model || !counts ? (
@@ -85,7 +100,13 @@ export function Overview(p: Props) {
               <h2 className="text-lg font-semibold">Alerts</h2>
               <span className="text-sm text-muted-foreground">
                 {counts.alertsTotal} alerts · click a tile to list them
-                {model.verified ? '' : ' · grouped from the trace, no alerts file loaded'}
+                {model.alertSource === 'alerts'
+                  ? model.verified
+                    ? ''
+                    : ' · clears withheld'
+                  : model.alertSource === 'summaries'
+                    ? ' · alert list from alerts.trace.jsonl; load alerts.jsonl to confirm clears'
+                    : ' · grouped from the trace; load alerts.jsonl to confirm clears'}
               </span>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
@@ -110,25 +131,51 @@ export function Overview(p: Props) {
                 )
               })}
             </div>
+            {model.badAlertLines > 0 ? (
+              <p className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">
+                {model.badAlertLines} line{model.badAlertLines === 1 ? '' : 's'} in the alerts file could not be read, so an alert may be
+                missing. Clears are withheld (shown as Not verified) until the file is fixed.
+              </p>
+            ) : null}
+            {model.conflictingAlerts.length > 0 ? (
+              <p className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+                Conflicting lines in the alerts file:{' '}
+                {model.conflictingAlerts.map((c) => `${c.alert_id} (lines ${c.lines.join(', ')})`).join('; ')}. Their hit lists were combined and
+                these alerts can’t be cleared.
+              </p>
+            ) : null}
             {counts.alertsWithUndecided > 0 ? (
               <p className="text-sm text-amber-700">
                 {counts.alertsWithUndecided} alert{counts.alertsWithUndecided === 1 ? '' : 's'} with {counts.hitsUndecided} hit
                 {counts.hitsUndecided === 1 ? '' : 's'} that {counts.hitsUndecided === 1 ? 'has' : 'have'} no decision; never cleared.
               </p>
             ) : null}
-            {counts.pipelineDisagreements.length > 0 ? (
-              <p className="text-sm text-red-700">
-                The pipeline’s alert summary differs from this roll-up for: {counts.pipelineDisagreements.join(', ')}.
-              </p>
+            {model.crossCheck ? (
+              model.crossCheck.problems.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Cross-check: the pipeline’s alert summaries ({model.crossCheck.checked}) agree with this view.
+                </p>
+              ) : (
+                <div className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+                  <div className="font-medium">The pipeline’s alert summaries disagree with this view:</div>
+                  <ul className="mt-1 list-disc pl-5">
+                    {model.crossCheck.problems.map((x) => (
+                      <li key={`${x.kind}-${x.alert_id}`}>{crossCheckText(x)}</li>
+                    ))}
+                  </ul>
+                </div>
+              )
             ) : null}
             {status ? <AlertList status={status} alerts={listed} onAlert={p.onAlert} /> : null}
           </section>
+
+          {p.repro ? <ReproCard report={p.repro.report} metrics={p.repro.metrics} onHit={p.onReproHit} /> : null}
 
           <div className="grid items-start gap-6 lg:grid-cols-5">
             <Card className="lg:col-span-2">
               <CardHeader>
                 <CardTitle>Hits by decision</CardTitle>
-                <CardDescription>{counts.hitsDecided} decided hits in the trace</CardDescription>
+                <CardDescription>{counts.hitsDecided} decided hits</CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -161,6 +208,12 @@ export function Overview(p: Props) {
                     </TableRow>
                   </TableBody>
                 </Table>
+                {counts.hitsMisfiled > 0 ? (
+                  <p className="mt-3 text-xs text-amber-700">
+                    {counts.hitsMisfiled} hit{counts.hitsMisfiled === 1 ? ' is' : 's are'} filed under a different alert in the trace, so{' '}
+                    {counts.hitsMisfiled === 1 ? 'it counts' : 'they count'} only as “hit has no decision”, not under its verdict.
+                  </p>
+                ) : null}
                 {counts.hitsUnlisted > 0 ? (
                   <p className="mt-3 text-xs text-amber-700">
                     {counts.hitsUnlisted} hit{counts.hitsUnlisted === 1 ? '' : 's'} in the trace not listed on any alert.
@@ -262,26 +315,39 @@ function AlertList({ status, alerts, onAlert }: { status: RollupStatus; alerts: 
   )
 }
 
-function Sources({ trace, alerts }: { trace: LoadedTrace | null; alerts: LoadedAlerts | null }) {
-  if (!trace && !alerts) return null
-  const alertsKind = alerts?.result.kind === 'summaries' ? 'alert summaries' : alerts?.result.kind === 'mixed' ? 'alerts + summaries' : 'alerts'
+function Sources({ loaded }: { loaded: Loaded }) {
+  const { trace, alerts, summaries, repro } = loaded
+  if (!trace && !alerts && !summaries && !repro) return null
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-card px-4 py-3 text-sm">
-      {trace ? (
+      <SourceLine
+        kind="Trace"
+        name={trace?.name ?? 'not loaded'}
+        summary={trace ? `${trace.result.hits.length} hits${trace.result.skipped ? `, ${trace.result.skipped} non-hit records skipped` : ''}` : ''}
+        issues={trace?.result.issues ?? []}
+      />
+      <SourceLine
+        kind="Alerts"
+        name={alerts?.name ?? 'not loaded'}
+        summary={alerts ? `${alerts.result.alerts.length} alerts` : 'without alerts.jsonl no alert can show as cleared'}
+        issues={alerts?.result.issues ?? []}
+      />
+      {summaries ? (
         <SourceLine
-          kind="Trace"
-          name={trace.name}
-          summary={`${trace.result.hits.length} hits${trace.result.skipped ? `, ${trace.result.skipped} non-hit records skipped` : ''}`}
-          issues={trace.result.issues}
+          kind="Summaries"
+          name={summaries.name}
+          summary={`${summaries.result.summaries.length} pipeline alert summaries (cross-check only)`}
+          issues={summaries === alerts ? [] : summaries.result.issues}
         />
-      ) : (
-        <SourceLine kind="Trace" name="not loaded" summary="" issues={[]} />
-      )}
-      {alerts ? (
-        <SourceLine kind="Alerts" name={alerts.name} summary={`${alerts.result.alerts.length} ${alertsKind}`} issues={alerts.result.issues} />
-      ) : (
-        <SourceLine kind="Alerts" name="not loaded" summary="missing hits cannot be detected, so no alert shows as cleared" issues={[]} />
-      )}
+      ) : null}
+      {repro ? (
+        <SourceLine
+          kind="Repro"
+          name={repro.name}
+          summary={repro.result.report ? `${repro.result.report.n_runs} runs, ${repro.result.report.hits.length} hits` : 'could not be read'}
+          issues={repro.result.issues}
+        />
+      ) : null}
     </div>
   )
 }
@@ -294,7 +360,7 @@ function SourceLine({ kind, name, summary, issues }: { kind: string; name: strin
   return (
     <div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="w-14 text-muted-foreground">{kind}</span>
+        <span className="w-20 text-muted-foreground">{kind}</span>
         <span className="font-mono text-xs">{name}</span>
         {summary ? <span className="text-muted-foreground">{summary}</span> : null}
         {errors > 0 ? (
@@ -309,7 +375,7 @@ function SourceLine({ kind, name, summary, issues }: { kind: string; name: strin
         ) : null}
       </div>
       {issues.length > 0 ? (
-        <ul className="mt-2 ml-17 list-disc space-y-0.5 pl-4 text-xs">
+        <ul className="mt-2 ml-23 list-disc space-y-0.5 pl-4 text-xs">
           {issues.slice(0, MAX_ISSUES).map((i) => (
             <li key={`${i.line}-${i.message}`} className={i.severity === 'info' ? 'text-muted-foreground' : 'text-red-700'}>
               line {i.line}: {i.message}
