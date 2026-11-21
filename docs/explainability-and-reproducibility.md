@@ -77,6 +77,7 @@ Hit side, `comparison`, `steps`, `tipping_point` and `badges` come from the matc
 - **`steps` lists every rule evaluated**, including ones that didn't fire and why. For REVIEW it names exactly which fact was missing.
 - **Each step carries `llm_used`** (true if any input fact to that rule has `method: "llm"`). The repro report uses it to split flips into LLM steps and rule steps, and the eval gate uses it to check that no `DIFFERENT_ENTITY` step that fired used an LLM-read fact.
 - Counterfactuals are reviewer-only and stay in the local trace, never in public output. In a real deployment they would be limited to compliance staff.
+- **Alert roll-up.** The trace also gets one summary per alert: `CLEARED` only when every hit is `DIFFERENT_ENTITY`, `ESCALATED` if any hit is `SAME_ENTITY`, otherwise `NEEDS_REVIEW` with the blocking hits named. A hit missing from the results blocks the clear. See [Stage 4 notes](stage4-notes.md#1-alert-roll-up).
 
 ## 3. Reasons and citations
 
