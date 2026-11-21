@@ -249,7 +249,7 @@ class LlmCannotClearTests(unittest.TestCase):
         self.assertEqual(decision.decision, "SAME_ENTITY")
         self.assertIn(decision.reason_code, {"NAME_DOB_MATCH", "NAME_DOB_LOCATION_MATCH"})
 
-    def test_joint_account_tiebreak_blocks_a_clear_and_leaves_a_match(self):
+    def test_joint_account_tiebreak_does_not_block(self):
         blocked = _resolution()
         blocked["resolution_clean"] = False
         blocked["candidates"][0]["fragility_flags"] = ["joint_account_tiebreak"]
@@ -258,9 +258,8 @@ class LlmCannotClearTests(unittest.TestCase):
             _hit(), _alert_row(), blocked,
             {"P-CUS-999991": _person()}, NameTools(VARIANTS),
         )
-        self.assertEqual(decision.decision, "REVIEW")
-        self.assertIn("joint_account_tiebreak", decision.blocked.get("DOB_MISMATCH", []))
-        self.assertIn("joint_account_tiebreak", decision.blocked.get("LOCATION_MISMATCH", []))
+        self.assertEqual(decision.decision, "DIFFERENT_ENTITY")
+        self.assertNotIn("joint_account_tiebreak", decision.blocked.get("DOB_MISMATCH", []))
 
         person = _person()
         person["dob"]["value"] = "1961-07-15"
@@ -273,14 +272,14 @@ class LlmCannotClearTests(unittest.TestCase):
         )
         self.assertEqual(match.decision, "SAME_ENTITY")
 
-    def test_any_non_latin_alias_blocks_a_name_clear(self):
+    def test_non_latin_alias_blocks_a_name_clear_only_when_it_outnumbers_latin_names(self):
         person = _person()
         hit = _hit()
-        # Two Latin names and one non-Latin alias, so a count-based rule would not block.
+        # One Latin name and two non-Latin aliases: blocked.
         hit["names"] = [
             {"value": "Oliver Fictional", "kind": "primary", "parts": ["oliver", "fictional"], "script": "latin"},
-            {"value": "Oliver Example", "kind": "alias", "parts": ["oliver", "example"], "script": "latin"},
             {"value": "示例", "kind": "alias", "parts": [], "script": "non_latin"},
+            {"value": "Пример", "kind": "alias", "parts": [], "script": "non_latin"},
         ]
         hit["flags"] = ["NON_LATIN_ALIAS"]
         hit["dob_candidates"] = []
@@ -291,8 +290,12 @@ class LlmCannotClearTests(unittest.TestCase):
         )
         self.assertEqual(decision.decision, "REVIEW")
         self.assertIn("NON_LATIN_ALIAS", decision.blocked.get("NAME_MISMATCH_VERIFIED", []))
-
-        hit["flags"] = []
+        # Two Latin names and one non-Latin alias: the Latin forms decide.
+        hit["names"] = [
+            {"value": "Oliver Fictional", "kind": "primary", "parts": ["oliver", "fictional"], "script": "latin"},
+            {"value": "Oliver Example", "kind": "alias", "parts": ["oliver", "example"], "script": "latin"},
+            {"value": "示例", "kind": "alias", "parts": [], "script": "non_latin"},
+        ]
         cleared = decide_hit(
             hit, _alert_row(), _resolution(),
             {"P-CUS-999991": person}, NameTools(VARIANTS),
@@ -300,8 +303,8 @@ class LlmCannotClearTests(unittest.TestCase):
         self.assertEqual(cleared.decision, "DIFFERENT_ENTITY")
         self.assertEqual(cleared.reason_code, "NAME_MISMATCH_VERIFIED")
 
-    def test_missing_field_blocks_every_clearance_not_only_the_skipped_one(self):
-        # The skipped field is the date of birth. A location clear must still be blocked.
+    def test_missing_field_blocks_only_the_clear_that_needs_it(self):
+        # The record had no date of birth: a location clear goes through, a DOB clear does not.
         resolution = _resolution()
         resolution["resolution_clean"] = False
         resolution["candidates"][0]["fragility_flags"] = ["candidate_kept_on_missing_field"]
@@ -313,10 +316,22 @@ class LlmCannotClearTests(unittest.TestCase):
             hit, _alert_row(), resolution,
             {"P-CUS-999991": _person()}, NameTools(VARIANTS),
         )
-        self.assertEqual(decision.decision, "REVIEW")
-        self.assertIn("candidate_kept_on_missing_field", decision.blocked.get("LOCATION_MISMATCH", []))
+        self.assertEqual(decision.decision, "DIFFERENT_ENTITY")
+        self.assertEqual(decision.reason_code, "LOCATION_MISMATCH")
+        dob_case = decide_hit(
+            _hit(), _alert_row(), resolution,
+            {"P-CUS-999991": _person()}, NameTools(VARIANTS),
+        )
+        self.assertIn("candidate_kept_on_missing_field", dob_case.blocked.get("DOB_MISMATCH", []))
+        # An alert that simply did not state a field blocks nothing.
+        resolution["candidates"][0]["filters"] = {"skipped_missing": [{"filter": "dob", "side": "alert"}]}
+        clear = decide_hit(
+            _hit(), _alert_row(), resolution,
+            {"P-CUS-999991": _person()}, NameTools(VARIANTS),
+        )
+        self.assertEqual(clear.decision, "DIFFERENT_ENTITY")
 
-    def test_partial_screened_dob_blocks_a_location_clear(self):
+    def test_partial_screened_dob_blocks_date_clears_but_not_location(self):
         resolution = _resolution()
         resolution["resolution_clean"] = False
         resolution["candidates"][0]["fragility_flags"] = ["dob_partial_only"]
@@ -327,8 +342,13 @@ class LlmCannotClearTests(unittest.TestCase):
             hit, _alert_row(), resolution,
             {"P-CUS-999991": _person()}, NameTools(VARIANTS),
         )
-        self.assertEqual(decision.decision, "REVIEW")
-        self.assertIn("dob_partial_only", decision.blocked.get("LOCATION_MISMATCH", []))
+        self.assertEqual(decision.decision, "DIFFERENT_ENTITY")
+        self.assertEqual(decision.reason_code, "LOCATION_MISMATCH")
+        dob_case = decide_hit(
+            _hit(), _alert_row(), resolution,
+            {"P-CUS-999991": _person()}, NameTools(VARIANTS),
+        )
+        self.assertIn("dob_partial_only", dob_case.blocked.get("DOB_MISMATCH", []))
 
     def test_unverified_flag_blocks_a_name_clear_when_the_legal_name_is_verified(self):
         person = _person()

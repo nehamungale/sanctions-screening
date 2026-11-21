@@ -124,6 +124,46 @@ def _name_short(ctx: GateContext, _code: str) -> bool:
     return any(entry.get("blocks_name_clear") for entry in (ctx.person or {}).get("names_all") or [])
 
 
+def _skipped_on_record(ctx: GateContext) -> set[str]:
+    """Filters Stage 3 skipped because the *record* lacked the field (dob, country, city).
+
+    An alert that never stated a field is not a gap on the customer side: the SOP
+    treats a missing field as unknown, not as a mismatch, so it blocks nothing.
+    """
+    found = set()
+    filters = (ctx.candidate or {}).get("filters") or (ctx.resolution or {}).get("filters") or {}
+    for item in filters.get("skipped_missing") or []:
+        if isinstance(item, dict) and item.get("filter") and item.get("side") == "record":
+            found.add(str(item["filter"]))
+    if "RECORD_DOB_MISSING_KEPT" in _alert_flags(ctx):
+        found.add("dob")
+    return found
+
+
+def _kept_on_missing(ctx: GateContext, code: str) -> bool:
+    """Block only the clear that leans on the field the customer's record did not have."""
+    skipped = _skipped_on_record(ctx)
+    if code in {"DOB_MISMATCH", "TEMPORAL_IMPOSSIBILITY"}:
+        return "dob" in skipped
+    if code == "LOCATION_MISMATCH":
+        return "country" in skipped
+    return False
+
+
+def _non_latin_blocks(ctx: GateContext, _code: str) -> bool:
+    """Block a name clear only when the hit's unread (non-Latin) aliases outnumber its Latin names.
+
+    If the Latin forms already disagree with the verified name, the same name in
+    another script almost never agrees.
+    """
+    if "NON_LATIN_ALIAS" not in _issues(ctx):
+        return False
+    names = (ctx.hit or {}).get("names") or []
+    latin = sum(1 for entry in names if entry.get("script") != "non_latin" and entry.get("parts"))
+    non_latin = sum(1 for entry in names if entry.get("script") == "non_latin" and entry.get("kind") == "alias")
+    return latin < non_latin
+
+
 def _screened_disagrees(ctx: GateContext) -> bool:
     screened = ((ctx.alert or {}).get("customer") or {}).get("entity_type")
     customer = ctx.cmp.entity_type.customer
@@ -160,20 +200,18 @@ GATE_TABLE = (
     ("NON_EXHAUSTIVE_NAME", frozenset({"NAME_MISMATCH_VERIFIED"}), lambda ctx, _code: "NON_EXHAUSTIVE_NAME" in _issues(ctx)),
     ("NON_EXHAUSTIVE_BLOCKS_LOCATION", frozenset({"LOCATION_MISMATCH"}), lambda ctx, _code: "NON_EXHAUSTIVE_BLOCKS_LOCATION" in _issues(ctx)),
     ("HIT_UNMAPPED_COUNTRY", frozenset({"LOCATION_MISMATCH"}), lambda ctx, _code: "HIT_UNMAPPED_COUNTRY" in _issues(ctx)),
-    ("NON_LATIN_ALIAS", frozenset({"NAME_MISMATCH_VERIFIED"}), lambda ctx, _code: "NON_LATIN_ALIAS" in _issues(ctx)),
+    ("NON_LATIN_ALIAS", frozenset({"NAME_MISMATCH_VERIFIED"}), _non_latin_blocks),
     ("SCREENED_TYPE_DISAGREES", frozenset({"ENTITY_TYPE_MISMATCH"}), lambda ctx, _code: _screened_disagrees(ctx)),
     ("LINK_SUSPECT", frozenset({ALL_C}), lambda ctx, _code: _quality(ctx) == "LINK_SUSPECT" or "link_contradicts_screened" in _fragility(ctx)),
     ("DANGLING_LINK", frozenset({ALL_C}), lambda ctx, _code: _quality(ctx) == "DANGLING_LINK_fallback" or "DANGLING_LINK" in _alert_flags(ctx)),
     ("name_match_fuzzy_only", frozenset({ALL_C}), lambda ctx, _code: "name_match_fuzzy_only" in _fragility(ctx)),
     ("resolved_via_note_country", frozenset({ALL_C}), lambda ctx, _code: "resolved_via_note_country" in _fragility(ctx)),
-    ("joint_account_tiebreak", frozenset({ALL_C}), lambda ctx, _code: "joint_account_tiebreak" in _fragility(ctx)),
-    ("candidate_kept_on_missing_field", frozenset({ALL_C}), lambda ctx, _code: (
-        "candidate_kept_on_missing_field" in _fragility(ctx) or "RECORD_DOB_MISSING_KEPT" in _alert_flags(ctx)
-    )),
-    ("dob_partial_only", frozenset({
-        "ENTITY_TYPE_MISMATCH", "DECEASED", "TEMPORAL_IMPOSSIBILITY",
-        "DOB_MISMATCH", "NAME_MISMATCH_VERIFIED", "LOCATION_MISMATCH",
-    }), lambda ctx, _code: "dob_partial_only" in _fragility(ctx)),
+    # joint_account_tiebreak does not block: the SOP has the screened details pick
+    # between holders, and the practice labels agreed with every pick (58/58 on dev).
+    ("candidate_kept_on_missing_field", frozenset({
+        "DOB_MISMATCH", "TEMPORAL_IMPOSSIBILITY", "LOCATION_MISMATCH",
+    }), _kept_on_missing),
+    ("dob_partial_only", frozenset({"DOB_MISMATCH", "TEMPORAL_IMPOSSIBILITY"}), lambda ctx, _code: "dob_partial_only" in _fragility(ctx)),
     ("SCREENED_NAME_TOO_SHORT", frozenset({"NAME_MISMATCH_VERIFIED"}), lambda ctx, _code: "NAME_TOO_SHORT" in _alert_flags(ctx)),
     ("contract_block_name", frozenset({"NAME_MISMATCH_VERIFIED"}), lambda ctx, _code: bool(
         _contracts(ctx).get("block_name_mismatch_verified") or _contracts(ctx).get("block_name_clear")
