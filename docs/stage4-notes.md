@@ -1,6 +1,6 @@
 # Stage 4: Decision rules (notes)
 
-> **Status: open.** Stage 4 is not designed yet. This file collects notes for whoever builds it, and anyone can add to it. Each section is one part of the design, not the whole thing.
+> **Status: designed, not built.** §1 covers the alert roll-up. §2 is the full build guide for Stage 4: the decision procedure, the pre-clearance gate (including every Stage 1, 2 and 3 flag it reads), the optional LLM veto, the clearance log, reasons and evidence, tests and build order. Anyone can add to it.
 >
 > Part of the 4-stage architecture: **1** customer golden record · **2** hit golden profile · **3** alert → person resolution · **4** decision rules (this doc).
 
@@ -522,7 +522,7 @@ Stage 3 is merged (`9981431`). The contract is the real code in `system/stage3/r
 | `resolution_status == "ambiguous"` | clear only if **every** candidate clears post-gate (§2.4.1) | hard |
 | `resolution_status == "not_found"` | everything except TYPE on the screened type | hard |
 
-**Caveat: `resolution_clean` is not a green light for the hit.** It is computed from Stage 3 fragility only. It ignores Stage 1 person flags: 20 of the 236 `clean_link` alerts resolve to persons carrying `NAME_TOO_SHORT`. So Stage 4 must always run the §2.5.1 person checks (`BLOCK_*`, `NAME_TOO_SHORT`, `UNVERIFIED`, `UNMAPPED_COUNTRY`, `NOTE_FLAGGED:*`, …) and the §2.5.2 hit checks before any clearance, whatever `resolution_clean` says. `resolution_clean == false` blocks; `resolution_clean == true` permits nothing on its own.
+**Caveat: `resolution_clean` is not a green light for the hit.** It is computed from Stage 3 fragility only. It ignores Stage 1 person flags: `NAME_TOO_SHORT` appears on 16 of the 236 `clean_link` alerts and 20 of the 307 `resolution_clean` alerts. Stage 3 keeps it that way on purpose, so the clearance log can show which check blocked a clear. So Stage 4 must always run the §2.5.1 person checks (`BLOCK_*`, `NAME_TOO_SHORT`, `UNVERIFIED`, `UNMAPPED_COUNTRY`, `NOTE_FLAGGED:*`, …) and the §2.5.2 hit checks before any clearance, whatever `resolution_clean` says. `resolution_clean == false` blocks; `resolution_clean == true` permits nothing on its own.
 
 Implement the Stage 3 gate on the per-candidate `fragility_flags` (each AMBIGUOUS candidate is gated on its own flags), plus the top-level `flags` and `resolution_quality`. Change one row at a time, with clearance-log numbers in the PR.
 
@@ -883,9 +883,9 @@ Open one PR per two or three steps. There is no CI, so each PR must say it ran `
 
 | # | Question | Default until answered | Who |
 |---|---|---|---|
-| Q1 | Stage 3: should `resolution_clean` also fold in Stage 1 person flags (20 of 236 clean links carry `NAME_TOO_SHORT`)? And should `evidence_ids` drop `ACC-` ids, which labels never cite? | Stage 4 checks person flags itself and builds its own evidence | Resolver |
-| Q2 | Declared-DOB contract: the literal reading (any missing declared date blocks) or "the verified date decides, and an agreeing declared date blocks" (§2.4.3)? The literal reading loses 2 practice clearances | The second reading, plus `DECLARED_DOB_AGREES` | FDE / team |
-| Q3 | `shared.contracts.dob_mismatch_allowed` ignores the 1-year tolerance and takes a single hit value | Don't call it; fix or retire it | FDE |
+| Q1 | ~~Should `resolution_clean` fold in Stage 1 person flags? Should `evidence_ids` drop `ACC-` ids?~~ **Answered (Resolver):** no to both. `resolution_clean` stays about resolution only. Stage 4 checks the person's `BLOCK_*`/`NAME_TOO_SHORT` flags for the specific reason code it emits (NAME_TOO_SHORT blocks name clears, not a DOB clear) and logs each block separately. Stage 4 builds output `evidence` from the hit-deciding records, adding an `ACC-` id only when the reason rests on the link (e.g. a joint-account pick) | Stage 4 | Resolved |
+| Q2 | Declared-DOB contract: the literal reading (any missing declared date blocks) or "the verified date decides, and an agreeing declared date blocks" (§2.4.3)? The literal reading loses 2 practice clearances | **Agreed (FDE):** the second reading, plus `DECLARED_DOB_AGREES`. FDE is documenting it in SCHEMA/contracts | Resolved |
+| Q3 | `shared.contracts.dob_mismatch_allowed` ignores the 1-year tolerance and takes a single hit value | Don't call it. **Agreed (FDE):** it will be fixed to P6 (more than 1 year outside, every hit date) with a deprecation note, in a follow-up after #10 | FDE |
 | Q4 | Reason-code priority: robustness order (§2.4.9) or POLICY table order (explainability doc)? | Robustness order; update the explainability doc | team |
 | Q5 | Evidence for `DECEASED`, and for `ENTITY_TYPE_MISMATCH` when no customer was found: cite the `alert_id` (a valid ID for `validate.py`) or nothing? No practice label covers these | Cite the `alert_id` | team |
 | Q6 | Public reason precision: full dates (as in the practice reference reasons) or years only (explainability doc §3)? | Match the reference reasons. Dev data is pseudonymised, and the brief requires `output/dev.jsonl` to be published | team (Neha) |

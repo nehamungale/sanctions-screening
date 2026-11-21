@@ -1,10 +1,10 @@
 # Stage 2 and Stage 3 design review notes
 
-Review of `docs/stage2-hit-golden-profile.md` and `docs/stage3-alert-resolution.md` (merged in #6), checked against the explainability and reproducibility design on branch `docs/explainability-repro` and Stage 1's `system/shared/llm_client.py`. These are open items to settle before Stage 2/3 code is built. No code changes here.
+Review of `docs/stage2-hit-golden-profile.md` and `docs/stage3-alert-resolution.md` (merged in #6), checked against the explainability and reproducibility design and Stage 1's `system/shared/llm_client.py`. Stages 2 and 3 are now on main. Status lines below were checked against `9981431`.
 
 ## 1. LLM facts and clearing a hit
 
-**Fixed (PR #10).** The Stage 2 design now says an LLM fact can never contribute to a `DIFFERENT_ENTITY` clearance, not only that it cannot be the sole ground.
+**Status:** Fixed (PR #10) for the Stage 2 wording. The Stage 2 design now says an LLM fact can never contribute to a `DIFFERENT_ENTITY` clearance, not only that it cannot be the sole ground. On main at `9981431` the status was: Open, fix pending in PR #10 for the Stage 2 wording (main still says an LLM fact cannot be the sole ground). **Status:** Open, Stage 4 for enforcing that an LLM-read fact cannot contribute to `DIFFERENT_ENTITY` at all.
 
 **Stage 2 says:** "An LLM-only fact can never be the sole ground for `DIFFERENT_ENTITY`."
 
@@ -16,7 +16,7 @@ The gap: "sole ground" still allows a clear where an LLM-read fact is one of sev
 
 ## 2. One LLM on/off switch
 
-**Fixed (PR #10).** `SANCTIONS_LLM=0` turns Stage 1 and Stage 2 off; `USE_LLM_NOTES` and `USE_LLM_HITS` only narrow that.
+**Status:** Fixed (on main before PRs #7 to #9) for Stage 2: `SANCTIONS_LLM=0` forces `USE_LLM_HITS` off (`system/stage2/llm.py`). The repro tool already sets `SANCTIONS_LLM=0` on its LLM-off run, so that run does turn Stage 2 off. **Status:** Fixed (PR #10) for Stage 1. `SANCTIONS_LLM=0` turns Stage 1 and Stage 2 off; `USE_LLM_NOTES` and `USE_LLM_HITS` only narrow that. On main at `9981431` the Stage 1 status was: Open, fix pending in PR #10, because Stage 1 still looked only at `USE_LLM_NOTES`.
 
 There are currently three switches:
 
@@ -24,15 +24,15 @@ There are currently three switches:
 |---|---|
 | Stage 1 (`system/stage1`) | `USE_LLM_NOTES` |
 | Stage 2 design | `USE_LLM_HITS` |
-| Repro report tool (`tools/repro`, on `docs/explainability-repro`) | sets `USE_LLM_NOTES=0` and `SANCTIONS_LLM=0` for its LLM-off run |
+| Repro report tool (`tools/repro`) | sets `USE_LLM_NOTES=0` and `SANCTIONS_LLM=0` for its LLM-off run |
 
-The repro tool's LLM-off run would not switch Stage 2 off. The LLM-sensitivity metric (LLM on versus off) would then be wrong.
+When this note was written, that LLM-off run did not set `USE_LLM_HITS`, so it would have left Stage 2 on. On main, `SANCTIONS_LLM=0` turns Stage 2 off. Stage 1 was the remaining gap at `9981431`. PR #10 closes it: `SANCTIONS_LLM=0` turns Stage 1 off as well, and `USE_LLM_NOTES` and `USE_LLM_HITS` only narrow that.
 
 **Suggested change:** pick one master switch (for example `SANCTIONS_LLM`, default off) that turns every LLM step off. Per-stage switches may stay, but only to narrow what the master switch turns on. Record the effective setting in the trace run header.
 
 ## 3. Call budget across stages
 
-**Fixed (PR #10).** Stages share one client: run budget 48, 12 calls per extraction, a 20 minute backstop, and sorted id order so a skipped call is the same hit every run.
+**Status:** Fixed (PR #10). Stages share one client: run budget 48, 12 calls per extraction, a 20 minute backstop, and sorted id order so a skipped call is the same hit every run. On main at `9981431` the status was: Open, fix pending in PR #10. The two stages did not share a client. Stage 1's default cap was 90 seconds and 48 calls. Stage 2, if it built its own client, used 48 calls and 1,200 seconds. A Stage 2 hit skipped for the cap is flagged `LLM_SKIPPED_BUDGET`. Hits are visited in sorted `hit_id` order.
 
 Stage 1's client caps the whole run at 48 LLM calls (`llm_client.py`, line 47) and 90 seconds (line 48). Stage 2 needs 3 agreeing calls per unresolved birth sentence.
 
@@ -46,5 +46,5 @@ Open questions:
 
 ## Smaller notes
 
-- Stage 3 sets `customer_record_id` to `null` for NOT_FOUND. The trace design should allow `null` alongside a `CUS-` ID and `AMBIGUOUS`.
-- In Stage 3's ambiguity hand-off, a hit is cleared when every candidate person gives `DIFFERENT_ENTITY`. That clear must cite each candidate's deciding records, and the unsafe-clearance gate should test it with a synthetic AMBIGUOUS fixture.
+- **Status:** Fixed (PR #9, Stage 3). `not_found` (including `UNRESOLVED_LINK`) sets `customer_record_id` to `null`. `AMBIGUOUS` stays the string `AMBIGUOUS`. **Status:** Open, Stage 4 for the trace schema that has to accept all three.
+- **Status:** Open, Stage 4. Clearing an ambiguous alert only when every candidate is `DIFFERENT_ENTITY`, citing each candidate's deciding records, is not implemented. Stage 3 keeps every candidate.

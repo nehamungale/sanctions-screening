@@ -11,7 +11,7 @@
 An alert shows the customer **as screened**: a name (sometimes a nickname or a typo), a type, and sometimes a date of birth, country and city. Some alerts carry a **link** (account number, login or email). Many don't. Before any hit can be judged, we must know which customer the alert is about:
 
 - **Follow the link when there is one** (SOP), but an account can have **two holders** (joint accounts).
-- **Without a link, search.** The system of record has ~72k records and very few distinct names, so the search must narrow by date of birth, country and city.
+- **Without a link, search.** The system of record on dev has 72,265 records and very few distinct names, so the search must narrow by date of birth, country and city.
 - **Records are not people.** A match on one record pulls in the whole Stage 1 person.
 - **If more than one person fits, say so.** The decision stage then decides each hit for every candidate.
 
@@ -25,7 +25,9 @@ An alert shows the customer **as screened**: a name (sometimes a nickname or a t
 | **Never borrow** | Only records of the chosen person(s) are used downstream |
 | **No LLM** | Nothing here needs free-text reading |
 
-**Validation:** on the development set the resolver reproduces the customer resolution of **all 50 practice labels (50/50)**, including joint-account picks, merged multi-record persons and both ambiguous cases.
+**Shipped** in `system/stage3` (PR #9). `system/run` writes `alert_resolution.jsonl` into the cache. It does not decide hits.
+
+**Dev run** (one `system/run`, LLM off): 440 alerts, 413 `resolved_single`, 27 `ambiguous`, 0 `not_found`. Joint accounts 58/58 resolved to one holder. Linked alerts 294 (112 single-holder account, 58 joint, 70 login, 54 email). Unlinked 146: 119 resolved, 27 ambiguous. `resolution_clean` 307. `resolution_quality`: `clean_link` 236, `unique_search_match` 119, `joint_account_pick` 58, `ambiguous` 27. Fragility: `candidate_kept_on_missing_field` 128, `joint_account_tiebreak` 58, `dob_partial_only` 32, `name_match_fuzzy_only` 2. Operational flags: `NAME_TOO_SHORT` 22, `RECORD_DOB_MISSING_KEPT` 1. No `link_contradicts_screened`, no dangling link, no `unresolved_joint_link`. Practice labels **50/50**. Of the 307 clean resolutions, 20 also carry `NAME_TOO_SHORT` (16 of those are `clean_link`). `resolution_clean` does not make a one-part name safe to confirm or clear on.
 
 Step labels: 🟦 **[QUERY]** join/filter · 🟩 **[PARSE]** normalisation.
 
@@ -79,11 +81,11 @@ flowchart TD
 | `alerts.jsonl` | `alert_id`, `screened_at`, `customer.name`, `customer.entity_type`, `customer.dob`, `customer.country`, `customer.city`, `account_ref`, `login_handle`, `email`, `hit_ids` |
 | `accounts.jsonl` | `account_id`, `customer_id`, `login_handle` |
 | `customers.jsonl` (or a Stage 1 per-record block) | `record_id`, `entity_type`, `full_name`, `preferred_name`, `login_name`, `dob`, `residence_country`, `nationality`, `city`, `address`, `email` |
-| Stage 1 | `index_record_id` (record → person), `index_name` (name-part blocking), `person_golden` (`record_ids`, `names_all`, `declared_dobs`, `countries`) |
+| Stage 1 cache | `record_view.jsonl`, `index_account_record_id.json`, `index_login_record_id.json`, `index_email_record_id.json`, `index_name_part_record_id.json`. `index_name.json` is not read. `customers.jsonl` is read only to recover a company's declared date of birth |
 
-On the development set the link types are mutually exclusive: about 39% of alerts carry an account number, 16% a login, 12% an email, and **33% no link**.
+On the reproduced dev run the link types are mutually exclusive: 170 account (112 single-holder, 58 joint), 70 login, 54 email, and 146 with no link.
 
-> **Stage 1 interface note.** Stage 3 matches the *screened* details against each **record's** declared values (full / preferred / login name, declared date of birth, residence, nationality, city, address). The verified legal name is **not** used for searching (SOP). So Stage 3 either reads `customers.jsonl` directly, or Stage 1 publishes a per-record block plus record-level account and login indexes.
+> **Stage 1 interface note.** Stage 3 matches the *screened* details against each **record's** declared values on `record_view.jsonl` (full / preferred / login name, declared date of birth, residence, nationality, city, address). The verified legal name is **not** used for searching (SOP). It does not read `index_name.json`. For a company it replaces the view's date with `customers.dob`, because the view may hold the registry incorporation date.
 
 ---
 
@@ -97,9 +99,9 @@ Reuse Stage 1 functions: name parts (placeholders, initials, legal forms dropped
 
 | Link | Join | Result |
 |---|---|---|
-| `account_ref` | `accounts.account_id` | 1 holder record, or **2 for a joint account** (~1 in 3 account links on dev) |
-| `login_handle` | `accounts.login_handle` (unique) | 1 record |
-| `email` | `customers.email` (case-insensitive, unique) | 1 record |
+| `account_ref` | `accounts.account_id` | 1 holder record, or 2 for a joint account (58 of 170 account links on this dev run) |
+| `login_handle` | `accounts.login_handle`, trimmed and casefolded | 1 record on dev |
+| `email` | `customers.email` (trimmed, lowercased) | 1 record |
 
 Each record maps to its `person_id`. If that gives one person, the alert is **RESOLVED**. A link value that matches nothing is flagged `DANGLING_LINK` and the alert falls back to name search.
 
@@ -109,9 +111,9 @@ The SOP says a link can lead to more than one person, and the screened details t
 
 - exactly one person fits → **RESOLVED** (`LINK_ACCOUNT_JOINT`)
 - more than one fits → **AMBIGUOUS**
-- none fits → **UNRESOLVED_LINK** (no customer; flagged; never picked arbitrarily)
+- none fits → `status` `UNRESOLVED_LINK`, `resolution_status` `not_found`, `resolution_reason` `unresolved_joint_link`, `customer_record_id` null. Never picked arbitrarily.
 
-On dev, every joint-account alert resolves to exactly one holder.
+On the reproduced dev run, every joint-account alert resolved to exactly one holder.
 
 ### 4.4 Name search cascade (no link) 🟦 [QUERY]
 
@@ -130,11 +132,12 @@ flowchart LR
   F0 --> F1 --> F2 --> F3 --> F4 --> E
 ```
 
-- **F1 name** uses the Stage 1 SOP name rule (variants, joined/split parts, small spelling edits, nicknames, order-free). It is blocked through the name-part index so it never scans every record with fuzzy matching.
+- **F1 name** uses the Stage 1 SOP name rule (variants, joined/split parts, small spelling edits, nicknames, order-free). `shared.names.agree_parts` checks full coverage of the left name only when both names have the same number of parts. Stage 3 calls it both ways and keeps the match only when both calls agree. **Status:** Open, fix pending in PR #10 for a symmetric `agree_parts`. The blocking index is `index_name_part_record_id.json` (exact parts only). It is expanded with variant groups, edit distance and joined or split forms before the full name rule confirms a candidate. `index_name.json` is not read, because it can contain the verified legal name.
+- **Companies.** The date filter uses the declared `customers.dob`, not `record_view.dob`. For a company the view's date is the registry incorporation date when an approved registry extract exists. Principle 2 compares the date the customer declared.
 - **F2 date of birth:** a year-only screened date is compatible with any full date in that year.
 - **F3 country:** codes, names and nationality adjectives are compared after normalisation.
 
-Dev (unlinked alerts): about 80% resolve to one person and about 20% are ambiguous (2–6 persons). None come back empty.
+Dev (unlinked alerts, this run): 119 resolved to one person and 27 were ambiguous. None came back empty.
 
 ### 4.5 Record → person expansion 🟦 [QUERY]
 
@@ -142,7 +145,7 @@ Every surviving record brings in its whole Stage 1 person (records joined by pho
 
 ### 4.6 Link sanity check 🟦 [QUERY] (flag only)
 
-The SOP says to follow whatever link the alert carries. For extra safety we still test the screened name and date of birth against the linked person's records. If they contradict, the link is **still followed**, and the alert is flagged `LINK_SUSPECT` so the decision stage won't clear on it. On dev there are **no** such cases: every linked customer agrees with the screened details.
+The SOP says to follow whatever link the alert carries. For extra safety we still test the screened name and date of birth against the linked person's records. If they contradict, the link is **still followed**. The fragility flag is `link_contradicts_screened` (this replaces the design name `LINK_SUSPECT`). `resolution_quality` is then `LINK_SUSPECT`, and `resolution_clean` is false. Stage 4 must not clear it. On the reproduced dev run there were **no** such cases.
 
 ### 4.7 Which `customer_record_id`
 
@@ -151,7 +154,7 @@ The SOP says to follow whatever link the alert carries. For extra safety we stil
 | RESOLVED via link | the linked record (for a joint account, the fitting holder) |
 | RESOLVED via search | the smallest record ID among the matching records (any record of the person is accepted) |
 | AMBIGUOUS | `"AMBIGUOUS"` |
-| NOT_FOUND / UNRESOLVED_LINK | `null` |
+| `not_found`, including `UNRESOLVED_LINK` | `null`. `resolution_reason` is `unresolved_joint_link` for a joint account neither holder fits, and `dangling_link` when a missing link fell through to search and that search also found nobody |
 
 ---
 
@@ -209,9 +212,27 @@ Evidence for an ambiguous alert cites every candidate's customer records plus th
 }
 ```
 
-- `method`: `LINK_ACCOUNT` · `LINK_ACCOUNT_JOINT` · `LINK_LOGIN` · `LINK_EMAIL` · `NAME_SEARCH`
-- `status`: `RESOLVED` · `AMBIGUOUS` · `NOT_FOUND` · `UNRESOLVED_LINK`
-- `flags`: `DANGLING_LINK` · `LINK_SUSPECT` · `RECORD_DOB_MISSING_KEPT` · `NAME_TOO_SHORT`
+The example above is the legacy shape. The file on main also has the fields below. Keys are sorted. Alerts are sorted by `alert_id`.
+
+| Field | Meaning |
+|---|---|
+| `resolution_method` | `link_account`, `link_login`, `link_email`, or `name_search` |
+| `resolution_status` | `resolved_single`, `ambiguous`, or `not_found` |
+| `resolution_reason` | `null`, `dangling_link`, or `unresolved_joint_link` |
+| `resolution_quality` | `clean_link`, `unique_search_match`, `joint_account_pick`, `LINK_SUSPECT`, `DANGLING_LINK_fallback`, `ambiguous`, or `not_found` |
+| `resolution_clean` | True only when `resolution_status` is `resolved_single` and `fragility_flags` is empty |
+| `evidence_ids` | Ids that decided the resolution: surviving matched `CUS-` ids, plus the account id when an account link was followed |
+| `considered_ids` | Record ids that were compared and did not decide it |
+| `candidates[].filters` | `applied`, `passed`, and `skipped_missing` (`{filter, side}` with side `alert` or `record`) for name, dob, country, and city |
+| `candidates[].fragility_flags` | That candidate's flags. The alert's `fragility_flags` is the sorted union |
+
+`method` and `status` are the legacy labels: `LINK_ACCOUNT`, `LINK_ACCOUNT_JOINT`, `LINK_LOGIN`, `LINK_EMAIL`, `NAME_SEARCH`, and `RESOLVED`, `AMBIGUOUS`, `NOT_FOUND`, `UNRESOLVED_LINK`. `UNRESOLVED_LINK` stays in `status`. `resolution_status` maps it to `not_found`.
+
+Fragility flags, sorted: `candidate_kept_on_missing_field`, `dob_partial_only`, `joint_account_tiebreak`, `link_contradicts_screened`, `name_match_fuzzy_only`, `resolved_via_note_country`.
+
+`link_contradicts_screened` is the field that the design called `LINK_SUSPECT`. The link is still followed. `resolution_quality` uses the old name `LINK_SUSPECT` for that case.
+
+Operational `flags`, not fragility: `DANGLING_LINK`, `NAME_TOO_SHORT`, `RECORD_DOB_MISSING_KEPT`. A missing screened field on a search or a joint pick is `candidate_kept_on_missing_field`. A direct link does not run those filters, so a missing screened city on a link is not that flag. A record with no date of birth, country, or city is kept. Unknown is not a mismatch.
 
 ---
 
@@ -226,13 +247,13 @@ Evidence for an ambiguous alert cites every candidate's customer records plus th
 | 5 | Login link / email link (mixed case) | RESOLVED |
 | 6 | Link value not found | `DANGLING_LINK` → name search |
 | 7 | Linked record is part of a multi-record person | whole person returned |
-| 8 | Linked customer contradicts the screened details | still followed, `LINK_SUSPECT` |
+| 8 | Linked customer contradicts the screened details | still followed, fragility `link_contradicts_screened`, quality `LINK_SUSPECT` |
 | 9 | Screened nickname or typo | agrees via variants / edit distance |
 | 10 | Year-only screened DOB vs full record DOB | compatible |
 | 11 | Record without a DOB | kept, flagged |
 | 12 | Country as code / name / adjective | normalised before comparing |
 | 13 | City matched via address text | matches |
-| 14 | Company alert | legal forms ignored; incorporation date used as DOB |
+| 14 | Company alert | legal forms ignored; search date is the declared `customers.dob`, not the registry incorporation date on the record view |
 | 15 | Other entity type | excluded by F0 |
 | 16 | Two surviving records of one person | RESOLVED, not AMBIGUOUS |
 | 17 | Two or more persons survive | AMBIGUOUS, all candidates and counts kept |
@@ -246,7 +267,13 @@ Evidence for an ambiguous alert cites every candidate's customer records plus th
 
 ## 8. What Stage 4 consumes
 
-- **RESOLVED** → each hit is decided against one person; `customer_record_id` comes from here.
-- **AMBIGUOUS** → each hit is decided per candidate and combined (§5).
-- **NOT_FOUND / UNRESOLVED_LINK** → no customer facts; the hit goes to `REVIEW / INSUFFICIENT_DATA`, with `customer_record_id = null`.
-- **LINK_SUSPECT** → the decision stage must not clear the hit.
+**Status:** Open, Stage 4. Nothing here decides a hit.
+
+- **`resolved_single`** → each hit is decided against one person. `customer_record_id` comes from here.
+- **`ambiguous`** → each hit is decided per candidate and combined (§5). Do not pick one person. `customer_record_id` is `AMBIGUOUS`.
+- **`not_found`**, including `unresolved_joint_link` → no customer facts. The hit goes to `REVIEW` / `INSUFFICIENT_DATA`, with `customer_record_id` null.
+- **`resolution_clean` false**, `link_contradicts_screened` (quality `LINK_SUSPECT`), and `DANGLING_LINK_fallback` → do not clear.
+- **`NAME_TOO_SHORT`** is not a fragility flag. A clean resolution can still have it. Do not confirm or clear that customer on name.
+- **`candidate_kept_on_missing_field`** means a missing dob, country, or city was unknown, not a mismatch. Do not clear on that missing field.
+- **`dob_partial_only`** and **`name_match_fuzzy_only`** are weak agreement.
+- **`resolved_via_note_country`** did not occur on dev. If it does, the country came from a note tag on residence or nationality. Do not clear on location from that alone.
