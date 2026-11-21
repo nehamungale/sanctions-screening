@@ -3,7 +3,7 @@
 import type { Model } from './model.ts'
 import { DIM_LABELS, MISSING_TEXT, undecidedText } from './labels.ts'
 import { HIT_NOT_DECIDED, type Decision } from './policy.ts'
-import { noComparisonReason, readComparison, readDecidingDims, readIdentity, unknownFacts } from './trace-view.ts'
+import { noComparisonReason, readComparison, readDecidingDims, readIdentity, readSteps, unknownFacts } from './trace-view.ts'
 import type { TraceHit, UndecidedReason } from './types.ts'
 
 export interface HitRow {
@@ -126,4 +126,68 @@ export function filterRows(rows: readonly HitRow[], f: AuditFilters, unstable: R
       (!f.unstable || unstable.has(r.hit_id)) &&
       (f.llm === null || (f.llm === 'yes' ? r.llm_used === true : r.llm_used !== true)),
   )
+}
+
+/** Plain words for the safety checks (system/stage4/gate.py) that hold a clear back. */
+export const GATE_LABELS: Record<string, string> = {
+  NON_LATIN_ALIAS: 'hit has a name in a script we do not compare',
+  NON_EXHAUSTIVE_NAME: 'name comparison not exhaustive',
+  joint_account_tiebreak: 'customer picked from a joint account by tie-break',
+  candidate_kept_on_missing_field: 'alert lacked a field the clear needs',
+  name_match_fuzzy_only: 'customer matched only through a spelling variant',
+  dob_partial_only: 'screened date of birth matched only in part',
+  LINK_SUSPECT: 'alert link contradicts the screened details',
+  DANGLING_LINK: 'alert link points at no customer record',
+  resolved_via_note_country: 'customer reached only through a note country',
+  BLOCK_NAME_MISMATCH_VERIFIED: 'no customer date of birth, so name cannot clear',
+  UNVERIFIED: 'no customer date of birth, so name cannot clear',
+  BLOCK_NAME_CLEAR: 'customer name too short to compare',
+  SCREENED_NAME_TOO_SHORT: 'screened name too short to compare',
+  BLOCK_DOB_AGE_NAME_CLEAR: 'a verification note could not be fully read',
+  DOB_MAY_NOT_CLEAR: 'customer date of birth not safe to clear on',
+  NAME_MAY_NOT_CLEAR: 'customer name not safe to clear on',
+  WEAK_DOB_RULE: 'hit birth year from a weak age sentence',
+  BORN_CUE_SEARCH_DOB: 'profile birth cue the search result may miss',
+  MULTI_SR_CONFLICT: 'search results disagree on birth year',
+  NOTE_DOB_UNRESOLVED: 'birth cue in profile could not be read',
+  HIT_UNPARSED_DATE: 'a date on the hit could not be read',
+  DECLARED_DOB_AGREES: 'a declared date of birth agrees with the hit',
+  HIT_UNMAPPED_COUNTRY: 'a hit country could not be mapped',
+  NON_EXHAUSTIVE_BLOCKS_LOCATION: 'name not fully compared, so location cannot clear',
+  SCREENED_TYPE_DISAGREES: 'screened entity type disagrees with the customer',
+  MULTI_VERIFICATION_CONFLICT: 'identity checks disagree',
+  TYPE_CONFLICT: 'customer records disagree on entity type',
+  BLOCK_LOCATION_MISMATCH: 'customer countries not safe to clear on',
+  LLM_DOB_UNKNOWN: 'model could not read the hit’s birth date',
+}
+
+export interface WhyTag {
+  key: string
+  label: string
+  /** 'held': a contradiction was found but a safety check held the clear back. */
+  kind: 'held' | 'missing' | 'identity' | 'confirm'
+}
+
+/** Why a hit needs a person, as tags that can be counted and filtered on. */
+export function whyTags(row: HitRow): WhyTag[] {
+  if (row.decision === null || !row.hit) return [{ key: 'undecided', label: 'no decision from the pipeline', kind: 'identity' }]
+  const raw = row.hit.raw
+  if (row.decision === 'SAME_ENTITY') return [{ key: `confirm:${row.reason_code}`, label: `confirmed: ${row.reason_code}`, kind: 'confirm' }]
+  const tags: WhyTag[] = []
+  if (row.reason_code === 'AMBIGUOUS_CUSTOMER_RECORD') tags.push({ key: 'ambiguous', label: 'more than one customer fits', kind: 'identity' })
+  const cid = row.hit.verdict.customer_record_id
+  if (!cid) tags.push({ key: 'no-customer', label: 'no customer record found', kind: 'identity' })
+  for (const s of readSteps(raw)) {
+    if (s.result === 'blocked' && s.why) tags.push({ key: `held:${s.why}`, label: GATE_LABELS[s.why] ?? s.why.replace(/_/g, ' ').toLowerCase(), kind: 'held' })
+  }
+  for (const u of unknownFacts(readComparison(raw))) {
+    if (u.dim === 'death' || u.dim === 'earliest_report') continue
+    const dim = (DIM_LABELS[u.dim] ?? u.dim).toLowerCase()
+    if (u.side === 'hit' || u.side === 'both') tags.push({ key: `missing-hit:${u.dim}`, label: `${dim} not on list profile`, kind: 'missing' })
+    if (u.side === 'customer' || u.side === 'both') tags.push({ key: `missing-cust:${u.dim}`, label: `${dim} not in customer records`, kind: 'missing' })
+  }
+  if (readIdentity(raw).flags.includes('UNVERIFIED')) tags.push({ key: 'declared-only', label: 'customer facts declared, not verified', kind: 'missing' })
+  if (row.hit.raw.output_only === true) tags.push({ key: 'output-only', label: 'decision only (load the trace for why)', kind: 'missing' })
+  const seen = new Set<string>()
+  return tags.filter((t) => (seen.has(t.key) ? false : (seen.add(t.key), true)))
 }
