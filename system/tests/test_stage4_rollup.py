@@ -316,6 +316,38 @@ class LlmCannotClearTests(unittest.TestCase):
         self.assertEqual(decision.decision, "REVIEW")
         self.assertIn("candidate_kept_on_missing_field", decision.blocked.get("LOCATION_MISMATCH", []))
 
+    def test_partial_screened_dob_blocks_a_location_clear(self):
+        resolution = _resolution()
+        resolution["resolution_clean"] = False
+        resolution["candidates"][0]["fragility_flags"] = ["dob_partial_only"]
+        resolution["fragility_flags"] = ["dob_partial_only"]
+        hit = _hit()
+        hit["dob_candidates"] = []
+        decision = decide_hit(
+            hit, _alert_row(), resolution,
+            {"P-CUS-999991": _person()}, NameTools(VARIANTS),
+        )
+        self.assertEqual(decision.decision, "REVIEW")
+        self.assertIn("dob_partial_only", decision.blocked.get("LOCATION_MISMATCH", []))
+
+    def test_unverified_flag_blocks_a_name_clear_when_the_legal_name_is_verified(self):
+        person = _person()
+        person["flags"] = ["UNVERIFIED"]
+        self.assertTrue(person["legal_name"]["verified"])
+        hit = _hit()
+        hit["names"] = [{
+            "value": "Oliver Fictional", "kind": "primary",
+            "parts": ["oliver", "fictional"], "script": "latin",
+        }]
+        hit["dob_candidates"] = []
+        hit["countries"] = [{"value": "Ireland", "unmapped": False, "field": "countries"}]
+        decision = decide_hit(
+            hit, _alert_row(), _resolution(),
+            {"P-CUS-999991": person}, NameTools(VARIANTS),
+        )
+        self.assertEqual(decision.decision, "REVIEW")
+        self.assertIn("BLOCK_NAME_MISMATCH_VERIFIED", decision.blocked.get("NAME_MISMATCH_VERIFIED", []))
+
     def test_one_year_apart_is_neither_agreement_nor_contradiction(self):
         customer = {"y": 1980, "m": 5, "d": 1}
         self.assertFalse(contradicts(customer, {"years": [1981], "month": None, "day": None}))

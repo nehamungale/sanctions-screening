@@ -101,9 +101,12 @@ def _legal(ctx: GateContext) -> dict:
 
 
 def _name_unverified(ctx: GateContext, _code: str) -> bool:
-    """The UNVERIFIED flag is also set for a missing date of birth, so the name gate reads the legal name."""
+    """A missing date of birth sets UNVERIFIED even when the legal name is verified.
+
+    That flag blocks a name clearance either way.
+    """
     flags = _person_flags(ctx)
-    if "BLOCK_NAME_MISMATCH_VERIFIED" in flags:
+    if "UNVERIFIED" in flags or "BLOCK_NAME_MISMATCH_VERIFIED" in flags:
         return True
     legal = _legal(ctx)
     return legal.get("verified") is not True
@@ -168,7 +171,10 @@ GATE_TABLE = (
     ("candidate_kept_on_missing_field", frozenset({ALL_C}), lambda ctx, _code: (
         "candidate_kept_on_missing_field" in _fragility(ctx) or "RECORD_DOB_MISSING_KEPT" in _alert_flags(ctx)
     )),
-    ("dob_partial_only", frozenset({"DOB_MISMATCH", "TEMPORAL_IMPOSSIBILITY"}), lambda ctx, _code: "dob_partial_only" in _fragility(ctx)),
+    ("dob_partial_only", frozenset({
+        "ENTITY_TYPE_MISMATCH", "DECEASED", "TEMPORAL_IMPOSSIBILITY",
+        "DOB_MISMATCH", "NAME_MISMATCH_VERIFIED", "LOCATION_MISMATCH",
+    }), lambda ctx, _code: "dob_partial_only" in _fragility(ctx)),
     ("SCREENED_NAME_TOO_SHORT", frozenset({"NAME_MISMATCH_VERIFIED"}), lambda ctx, _code: "NAME_TOO_SHORT" in _alert_flags(ctx)),
     ("contract_block_name", frozenset({"NAME_MISMATCH_VERIFIED"}), lambda ctx, _code: bool(
         _contracts(ctx).get("block_name_mismatch_verified") or _contracts(ctx).get("block_name_clear")
@@ -219,6 +225,8 @@ def gate_words(reasons: list[str]) -> str:
         "LINK_SUSPECT": "the alert link contradicts the screened details",
         "DANGLING_LINK": "the alert link does not point at a customer record",
         "resolved_via_note_country": "the customer was reached only through a country in a note",
+        "BLOCK_NAME_MISMATCH_VERIFIED": "the customer's date of birth is missing, so the name cannot clear the hit",
+        "UNVERIFIED": "the customer's date of birth is missing, so the name cannot clear the hit",
         "BLOCK_NAME_CLEAR": "the customer's name has too few real parts to compare",
         "SCREENED_NAME_TOO_SHORT": "the screened name has too few real parts to compare",
         "BLOCK_DOB_AGE_NAME_CLEAR": "a verification note could not be fully read",
