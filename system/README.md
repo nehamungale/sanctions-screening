@@ -86,7 +86,7 @@ These ids are invented.
 
 ## Trace
 
-`ui/TRACE_CONTRACT.md` is not in the repo yet. The trace is not written into the official output. It is `$TRACE_PATH` or `$SANCTIONS_CACHE/trace.jsonl` (`trace_schema` 1). Each hit record has:
+The trace follows `ui/TRACE_CONTRACT.md`. It is not written into the official output. It is `$TRACE_PATH` or `$SANCTIONS_CACHE/trace.jsonl` (`trace_schema` 1). Each hit record has:
 
 - `verdict` — the official line
 - `deciding_dims` — the dimensions that decided it (`name`, `dob`, `country`, `type`, `death`, `earliest_report`)

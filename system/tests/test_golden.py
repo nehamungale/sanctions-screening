@@ -514,7 +514,7 @@ class RunTests(unittest.TestCase):
             self.assertEqual(list(outputted[0]), [
                 "hit_id", "alert_id", "decision", "reason_code", "customer_record_id", "reason", "evidence",
             ])
-            self.assertEqual(outputted[0]["hit_id"], "H-000010")
+            self.assertEqual(outputted[0]["hit_id"], "H-SYN010")
             self.assertEqual(outputted[0]["decision"], "DIFFERENT_ENTITY")
             self.assertIn(outputted[0]["reason_code"], {
                 "DOB_MISMATCH", "LOCATION_MISMATCH", "NAME_MISMATCH_VERIFIED",
