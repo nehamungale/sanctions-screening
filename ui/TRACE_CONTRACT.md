@@ -15,7 +15,8 @@ nothing throws. Anything that would make a hit or alert look safer than the data
 `fixtures/trace-pipeline.sample.jsonl` is a trace written by `system/run` itself on a small synthetic data folder
 (`tests/make-real-trace.py`; IDs rewritten to the synthetic form afterwards). `fixtures/trace.sample.jsonl` is hand-written
 in the same shape (a test checks its field names against the pipeline's), with the alert summaries appended by the repo's
-own `stage4.rollup.roll_up` (`tests/make-trace-sample.py`).
+own `stage4.rollup.roll_up` (`tests/make-trace-sample.py`). `fixtures/trace-crosscheck.sample.jsonl` is the same trace with
+the A-SYN009 summary deliberately wrong (says CLEARED), for the cross-check demo (`?sample=crosscheck`).
 
 ## 1. `trace.jsonl`: one line per hit, then one line per alert
 

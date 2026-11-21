@@ -28,7 +28,7 @@ import { allHitRows, filterRows, NO_FILTERS, queueGroups, whatsMissingLine } fro
 
 const fixture = (name: string) => readFileSync(new URL(`../fixtures/${name}`, import.meta.url), 'utf8')
 /** The alert summary lines stage4 appends to trace.jsonl, as a separate (legacy alerts.trace.jsonl) file. */
-const summaryLines = (name = 'trace.sample.jsonl') =>
+const summaryLines = (name = 'trace-crosscheck.sample.jsonl') =>
   fixture(name)
     .split('\n')
     .filter((l) => l.includes('"alert_status"'))
@@ -50,9 +50,9 @@ const roll = (lines: string[], hit_ids: string[], alertsVerified = true) => {
 
 const INTERNAL = /ESCALATED|NEEDS_REVIEW|NOT_VERIFIED/
 
-function loadFixtures(o: { alerts?: boolean; summaries?: boolean }): Loaded {
+function loadFixtures(o: { alerts?: boolean; summaries?: boolean; crosscheck?: boolean }): Loaded {
   return {
-    trace: { name: 't', result: parseTraceJsonl(fixture('trace.sample.jsonl')) },
+    trace: { name: 't', result: parseTraceJsonl(fixture(o.crosscheck ? 'trace-crosscheck.sample.jsonl' : 'trace.sample.jsonl')) },
     alerts: o.alerts ? { name: 'a', result: parseAlerts(fixture('alerts.sample.jsonl')) } : null,
     summaries: o.summaries ? { name: 's', result: parseAlerts(summaryLines()) } : null,
     repro: null,
@@ -177,25 +177,34 @@ test('summary lines inside trace.jsonl are split from hit lines; hit list includ
 })
 
 test('B1: the trace alone (with its summary lines) never shows Cleared (Not verified instead)', () => {
-  const m = buildModel(loadFixtures({}))!
-  assert.equal(m.verified, false)
-  assert.equal(m.alertSource, 'summaries')
-  assert.equal(m.summarySource, 'trace')
-  assert.equal(m.counts.alerts.CLEARED, 0)
-  assert.equal(m.counts.alerts.NOT_VERIFIED, 2)
-  // pipeline CLEARED vs UI Not verified is not a disagreement; the broken A-SYN009 summary is
-  assert.deepEqual(m.crossCheck?.problems, A9_DISAGREES)
+  for (const crosscheck of [false, true]) {
+    const m = buildModel(loadFixtures({ crosscheck }))!
+    assert.equal(m.verified, false)
+    assert.equal(m.alertSource, 'summaries')
+    assert.equal(m.summarySource, 'trace')
+    assert.equal(m.counts.alerts.CLEARED, 0)
+    assert.equal(m.counts.alerts.NOT_VERIFIED, 2)
+    // pipeline CLEARED vs UI Not verified is not a disagreement; the broken A-SYN009 summary is
+    assert.deepEqual(m.crossCheck?.problems, crosscheck ? A9_DISAGREES : [])
+  }
 })
 
-test('B1: with alerts.jsonl, Cleared shows and the cross-check flags only the broken summary', () => {
+test('B1: default sample: Cleared shows and the cross-check agrees; crosscheck sample flags only the broken summary', () => {
   const m = buildModel(loadFixtures({ alerts: true }))!
   assert.equal(m.counts.alerts.CLEARED, 2)
-  assert.deepEqual(m.crossCheck?.problems, A9_DISAGREES)
+  assert.deepEqual(m.crossCheck?.problems, [])
+  const x = buildModel(loadFixtures({ alerts: true, crosscheck: true }))!
+  assert.equal(x.counts.alerts.CLEARED, 2)
+  assert.deepEqual(x.crossCheck?.problems, A9_DISAGREES)
+  // the two samples differ only in that one summary line
+  const diff = fixture('trace.sample.jsonl').split('\n').filter((l, i) => l !== fixture('trace-crosscheck.sample.jsonl').split('\n')[i])
+  assert.equal(diff.length, 1)
+  assert.match(diff[0], /"alert_id":"A-SYN009","alert_status":"NEEDS_REVIEW"/)
 })
 
 test('MUST KEEP: a pipeline summary that says CLEARED never makes an alert Cleared', () => {
   for (const alerts of [false, true]) {
-    const m = buildModel(loadFixtures({ alerts }))!
+    const m = buildModel(loadFixtures({ alerts, crosscheck: true }))!
     assert.equal(m.summariesById.get('A-SYN009')!.alert_status, 'NEEDS_REVIEW')
     assert.deepEqual(m.summariesById.get('A-SYN009')!.undecided_hit_ids, ['H-SYN014'])
   }

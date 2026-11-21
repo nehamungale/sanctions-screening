@@ -20,6 +20,7 @@ paths=(
   "?sample=1&screen=queue&alert=A-SYN008&hit=H-SYN013" "?sample=trace&status=review"
   "?sample=pipeline" "?sample=pipeline&alert=A-SYN101&hit=H-SYN101" "?sample=pipeline&alert=A-SYN103&hit=H-SYN105"
   "?sample=pipeline&alert=A-SYN104&hit=H-SYN107" "?sample=pipeline&alert=A-SYN105&hit=H-SYN109" "?sample=pipeline&screen=audit"
+  "?sample=crosscheck" "?sample=crosscheck&alert=A-SYN009&hit=H-SYN014" "?sample=crosscheck&status=review"
 )
 # Text that must be on a page (path|text).
 expects=(
@@ -33,7 +34,11 @@ expects=(
   "?sample=summaries|No original alerts file loaded, so nothing can be shown as Cleared"
   "?sample=summaries&status=cleared|Not available until the alerts file is loaded"
   "?sample=1&alert=A-SYN005&hit=H-SYN009|Hit has no decision"
-  "?sample=1|a pipeline summary never clears an alert here"
+  "?sample=1|agree with this view"
+  "?sample=trace|agree with this view"
+  "?sample=crosscheck|a pipeline summary never clears an alert here"
+  "?sample=crosscheck|deliberately wrong"
+  "?sample=crosscheck&alert=A-SYN009&hit=H-SYN014|Hit has no decision"
   "?sample=1&alert=A-SYN001&hit=H-SYN001|compared with the hit"
   "?sample=1&alert=A-SYN008&hit=H-SYN013|No comparison"
   "?sample=1&alert=A-SYN008&hit=H-SYN013|no matching customer record"
@@ -46,6 +51,8 @@ expects=(
   "?sample=pipeline&alert=A-SYN104&hit=H-SYN107|No comparison"
   "?sample=pipeline&alert=A-SYN103&hit=H-SYN105|compared with the hit"
 )
+# Pages that must show no cross-check disagreement (the default demo is clean).
+clean_pages=("?sample=1" "?sample=trace" "?sample=pipeline")
 # Pages that must show the name fact row (so the "verified" check below is not vacuous).
 name_fact_pages=("?sample=1&alert=A-SYN001&hit=H-SYN001" "?sample=pipeline&alert=A-SYN101&hit=H-SYN101" "?sample=pipeline&alert=A-SYN103&hit=H-SYN105")
 fail=0
@@ -72,6 +79,9 @@ for p in "${paths[@]}"; do
   if grep -qi 'verified' <<<"$name_row"; then echo "FAIL (name fact labelled verified): $p"; fail=1; fi
   for n in "${name_fact_pages[@]}"; do
     if [[ "$n" == "$p" && -z "$name_row" ]]; then echo "FAIL (no name fact row to check): $p"; fail=1; fi
+  done
+  for c in "${clean_pages[@]}"; do
+    if [[ "$c" == "$p" ]] && grep -q 'disagree with this view' <<<"$text"; then echo "FAIL (cross-check disagreement on the default demo): $p"; fail=1; fi
   done
   for e in "${expects[@]}"; do
     if [[ "${e%%|*}" == "$p" ]] && ! grep -qF "${e#*|}" <<<"$text"; then echo "FAIL (missing text '${e#*|}'): $p"; fail=1; fi

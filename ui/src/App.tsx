@@ -32,7 +32,7 @@ interface Nav {
   filters: AuditFilters
 }
 
-/** ?sample=1 (everything), ?sample=trace (trace only; alias summaries), ?sample=pipeline (real stage4 trace); &repro=flipped. */
+/** ?sample=1 (everything), ?sample=trace (trace only; alias summaries), ?sample=pipeline (real stage4 trace), ?sample=crosscheck (a wrong pipeline summary); &repro=flipped. */
 type SampleMode = { mode: SampleKind; repro: 'stable' | 'flipped' } | null
 
 function readNav(): Nav {
@@ -58,7 +58,7 @@ function readNav(): Nav {
 function readSample(): SampleMode {
   const q = new URLSearchParams(window.location.search)
   const v = q.get('sample')
-  const mode = v === '1' ? 'full' : v === 'trace' || v === 'summaries' || v === 'pipeline' ? v : null
+  const mode = v === '1' ? 'full' : v === 'trace' || v === 'summaries' || v === 'pipeline' || v === 'crosscheck' ? v : null
   return mode ? { mode, repro: q.get('repro') === 'flipped' ? 'flipped' : 'stable' } : null
 }
 

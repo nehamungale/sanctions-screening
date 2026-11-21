@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Append the Stage 4 alert summaries to fixtures/trace.sample.jsonl, as the real pipeline does.
+"""Append the Stage 4 alert summaries to fixtures/trace.sample.jsonl, as the real pipeline does,
+and write fixtures/trace-crosscheck.sample.jsonl: the same trace with one summary deliberately wrong.
 
 The hit lines in the fixture are hand-written synthetic records in the stage4 trace shape
 (system/stage4/trace.py). The summary lines are computed with the repo's own roll-up
-(system/stage4/rollup.py) from those hit lines and fixtures/alerts.sample.jsonl, then one is
-deliberately broken so the UI's cross-check has a disagreement to show:
+(system/stage4/rollup.py) from those hit lines and fixtures/alerts.sample.jsonl. In the crosscheck
+copy (?sample=crosscheck) one is broken so the UI's cross-check has a disagreement to show:
 
-  A-SYN009  the pipeline would say NEEDS_REVIEW (H-SYN014 not decided); the fixture says CLEARED.
-            The UI must still show Needs review: summaries never make an alert Cleared.
+  A-SYN009  the pipeline would say NEEDS_REVIEW (H-SYN014 not decided); the crosscheck copy says
+            CLEARED. The UI must still show Needs review: summaries never make an alert Cleared.
 
     python3 tests/make-trace-sample.py [path/to/repo checkout]   (read-only; no bytecode written)
 """
@@ -38,10 +39,12 @@ decisions = {
     for h in hits
 }
 summaries = roll_up(alerts, decisions)
-for s in summaries:
+dump = lambda r: json.dumps(r, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+trace.write_text("".join(dump(r) + "\n" for r in hits + summaries))
+broken = json.loads(json.dumps(summaries))
+for s in broken:
     if s["alert_id"] == "A-SYN009":
         s["alert_status"] = "CLEARED"
         s["blocking_hit_ids"] = []
-dump = lambda r: json.dumps(r, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-trace.write_text("".join(dump(r) + "\n" for r in hits + summaries))
-print(f"wrote {len(hits)} hit lines and {len(summaries)} alert summaries")
+(UI / "fixtures/trace-crosscheck.sample.jsonl").write_text("".join(dump(r) + "\n" for r in hits + broken))
+print(f"wrote {len(hits)} hit lines and {len(summaries)} alert summaries (+ the crosscheck copy)")

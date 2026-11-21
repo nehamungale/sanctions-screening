@@ -15,9 +15,9 @@ rendered as plain text. Field-by-field contract: [TRACE_CONTRACT.md](TRACE_CONTR
 Screens: **Overview** (alert roll-up, repro card, totals), **Analyst queue** (REVIEW, then no decision, then SAME_ENTITY),
 **Audit** (all hits, filters in the URL). All open the shared `HitPanel`.
 
-URL: `?sample=1` | `trace` (alias `summaries`) | `pipeline` (+ `&repro=flipped`), `screen=queue|audit`, `status=cleared|compliance|review|not-verified`,
+URL: `?sample=1` | `trace` (alias `summaries`) | `pipeline` | `crosscheck` (A-SYN009's pipeline summary wrongly says Cleared; the UI still shows Needs review) (+ `&repro=flipped`), `screen=queue|audit`, `status=cleared|compliance|review|not-verified`,
 `alert=A-…`, `hit=H-…`, Audit filters `verdict=`, `code=`, `fragility=`, `unstable=1`, `llm=yes|no`.
 
 Fixtures (`fixtures/*.sample.*`) are synthetic (IDs like `H-SYN001`). `trace-pipeline.sample.jsonl` was written by
 `system/run` (`tests/make-real-trace.py <repo> <out>`). `tests/make-trace-sample.py` appends the alert summaries to
-`trace.sample.jsonl` with the repo's own roll-up; `tests/make-repro-samples.py` regenerates the repro samples.
+`trace.sample.jsonl` with the repo's own roll-up and writes `trace-crosscheck.sample.jsonl` (one summary broken); `tests/make-repro-samples.py` regenerates the repro samples.

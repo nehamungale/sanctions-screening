@@ -2,6 +2,7 @@ import samplePipelineAlertsText from '../../fixtures/alerts-pipeline.sample.json
 import sampleAlertsText from '../../fixtures/alerts.sample.jsonl?raw'
 import sampleReproFlippedText from '../../fixtures/repro-flipped.sample.json?raw'
 import sampleReproText from '../../fixtures/repro.sample.json?raw'
+import sampleCrosscheckTraceText from '../../fixtures/trace-crosscheck.sample.jsonl?raw'
 import samplePipelineTraceText from '../../fixtures/trace-pipeline.sample.jsonl?raw'
 import sampleTraceText from '../../fixtures/trace.sample.jsonl?raw'
 import { parseAlerts, parseTraceJsonl } from './parse.ts'
@@ -10,7 +11,7 @@ import { EMPTY, type Loaded } from './model.ts'
 
 export * from './model.ts'
 
-export type SampleKind = 'full' | 'trace' | 'summaries' | 'pipeline'
+export type SampleKind = 'full' | 'trace' | 'summaries' | 'pipeline' | 'crosscheck'
 
 /**
  * Bundled synthetic fixtures (static strings compiled into the app; no fetch).
@@ -18,6 +19,7 @@ export type SampleKind = 'full' | 'trace' | 'summaries' | 'pipeline'
  * 'full': trace + alerts.jsonl + repro; 'trace' (alias 'summaries'): trace.jsonl only, so its
  * summary lines are the only alert list and nothing can show as Cleared;
  * 'pipeline': a trace written by the real stage4 code (tests/make-real-trace.py) + its alerts.jsonl.
+ * 'crosscheck': the full sample, but one pipeline summary (A-SYN009) wrongly says Cleared, to show the cross-check.
  */
 export function loadSample(mode: SampleKind = 'full', repro: 'stable' | 'flipped' = 'stable'): Loaded {
   if (mode === 'pipeline') {
@@ -27,7 +29,10 @@ export function loadSample(mode: SampleKind = 'full', repro: 'stable' | 'flipped
       alerts: { name: 'alerts-pipeline.sample.jsonl (bundled)', result: parseAlerts(samplePipelineAlertsText) },
     }
   }
-  const trace = { name: 'trace.sample.jsonl (bundled)', result: parseTraceJsonl(sampleTraceText) }
+  const trace =
+    mode === 'crosscheck'
+      ? { name: 'trace-crosscheck.sample.jsonl (bundled; A-SYN009 summary deliberately wrong)', result: parseTraceJsonl(sampleCrosscheckTraceText) }
+      : { name: 'trace.sample.jsonl (bundled)', result: parseTraceJsonl(sampleTraceText) }
   if (mode === 'trace' || mode === 'summaries') return { ...EMPTY, trace }
   const reproFile =
     repro === 'flipped'
