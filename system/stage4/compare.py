@@ -443,7 +443,7 @@ def _issue_flags(hit: dict, person: dict, cmp: Comparison) -> None:
         cmp.issues.append("LLM_DOB_UNKNOWN")
     if "MULTI_SR_CONFLICT" in hit_flags:
         cmp.issues.append("MULTI_SR_CONFLICT")
-    if any(item.get("rule_strength") == "weak" for item in (hit.get("dob_candidates") or [])):
+    if _weak_dob_blocks(hit, cmp):
         cmp.issues.append("WEAK_DOB_RULE")
     text = hit.get("_profile_text") or ""
     paragraph = text.strip().split("\n\n", 1)[0] if text else ""
@@ -460,6 +460,34 @@ def _issue_flags(hit: dict, person: dict, cmp: Comparison) -> None:
         cmp.name.llm_used = cmp.name.llm_used or legal.get("method") == "llm"
     if "NON_EXHAUSTIVE_NAME" in cmp.issues and cmp.dob.status == AGREE:
         cmp.issues.append("NON_EXHAUSTIVE_BLOCKS_LOCATION")
+
+
+# A weak age sentence ("X was 32 when arrested in September 2001") can clear on its own
+# only when every birth year it allows is at least this far from every customer birth
+# year. A misread age or event date shifts a year by one or two, not by five or more.
+# On dev all 8 such hits read as the subject's age at a dated event (gaps 8-38 years);
+# the 2 with gaps of 2-3 years stay in review.
+WEAK_DOB_MIN_GAP_YEARS = 5
+
+
+def _weak_dob_blocks(hit: dict, cmp: Comparison) -> bool:
+    weak = [item for item in (hit.get("dob_candidates") or []) if item.get("rule_strength") == "weak"]
+    if not weak:
+        return False
+    detail = cmp.dob.detail or {}
+    verified = detail.get("verified")
+    customer = [verified] if verified else list(detail.get("declared") or [])
+    try:
+        customer_years = [int(part["y"]) for part in customer if part and part.get("y") is not None]
+        weak_years = [int(year) for item in weak for year in (item.get("years") or []) if year is not None]
+    except (TypeError, ValueError):
+        return True
+    if not customer_years or not weak_years:
+        return True
+    if any((part or {}).get("method") == "llm" for part in customer) or any(item.get("method") == "llm" for item in weak):
+        return True
+    gap = min(abs(c - w) for c in customer_years for w in weak_years)
+    return gap < WEAK_DOB_MIN_GAP_YEARS
 
 
 def _unique(values: list) -> list[str]:
