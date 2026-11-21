@@ -4,6 +4,13 @@
 >
 > Part of the 4-stage architecture: **1** customer golden record · **2** hit golden profile · **3** alert → person resolution (this doc) · **4** decision rules.
 
+| | |
+|---|---|
+| **Status** | ✅ Built (`system/stage3/`, PR #9). Does not decide hits. |
+| **Dev run** | 440 alerts: 413 resolved to one person, 27 ambiguous, 0 not found. Joint accounts 58/58 resolved. Practice labels 50/50. ~8 s. No LLM. |
+| **Code map** | [§9](#9-code-map) |
+| **Planned refactor** | [§11](#11-refactor-plan-to-be-done). Not started. |
+
 ---
 
 ## 1. Why this stage exists
@@ -24,8 +31,6 @@ An alert shows the customer **as screened**: a name (sometimes a nickname or a t
 | **Unknown stays unknown** | A record with no date of birth is not excluded by a date filter |
 | **Never borrow** | Only records of the chosen person(s) are used downstream |
 | **No LLM** | Nothing here needs free-text reading |
-
-**Shipped** in `system/stage3` (PR #9). `system/run` writes `alert_resolution.jsonl` into the cache. It does not decide hits.
 
 **Dev run** (one `system/run`, LLM off): 440 alerts, 413 `resolved_single`, 27 `ambiguous`, 0 `not_found`. Joint accounts 58/58 resolved to one holder. Linked alerts 294 (112 single-holder account, 58 joint, 70 login, 54 email). Unlinked 146: 119 resolved, 27 ambiguous. `resolution_clean` 307. `resolution_quality`: `clean_link` 236, `unique_search_match` 119, `joint_account_pick` 58, `ambiguous` 27. Fragility: `candidate_kept_on_missing_field` 128, `joint_account_tiebreak` 58, `dob_partial_only` 32, `name_match_fuzzy_only` 2. Operational flags: `NAME_TOO_SHORT` 22, `RECORD_DOB_MISSING_KEPT` 1. No `link_contradicts_screened`, no dangling link, no `unresolved_joint_link`. Practice labels **50/50**. Of the 307 clean resolutions, 20 also carry `NAME_TOO_SHORT` (16 of those are `clean_link`). `resolution_clean` does not make a one-part name safe to confirm or clear on.
 
@@ -132,7 +137,7 @@ flowchart LR
   F0 --> F1 --> F2 --> F3 --> F4 --> E
 ```
 
-- **F1 name** uses the Stage 1 SOP name rule (variants, joined/split parts, small spelling edits, nicknames, order-free). `shared.names.agree_parts` checks full coverage of the left name only when both names have the same number of parts. Stage 3 calls it both ways and keeps the match only when both calls agree. **Status:** Open, fix pending in PR #10 for a symmetric `agree_parts`. The blocking index is `index_name_part_record_id.json` (exact parts only). It is expanded with variant groups, edit distance and joined or split forms before the full name rule confirms a candidate. `index_name.json` is not read, because it can contain the verified legal name.
+- **F1 name** uses the Stage 1 SOP name rule (variants, joined/split parts, small spelling edits, nicknames, order-free). `shared.names.agree_parts` is symmetric since PR #10. Stage 3 still calls it both ways through `stage3/names.py` (`agree_symmetric`), a workaround from before that fix. It is now redundant (R3.1). The blocking index is `index_name_part_record_id.json` (exact parts only). It is expanded with variant groups, edit distance and joined or split forms before the full name rule confirms a candidate. `index_name.json` is not read, because it can contain the verified legal name.
 - **Companies.** The date filter uses the declared `customers.dob`, not `record_view.dob`. For a company the view's date is the registry incorporation date when an approved registry extract exists. Principle 2 compares the date the customer declared.
 - **F2 date of birth:** a year-only screened date is compatible with any full date in that year.
 - **F3 country:** codes, names and nationality adjectives are compared after normalisation.
@@ -267,7 +272,7 @@ Operational `flags`, not fragility: `DANGLING_LINK`, `NAME_TOO_SHORT`, `RECORD_D
 
 ## 8. What Stage 4 consumes
 
-**Status:** Open, Stage 4. Nothing here decides a hit.
+Nothing here decides a hit. These are the rules Stage 4 must apply to Stage 3's output.
 
 - **`resolved_single`** → each hit is decided against one person. `customer_record_id` comes from here.
 - **`ambiguous`** → each hit is decided per candidate and combined (§5). Do not pick one person. `customer_record_id` is `AMBIGUOUS`.
@@ -277,3 +282,38 @@ Operational `flags`, not fragility: `DANGLING_LINK`, `NAME_TOO_SHORT`, `RECORD_D
 - **`candidate_kept_on_missing_field`** means a missing dob, country, or city was unknown, not a mismatch. Do not clear on that missing field.
 - **`dob_partial_only`** and **`name_match_fuzzy_only`** are weak agreement.
 - **`resolved_via_note_country`** did not occur on dev. If it does, the country came from a note tag on residence or nationality. Do not clear on location from that alone.
+
+---
+
+## 9. Code map
+
+| File | Lines | What it does |
+|---|---|---|
+| `system/stage3/resolve.py` | ~810 | `normalise_screened` (§4.1); `Resolver` follows links (§4.2), picks joint-account holders (§4.3), runs the search cascade (§4.4), expands records to persons (§4.5), runs the link check (§4.6) and sets fragility, quality and `customer_record_id` (§4.7). `resolve_alerts` runs every alert in `alert_id` order |
+| `system/stage3/stage1_adapter.py` | ~260 | `load_catalog`: reads the Stage 1 record view and record-level indexes back from `working/`, and re-reads `customers.jsonl` to put a company's declared DOB back |
+| `system/stage3/blocking.py` | ~80 | `PartBlock`: expands exact-part index keys with variants, edit distance and joins, to find name candidates fast |
+| `system/stage3/recall.py` | ~75 | Checks that the index search finds the same records as a full scan (a safety check, not pipeline logic) |
+| `system/stage3/names.py` | ~40 | `agree_symmetric`, `record_name_agrees`: two-way wrapper around `names_agree` (redundant since PR #10) |
+| `system/stage3/cli.py`, `__main__.py` | ~120 | `run_stage3` (called by the pipeline), a standalone CLI, and the practice-label check |
+
+Tests: `system/tests/test_stage3.py`.
+
+## 10. Known gaps
+
+| Gap | Effect |
+|---|---|
+| Re-check counts on the **updated dataset** | Figures above are from the old dev folder |
+| `resolved_via_note_country` and `link_contradicts_screened` never occurred on dev | Their handling is tested only with synthetic cases |
+
+## 11. Refactor plan (to be done)
+
+Same output, byte for byte, with practice labels still 50/50. When a step lands, change its status to **Done** and add the commit.
+
+| ID | Change | Why | Status |
+|---|---|---|---|
+| R3.1 | Delete `stage3/names.py` and call `NameTools.names_agree` directly in `resolve.py` and `recall.py`. First add a test showing `agree_parts(a, b)` equals `agree_parts(b, a)` on the Stage 3 cases | The bug it worked around was fixed in PR #10 | To do |
+| R3.2 | Take Stage 1's record views and indexes **in memory** from the pipeline (Stage 1 doc, R1.3). `load_catalog` keeps a file-reading path only for running Stage 3 alone | Removes the write-then-read-back round trip through `working/` | To do |
+| R3.3 | Have Stage 1's record view carry the company's **declared** DOB next to the incorporation date, and remove `_overlay_company_declared_dobs`, which re-reads `customers.jsonl` | Stage 3 should not reach around Stage 1 into raw files | To do |
+| R3.4 | Import names, dates, countries and text folding from `system/shared/` (Stage 1 doc, R1.1) | No stage imports another's internals | To do |
+| R3.5 | Move `recall.py` and `cli._practice` into the evaluation tool (shared doc, RS.5), and replace the private `_read_json` and `_read_jsonl` with the shared reader (RS.2) | Evaluation separate from the pipeline; one reader | To do |
+| R3.6 | Split `resolve.py` (~810 lines): link following and joint pick, search cascade, and candidate filters and fragility | Easier to review | To do |
