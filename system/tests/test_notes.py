@@ -160,6 +160,25 @@ class ResidenceTests(unittest.TestCase):
         self.assertNotEqual(parsed["kind"], "residence")
 
 
+class OutcomeTests(unittest.TestCase):
+    def test_negative_or_pending_kyc_note_is_not_verification(self):
+        text = (
+            "Sumsub was unable to verify ALICE SMITH, born January 2, 1990, "
+            "on a national ID from Nigeria. Status: pending as of 2024-05-01."
+        )
+        parsed = parse_note({
+            "note_id": "NOTE-NEG",
+            "channel": "kyc",
+            "created_at": "2024-05-01",
+            "text": text,
+        })
+        self.assertNotEqual(parsed["kind"], "verification")
+        self.assertIsNone(parsed["event"])
+        self.assertIn("negative_outcome", parsed["flags"])
+        self.assertTrue(parsed["verification_like"])
+        self.assertFalse(parsed["fully_parsed_verification"])
+
+
 class LlmTests(unittest.TestCase):
     def test_off_by_default_and_nulls_only(self):
         calls = []
@@ -176,6 +195,16 @@ class LlmTests(unittest.TestCase):
         filled = fill_null_slots("note", parsed, transport=transport, enabled=False)
         self.assertEqual(calls, [])
         self.assertEqual(filled["name"], "NILS MARTIN")
+
+        os.environ["SANCTIONS_LLM"] = "0"
+        os.environ["USE_LLM_NOTES"] = "1"
+        try:
+            blocked = fill_null_slots("note", {"flags": ["name_ambiguous"], "name": None}, transport=transport, enabled=True)
+        finally:
+            os.environ.pop("SANCTIONS_LLM", None)
+            os.environ.pop("USE_LLM_NOTES", None)
+        self.assertEqual(calls, [])
+        self.assertIsNone(blocked.get("name"))
 
         empty = {
             "name": None,

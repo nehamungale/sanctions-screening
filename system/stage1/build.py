@@ -49,7 +49,7 @@ class UnionFind:
         return True
 
 
-def build_from_tables(tables: dict, use_llm: bool | None = None) -> tuple[list[dict], dict, dict]:
+def build_from_tables(tables: dict, use_llm: bool | None = None, client=None) -> tuple[list[dict], dict, dict]:
     """Return ``(people, indexes, stats)`` from already-loaded tables."""
     customers = list(tables.get("customers") or [])
     accounts = list(tables.get("accounts") or [])
@@ -101,8 +101,8 @@ def build_from_tables(tables: dict, use_llm: bool | None = None) -> tuple[list[d
         "flag_counts": {},
     }
     flag_counts: dict[str, int] = defaultdict(int)
-    for note in notes:
-        parsed = parse_note(note, use_llm=use_llm)
+    for note in sorted(notes, key=lambda row: row.get("note_id") or ""):
+        parsed = parse_note(note, use_llm=use_llm, client=client)
         parsed_by_id[note["note_id"]] = parsed
         email = norm_email(note.get("requester_email"))
         if email:
@@ -197,11 +197,11 @@ def build_from_tables(tables: dict, use_llm: bool | None = None) -> tuple[list[d
     return people, indexes, stats
 
 
-def run_stage1(data_folder: str, cache_dir: str, use_llm: bool | None = None) -> dict:
+def run_stage1(data_folder: str, cache_dir: str, use_llm: bool | None = None, client=None) -> dict:
     """Load ``data_folder``, write golden artefacts under ``cache_dir``, return stats."""
     started = time.perf_counter()
     tables = DataStore(data_folder).load_stage1()
-    people, indexes, stats = build_from_tables(tables, use_llm=use_llm)
+    people, indexes, stats = build_from_tables(tables, use_llm=use_llm, client=client)
     os.makedirs(cache_dir, exist_ok=True)
     _write_jsonl(os.path.join(cache_dir, "person_golden.jsonl"), people)
     _write_json(os.path.join(cache_dir, "index_record_id.json"), indexes["record_id"])

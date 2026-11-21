@@ -29,19 +29,25 @@ NOTE_SCHEMA = {
 
 
 def llm_enabled() -> bool:
+    """On only when ``USE_LLM_NOTES=1``. ``SANCTIONS_LLM=0`` forces every stage off."""
+    if os.environ.get("SANCTIONS_LLM") == "0":
+        return False
     return os.environ.get("USE_LLM_NOTES", "0") == "1"
 
 
-def fill_null_slots(text: str, parsed: dict, transport=None, enabled: bool | None = None) -> dict:
+def fill_null_slots(text: str, parsed: dict, transport=None, enabled: bool | None = None, client=None) -> dict:
     """Fill null fields on a parser result. Regex values are left untouched."""
     if not parsed.get("flags"):
+        return parsed
+    if os.environ.get("SANCTIONS_LLM") == "0":
         return parsed
     if enabled is None:
         enabled = llm_enabled()
     if transport is None:
         if not enabled:
             return parsed
-        client = OpenRouterClient()
+        if client is None:
+            client = OpenRouterClient()
         extraction = client.extract(text, NOTE_SCHEMA, schema_name="note_slots")
         if extraction.status != "ok" or not extraction.value:
             parsed.setdefault("flags", []).append("llm_unknown")

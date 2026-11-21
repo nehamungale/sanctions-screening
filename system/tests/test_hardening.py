@@ -72,6 +72,35 @@ class NameMatcherTests(unittest.TestCase):
         agreed = tools.names_agree("Abdul Basit", "Abdulbasit")
         self.assertTrue(agreed["agree"])
 
+    def test_equal_length_agreement_is_symmetric(self):
+        tools = NameTools(VARIANTS)
+        pairs = [
+            ("Aaaabbb Ccc Ddd", "Aaaabbbccc Aaaabbb Ccc Zzzzz"),
+            ("Yusuf Smith", "Josephsmith"),
+            ("Abdul Basit", "Abdulbasit"),
+            ("Abdulsalam Zed", "Abdul Salam"),
+            ("Abdul Basit Rahman", "AbdulBasit Rahman"),
+            ("AbdulBasit", "Abdul Basit"),
+            ("Mark", "Markus"),
+            ("Joseph", "Yusuf"),
+            ("Yusuf", "Jose"),
+            ("Raskovic", "Raković"),
+            ("Starling", "Sterling"),
+            ("Carl E. Andersen", "Andersen, Carl"),
+            ("John Smith", "John"),
+            ("Sarah Johnson", "James Jacob Johnson"),
+            ("", "Ada Lovelace"),
+            ("J.R. Example", "Example Junior"),
+        ]
+        bare = NameTools({"groups": [], "company_legal_forms": []})
+        for left, right in pairs:
+            forward = tools.names_agree(left, right)["agree"]
+            backward = tools.names_agree(right, left)["agree"]
+            self.assertEqual(forward, backward, (left, right))
+            self.assertEqual(bare.names_agree(left, right)["agree"], bare.names_agree(right, left)["agree"], (left, right))
+        self.assertTrue(tools.names_agree("Abdulsalam Zed", "Abdul Salam")["agree"])
+        self.assertTrue(tools.names_agree("Abdul Salam", "Abdulsalam Zed")["agree"])
+
     def test_dotted_initials_and_placeholder_only(self):
         tools = NameTools(VARIANTS)
         self.assertEqual(tools.parts("J.R. Example", "Individual"), ["jr", "example"])
@@ -97,6 +126,28 @@ class NameMatcherTests(unittest.TestCase):
 
 
 class ContractTests(unittest.TestCase):
+    def test_negative_kyc_note_is_not_a_verification(self):
+        text = (
+            "Sumsub rejected identity verification for ALICE SMITH, born January 2, 1990, "
+            "using a national ID issued in Nigeria on 2024-05-01. The check was declined."
+        )
+        people, _indexes, _stats = build_from_tables(_tables(
+            [_customer("CUS-000010")],
+            notes=[{
+                "note_id": "NOTE-NEG1",
+                "requester_email": "cus-000010@example.com",
+                "channel": "kyc",
+                "created_at": "2024-05-01",
+                "text": text,
+            }],
+        ))
+        person = people[0]
+        self.assertEqual(person["note_ids_verification"], [])
+        self.assertNotIn("NOTE-NEG1", [event.get("source_id") for event in person["verification_events"]])
+        self.assertIn("BLOCK_DOB_AGE_NAME_CLEAR", person["flags"])
+        self.assertIn("NOTE_FLAGGED:NOTE-NEG1", person["flags"])
+        self.assertFalse(name_mismatch_verified_allowed(person))
+        self.assertFalse(dob_mismatch_allowed(person, "1980-01-01"))
     def test_unverified_name_cannot_clear_on_name_mismatch(self):
         people = _only(build_from_tables(_tables([
             _customer("CUS-000010", full_name="Alice Smith"),

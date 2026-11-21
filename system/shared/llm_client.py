@@ -23,8 +23,14 @@ An extracted fact is usable only when three calls return the same
 schema-valid value and every string in that value appears verbatim in the
 source text. Any disagreement, timeout, schema failure, or budget overrun
 yields UNKNOWN. The client never returns free-form model prose. Callers must
-tag a usable fact ``method='llm'``; that fact may support a confirmation or
-push toward review, and must not be the sole ground for ``DIFFERENT_ENTITY``.
+tag a usable fact ``method='llm'``. That fact must not contribute to a
+``DIFFERENT_ENTITY`` clearance at all. It may support a confirmation or
+push the hit to review.
+
+One client is shared for a whole run. ``call_budget`` is the run cap and
+``item_call_budget`` is the cap for a single extraction. The time cap is a
+single backstop for that client, set under 30 minutes so Stage 1 and Stage 2
+share one clock.
 """
 
 from __future__ import annotations
@@ -45,7 +51,10 @@ DEFAULT_SEED = 0
 DEFAULT_TIMEOUT_SECONDS = 20.0
 DEFAULT_RETRIES = 3
 DEFAULT_CALL_BUDGET = 48
-DEFAULT_TIME_CAP_SECONDS = 90.0
+# Three votes, each allowed the default retry count (3 + the first try).
+DEFAULT_ITEM_CALL_BUDGET = 12
+# One clock for the whole run. 20 minutes stays under the 30 minute limit.
+DEFAULT_TIME_CAP_SECONDS = 1200.0
 MAX_BACKOFF_SECONDS = 8.0
 VOTES = 3
 _RATE_LIMITED = object()
@@ -57,8 +66,8 @@ class Extraction:
     """A validated extraction, or UNKNOWN.
 
     ``value`` is the parsed object when ``status == 'ok'``. ``method`` is
-    ``'llm'`` only then. ``may_solely_support_different_entity`` is always
-    false: an LLM fact must not be the only ground for a clear.
+    ``'llm'`` only then.     ``may_solely_support_different_entity`` is always
+    false: an LLM fact must not contribute to a clearance.
     """
 
     status: str
@@ -90,6 +99,7 @@ class OpenRouterClient:
         timeout: float | None = None,
         retries: int | None = None,
         call_budget: int | None = None,
+        item_call_budget: int | None = None,
         time_cap: float | None = None,
         url: str = OPENROUTER_URL,
         sleeper=None,
@@ -111,6 +121,11 @@ class OpenRouterClient:
         self.call_budget = int(os.environ["OPENROUTER_CALL_BUDGET"]) if "OPENROUTER_CALL_BUDGET" in os.environ else (
             DEFAULT_CALL_BUDGET if call_budget is None else call_budget
         )
+        if "OPENROUTER_ITEM_CALL_BUDGET" in os.environ:
+            self.item_call_budget = int(os.environ["OPENROUTER_ITEM_CALL_BUDGET"])
+        else:
+            self.item_call_budget = DEFAULT_ITEM_CALL_BUDGET if item_call_budget is None else item_call_budget
+        self._item_ceiling = self.call_budget
         self.time_cap = float(os.environ["OPENROUTER_TIME_CAP"]) if "OPENROUTER_TIME_CAP" in os.environ else (
             DEFAULT_TIME_CAP_SECONDS if time_cap is None else time_cap
         )
@@ -125,6 +140,8 @@ class OpenRouterClient:
         """Three unanimous calls, or UNKNOWN. Never raises for a model failure."""
         if not is_free_model(self.model):
             return self._unknown("model_not_free")
+        self._item_ceiling = self.calls + self.item_call_budget
+        self._item_stopped = False
         if self._closed or self._over_cap():
             self._closed = True
             return self._unknown("time_or_budget_cap")
@@ -133,7 +150,11 @@ class OpenRouterClient:
         ballots: list[str] = []
         value: dict | None = None
         for _vote in range(VOTES):
+            if self._item_stopped:
+                return self._unknown("item_call_budget")
             parsed = self._vote(source_text, schema, schema_name)
+            if self._item_stopped and parsed is None:
+                return self._unknown("item_call_budget")
             if parsed is None:
                 detail = "rate_limited" if self._saw_rate_limit else "vote_failed"
                 return self._unknown(detail)
@@ -175,6 +196,9 @@ class OpenRouterClient:
         return None
 
     def _request(self, source_text: str, schema: dict, schema_name: str) -> dict | None:
+        if self.calls >= self._item_ceiling:
+            self._item_stopped = True
+            return None
         if self.calls >= self.call_budget or self._over_cap():
             self._closed = True
             return None

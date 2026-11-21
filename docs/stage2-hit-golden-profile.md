@@ -236,7 +236,7 @@ and says the form is worded the same in the unseen set. One line-anchored regex 
 - **Quote check:** `quote` must appear verbatim in the paragraph, and the age/dates must re-parse *from the quote* with our deterministic parsers. Birth years are computed by our code, never by the model.
 - **Three independent calls must agree exactly**, otherwise the fact is `UNKNOWN`.
 - Responses are **cached** by hash of (model, provider, prompt version, paragraph), so reruns are identical and offline.
-- Every LLM-derived candidate carries `method: "llm"`. **An LLM-only fact can never be the sole ground for `DIFFERENT_ENTITY`.** It can only push a hit to `REVIEW` or support a `SAME_ENTITY` confirmation.
+- Every LLM-derived candidate carries `method: "llm"`. **An LLM fact can never contribute to a `DIFFERENT_ENTITY` clearance**, not only when it would be the sole ground. It can only push a hit to `REVIEW` or support a `SAME_ENTITY` confirmation. A weak regex age (`rule_strength: "weak"`, from "was N", ", N,", or "reached") likewise cannot be the only ground for a clearance.
 
 ---
 
@@ -319,5 +319,5 @@ and says the form is worded the same in the unseen set. One line-anchored regex 
 - `countries[]` → location mismatch only when disjoint from **all** customer countries, and never when name and DOB agree.
 - `earliest_dated_report` → temporal impossibility; `deceased.date` vs the alert's screening date → deceased.
 - `entity_type` → entity-type mismatch.
-- `method: "llm"` facts → never the sole basis for `DIFFERENT_ENTITY`.
+- `method: "llm"` facts → never contribute to a `DIFFERENT_ENTITY` clearance. `rule_strength: "weak"` ages cannot be the only ground for one either.
 - Accepted search-result IDs → cited as evidence when they supplied the deciding DOB.

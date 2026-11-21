@@ -55,13 +55,20 @@ NOISE = {
     "Customer requested a statement for a rental application. Sent the last three months.",
 }
 _KNOWN_CHANNELS = {"kyc", "phone", "email", "app"}
+# A kyc-channel note with one of these outcomes is not evidence of identity.
+_NEGATIVE_OUTCOME = re.compile(
+    r"\b(?:rejected|failed|expired|pending|declined|denied|unsuccessful|"
+    r"unable to verify|not approved|could not verify|couldn't verify|"
+    r"verification failed|check failed|incomplete verification)\b",
+    re.IGNORECASE,
+)
 _VERIFICATION_CUE = re.compile(
     r"\b(?:passport|national ID|driving licen[cs]e|identity verification|date of birth|born|DOB)\b",
     re.IGNORECASE,
 )
 
 
-def parse_note(note: dict, use_llm: bool | None = None, transport=None) -> dict:
+def parse_note(note: dict, use_llm: bool | None = None, transport=None, client=None) -> dict:
     """Turn one note into ``noise``, ``verification``, ``residence``, or ``ignored``.
 
     Every result also carries ``countries`` (every mapped country in a non-noise
@@ -73,8 +80,11 @@ def parse_note(note: dict, use_llm: bool | None = None, transport=None) -> dict:
     text = note.get("text") or ""
     channel = (note.get("channel") or "").strip().lower()
     if channel == "kyc":
+        if _NEGATIVE_OUTCOME.search(text):
+            countries = countries_in_note(text)
+            return _bundle("ignored", None, ["negative_outcome"], text, channel, countries, False)
         parsed = extract_kyc(text, note.get("created_at"))
-        parsed = fill_null_slots(text, parsed, transport=transport, enabled=use_llm)
+        parsed = fill_null_slots(text, parsed, transport=transport, enabled=use_llm, client=client)
         flags = list(parsed.get("flags") or [])
         countries = list(parsed.get("countries") or [])
         method = "llm" if parsed.get("llm_fields") else "regex"

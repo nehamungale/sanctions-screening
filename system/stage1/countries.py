@@ -404,6 +404,10 @@ DEMONYMS: dict[str, str] = {
 
 # Extra spellings that are not a distinct country.
 ALIASES: dict[str, str] = {
+    "the UK": "United Kingdom",
+    "the U.K.": "United Kingdom",
+    "the USA": "United States",
+    "the U.S.": "United States",
     "UK": "United Kingdom",
     "U.K.": "United Kingdom",
     "USA": "United States",
@@ -415,6 +419,17 @@ ALIASES: dict[str, str] = {
     "Cote D'Ivoire": "Côte d'Ivoire",
     "Cote d'Ivoire": "Côte d'Ivoire",
     "Côte d’Ivoire": "Côte d'Ivoire",
+    "Côte d Ivoire": "Côte d'Ivoire",
+    "Cote d Ivoire": "Côte d'Ivoire",
+    "Deutschland": "Germany",
+    "Bundesrepublik Deutschland": "Germany",
+    "Brasil": "Brazil",
+    "Espana": "Spain",
+    "España": "Spain",
+    "Schweiz": "Switzerland",
+    "Suisse": "Switzerland",
+    "Österreich": "Austria",
+    "Oesterreich": "Austria",
     "UAE": "United Arab Emirates",
     "Czechia": "Czech Republic",
     "Korea": "South Korea",
@@ -501,7 +516,10 @@ _NOTE_SURFACES = sorted(
     key=len,
     reverse=True,
 )
-_NOTE_RE = re.compile(r"\b(" + "|".join(re.escape(item) for item in _NOTE_SURFACES) + r")\b")
+_NOTE_RE = re.compile(
+    r"\b(" + "|".join(re.escape(item) for item in _NOTE_SURFACES) + r")\b",
+    re.IGNORECASE,
+)
 _NOTE_PAREN = re.compile(r"\(Note:[^)]*\)")
 
 

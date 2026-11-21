@@ -32,8 +32,14 @@ def agree_parts(left: list[str], right: list[str], parts_match: PartsMatch) -> d
     nodes = {"n": 0, "capped": False}
 
     def consider(matches: int, cov_left: int, cov_right: int, pairs: tuple[str, ...]) -> None:
-        shorter_cov = cov_left if shorter_is_left else cov_right
-        agree = matches >= 2 or (shorter > 0 and shorter_cov == shorter)
+        # Equal lengths: either side being fully covered is agreement, so
+        # 'Abdulsalam Zed' agrees with 'Abdul Salam' and the swap does too.
+        if len(left) == len(right):
+            either = len(left) > 0 and (cov_left == len(left) or cov_right == len(right))
+            agree = matches >= 2 or either
+        else:
+            shorter_cov = cov_left if shorter_is_left else cov_right
+            agree = matches >= 2 or (shorter > 0 and shorter_cov == shorter)
         key = (1 if agree else 0, matches, cov_left + cov_right, pairs)
         current = best["key"]
         if current is None or key[0] > current[0] or (

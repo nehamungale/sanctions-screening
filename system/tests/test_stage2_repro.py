@@ -33,10 +33,10 @@ class Stage2DevTests(unittest.TestCase):
         self.assertEqual(first["individuals"], 702)
         self.assertEqual(buckets["dobs_only"], 146)
         self.assertEqual(buckets["dobs_and_note"], 6)
-        self.assertEqual(buckets["note_only"], 48)
+        self.assertEqual(buckets["note_only"], 50)
         self.assertEqual(buckets["search_result"], 55)
-        self.assertEqual(buckets["unknown"], 447)
-        self.assertEqual(first["note_birth_statements"], 54)
+        self.assertEqual(buckets["unknown"], 445)
+        self.assertEqual(first["note_birth_statements"], 56)
         self.assertEqual(first["deceased"], 6)
         self.assertEqual(first["deceased_undated"], 2)
         # Strict single-space lines are 639/214. Whitespace after ";" keeps one more.
