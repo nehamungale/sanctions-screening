@@ -1,0 +1,911 @@
+{
+  "config_check": {
+    "all_identical": {
+      "git_sha": false,
+      "input_hash": true,
+      "model": true,
+      "name_variants_hash": true,
+      "policy_hash": true,
+      "prompt_hashes": true,
+      "provider": true,
+      "python_version": true,
+      "rules_version": true
+    },
+    "available": true,
+    "runs": [
+      {
+        "git_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "input_hash": "input-hash",
+        "model": "openai/gpt-4o-mini",
+        "name_variants_hash": "variants-hash",
+        "policy_hash": "policy-hash",
+        "prompt_hashes": {
+          "read_note": "prompt-hash"
+        },
+        "provider": "ExampleProvider",
+        "python_version": "3.12.3",
+        "rules_version": "r1.0",
+        "run_index": 0,
+        "run_label": "run-01"
+      },
+      {
+        "git_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "input_hash": "input-hash",
+        "model": "openai/gpt-4o-mini",
+        "name_variants_hash": "variants-hash",
+        "policy_hash": "policy-hash",
+        "prompt_hashes": {
+          "read_note": "prompt-hash"
+        },
+        "provider": "ExampleProvider",
+        "python_version": "3.12.3",
+        "rules_version": "r1.0",
+        "run_index": 1,
+        "run_label": "run-02"
+      },
+      {
+        "git_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "input_hash": "input-hash",
+        "model": "openai/gpt-4o-mini",
+        "name_variants_hash": "variants-hash",
+        "policy_hash": "policy-hash",
+        "prompt_hashes": {
+          "read_note": "prompt-hash"
+        },
+        "provider": "ExampleProvider",
+        "python_version": "3.12.3",
+        "rules_version": "r1.0",
+        "run_index": 2,
+        "run_label": "run-03"
+      },
+      {
+        "git_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "input_hash": "input-hash",
+        "model": "openai/gpt-4o-mini",
+        "name_variants_hash": "variants-hash",
+        "policy_hash": "policy-hash",
+        "prompt_hashes": {
+          "read_note": "prompt-hash"
+        },
+        "provider": "ExampleProvider",
+        "python_version": "3.12.3",
+        "rules_version": "r1.0",
+        "run_index": 3,
+        "run_label": "run-04"
+      },
+      {
+        "git_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "input_hash": "input-hash",
+        "model": "openai/gpt-4o-mini",
+        "name_variants_hash": "variants-hash",
+        "policy_hash": "policy-hash",
+        "prompt_hashes": {
+          "read_note": "prompt-hash"
+        },
+        "provider": "ExampleProvider",
+        "python_version": "3.12.3",
+        "rules_version": "r1.0",
+        "run_index": 4,
+        "run_label": "run-05"
+      }
+    ]
+  },
+  "heatmap": {
+    "decisions": [
+      [
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY"
+      ],
+      [
+        "SAME_ENTITY",
+        "SAME_ENTITY",
+        "SAME_ENTITY",
+        "SAME_ENTITY",
+        "REVIEW"
+      ],
+      [
+        "REVIEW",
+        "REVIEW",
+        "REVIEW",
+        "REVIEW",
+        "REVIEW"
+      ],
+      [
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY"
+      ],
+      [
+        "REVIEW",
+        "REVIEW",
+        "REVIEW",
+        null,
+        "REVIEW"
+      ],
+      [
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY"
+      ]
+    ],
+    "hit_ids": [
+      "H-000001",
+      "H-000002",
+      "H-000003",
+      "H-000004",
+      "H-000005",
+      "H-000006"
+    ],
+    "reason_codes": [
+      [
+        "DOB_MISMATCH",
+        "DOB_MISMATCH",
+        "DOB_MISMATCH",
+        "DOB_MISMATCH",
+        "DOB_MISMATCH"
+      ],
+      [
+        "NAME_DOB_MATCH",
+        "NAME_DOB_MATCH",
+        "NAME_DOB_MATCH",
+        "NAME_DOB_MATCH",
+        "INSUFFICIENT_DATA"
+      ],
+      [
+        "INSUFFICIENT_DATA",
+        "AMBIGUOUS_CUSTOMER_RECORD",
+        "INSUFFICIENT_DATA",
+        "INSUFFICIENT_DATA",
+        "INSUFFICIENT_DATA"
+      ],
+      [
+        "LOCATION_MISMATCH",
+        "LOCATION_MISMATCH",
+        "LOCATION_MISMATCH",
+        "LOCATION_MISMATCH",
+        "LOCATION_MISMATCH"
+      ],
+      [
+        "INSUFFICIENT_DATA",
+        "INSUFFICIENT_DATA",
+        "INSUFFICIENT_DATA",
+        null,
+        "INSUFFICIENT_DATA"
+      ],
+      [
+        "DOB_MISMATCH",
+        "DOB_MISMATCH",
+        "DOB_MISMATCH",
+        "DOB_MISMATCH",
+        "DOB_MISMATCH"
+      ]
+    ],
+    "run_labels": [
+      "run-01",
+      "run-02",
+      "run-03",
+      "run-04",
+      "run-05"
+    ]
+  },
+  "hits": [
+    {
+      "alert_id": "A-000001",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": false,
+        "evidence": false,
+        "missing": false,
+        "output_trace_mismatch": false,
+        "reason_code": false,
+        "steps": false
+      },
+      "customer_record_id_per_run": [
+        "CUS-000001",
+        "CUS-000001",
+        "CUS-000001",
+        "CUS-000001",
+        "CUS-000001"
+      ],
+      "evidence_per_run": [
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": null,
+      "flip_type": "none",
+      "fragility": "solid",
+      "fragility_conflict": false,
+      "hit_id": "H-000001",
+      "judges_stable": true,
+      "llm_used": false,
+      "llm_used_per_run": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "missing_from_runs": [],
+      "modal_decision": "DIFFERENT_ENTITY",
+      "modal_reason_code": "DOB_MISMATCH",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "DIFFERENT_ENTITY",
+          "DOB_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "DOB_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "DOB_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "DOB_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "DOB_MISMATCH"
+        ]
+      ],
+      "stable": true,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "alert_id": "A-000002",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": true,
+        "evidence": false,
+        "missing": false,
+        "output_trace_mismatch": false,
+        "reason_code": true,
+        "steps": false
+      },
+      "customer_record_id_per_run": [
+        "CUS-000001",
+        "CUS-000001",
+        "CUS-000001",
+        "CUS-000001",
+        "CUS-000001"
+      ],
+      "evidence_per_run": [
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": null,
+      "flip_type": "decision",
+      "fragility": "borderline",
+      "fragility_conflict": false,
+      "hit_id": "H-000002",
+      "judges_stable": false,
+      "llm_used": true,
+      "llm_used_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "missing_from_runs": [],
+      "modal_decision": "SAME_ENTITY",
+      "modal_reason_code": "NAME_DOB_MATCH",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "SAME_ENTITY",
+          "NAME_DOB_MATCH"
+        ],
+        [
+          "SAME_ENTITY",
+          "NAME_DOB_MATCH"
+        ],
+        [
+          "SAME_ENTITY",
+          "NAME_DOB_MATCH"
+        ],
+        [
+          "SAME_ENTITY",
+          "NAME_DOB_MATCH"
+        ],
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ]
+      ],
+      "stable": false,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "alert_id": "A-000003",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": false,
+        "evidence": false,
+        "missing": false,
+        "output_trace_mismatch": false,
+        "reason_code": true,
+        "steps": false
+      },
+      "customer_record_id_per_run": [
+        "CUS-000001",
+        "CUS-000001",
+        "CUS-000001",
+        "CUS-000001",
+        "CUS-000001"
+      ],
+      "evidence_per_run": [
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": null,
+      "flip_type": "code",
+      "fragility": "thin",
+      "fragility_conflict": false,
+      "hit_id": "H-000003",
+      "judges_stable": false,
+      "llm_used": false,
+      "llm_used_per_run": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "missing_from_runs": [],
+      "modal_decision": "REVIEW",
+      "modal_reason_code": "INSUFFICIENT_DATA",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ],
+        [
+          "REVIEW",
+          "AMBIGUOUS_CUSTOMER_RECORD"
+        ],
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ],
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ],
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ]
+      ],
+      "stable": false,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "alert_id": "A-000004",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": false,
+        "evidence": true,
+        "missing": false,
+        "output_trace_mismatch": false,
+        "reason_code": false,
+        "steps": false
+      },
+      "customer_record_id_per_run": [
+        "CUS-000001",
+        "CUS-000001",
+        "CUS-000001",
+        "CUS-000001",
+        "CUS-000001"
+      ],
+      "evidence_per_run": [
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000002"
+        ],
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": null,
+      "flip_type": "evidence",
+      "fragility": "thin",
+      "fragility_conflict": false,
+      "hit_id": "H-000004",
+      "judges_stable": true,
+      "llm_used": false,
+      "llm_used_per_run": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "missing_from_runs": [],
+      "modal_decision": "DIFFERENT_ENTITY",
+      "modal_reason_code": "LOCATION_MISMATCH",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "DIFFERENT_ENTITY",
+          "LOCATION_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "LOCATION_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "LOCATION_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "LOCATION_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "LOCATION_MISMATCH"
+        ]
+      ],
+      "stable": false,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "alert_id": "A-000005",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": false,
+        "evidence": false,
+        "missing": true,
+        "output_trace_mismatch": false,
+        "reason_code": false,
+        "steps": false
+      },
+      "customer_record_id_per_run": [
+        "CUS-000001",
+        "CUS-000001",
+        "CUS-000001",
+        null,
+        "CUS-000001"
+      ],
+      "evidence_per_run": [
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ],
+        null,
+        [
+          "KYC-000001"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": null,
+      "flip_type": "other",
+      "fragility": "solid",
+      "fragility_conflict": false,
+      "hit_id": "H-000005",
+      "judges_stable": false,
+      "llm_used": false,
+      "llm_used_per_run": [
+        false,
+        false,
+        false,
+        null,
+        false
+      ],
+      "missing_from_runs": [
+        3
+      ],
+      "modal_decision": "REVIEW",
+      "modal_reason_code": "INSUFFICIENT_DATA",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ],
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ],
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ],
+        null,
+        [
+          "REVIEW",
+          "INSUFFICIENT_DATA"
+        ]
+      ],
+      "stable": false,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        false,
+        true
+      ]
+    },
+    {
+      "alert_id": "A-000006",
+      "alert_id_conflict": false,
+      "changes": {
+        "alert_id": false,
+        "canonical_facts": false,
+        "customer_record_id": false,
+        "decision": false,
+        "evidence": false,
+        "missing": false,
+        "output_trace_mismatch": false,
+        "reason_code": false,
+        "steps": true
+      },
+      "customer_record_id_per_run": [
+        "CUS-000001",
+        "CUS-000001",
+        "CUS-000001",
+        "CUS-000001",
+        "CUS-000001"
+      ],
+      "evidence_per_run": [
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ],
+        [
+          "KYC-000001"
+        ]
+      ],
+      "first_divergent_fact": null,
+      "first_divergent_step": {
+        "occurrence": 0,
+        "order_index": 3,
+        "rule": "DOB_MISMATCH",
+        "values_per_run": [
+          {
+            "result": "fired",
+            "rule": "DOB_MISMATCH",
+            "why": "dob rule"
+          },
+          {
+            "result": "fired",
+            "rule": "DOB_MISMATCH",
+            "why": "dob rule"
+          },
+          {
+            "result": "fired",
+            "rule": "DOB_MISMATCH",
+            "why": "dob rule"
+          },
+          {
+            "result": "fired",
+            "rule": "DOB_MISMATCH",
+            "why": "dob rule"
+          },
+          {
+            "result": "not_fired",
+            "rule": "DOB_MISMATCH",
+            "why": "dob rule"
+          }
+        ]
+      },
+      "flip_type": "other",
+      "fragility": "solid",
+      "fragility_conflict": false,
+      "hit_id": "H-000006",
+      "judges_stable": true,
+      "llm_used": false,
+      "llm_used_per_run": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "missing_from_runs": [],
+      "modal_decision": "DIFFERENT_ENTITY",
+      "modal_reason_code": "DOB_MISMATCH",
+      "output_trace_mismatch_runs": [],
+      "per_run": [
+        [
+          "DIFFERENT_ENTITY",
+          "DOB_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "DOB_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "DOB_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "DOB_MISMATCH"
+        ],
+        [
+          "DIFFERENT_ENTITY",
+          "DOB_MISMATCH"
+        ]
+      ],
+      "stable": false,
+      "trace_present_per_run": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    }
+  ],
+  "llm_sensitivity": {
+    "compared": true,
+    "hit_ids": [
+      "H-000002"
+    ],
+    "hits": [
+      {
+        "alert_id": "A-000002",
+        "hit_id": "H-000002",
+        "llm_off_decision": "REVIEW",
+        "llm_off_reason_code": "INSUFFICIENT_DATA",
+        "llm_on_modal_decision": "SAME_ENTITY",
+        "llm_on_modal_reason_code": "NAME_DOB_MATCH"
+      }
+    ],
+    "n_sensitive": 1
+  },
+  "meta": {
+    "generated_at": "2026-01-01T00:00:00+00:00",
+    "generator": "tools/repro",
+    "run_labels": [
+      "run-01",
+      "run-02",
+      "run-03",
+      "run-04",
+      "run-05"
+    ],
+    "sources": {
+      "llm_off_output": true,
+      "outputs": true,
+      "traces": true
+    }
+  },
+  "schema_version": 1,
+  "summary": {
+    "code_only_flip_hits": 1,
+    "decision_counts_per_run": [
+      {
+        "DIFFERENT_ENTITY": 3,
+        "REVIEW": 2,
+        "SAME_ENTITY": 1
+      },
+      {
+        "DIFFERENT_ENTITY": 3,
+        "REVIEW": 2,
+        "SAME_ENTITY": 1
+      },
+      {
+        "DIFFERENT_ENTITY": 3,
+        "REVIEW": 2,
+        "SAME_ENTITY": 1
+      },
+      {
+        "DIFFERENT_ENTITY": 3,
+        "REVIEW": 1,
+        "SAME_ENTITY": 1
+      },
+      {
+        "DIFFERENT_ENTITY": 3,
+        "REVIEW": 3,
+        "SAME_ENTITY": 0
+      }
+    ],
+    "decision_flip_hits": 1,
+    "flips_by_llm_used": {
+      "llm_used": {
+        "code": 0,
+        "decision": 1,
+        "evidence": 0,
+        "other": 0
+      },
+      "not_llm_used": {
+        "code": 1,
+        "decision": 0,
+        "evidence": 1,
+        "other": 2
+      },
+      "unknown": {
+        "code": 0,
+        "decision": 0,
+        "evidence": 0,
+        "other": 0
+      }
+    },
+    "hits_missing_from_some_runs": [
+      "H-000005"
+    ],
+    "judges_flip_hits": 2,
+    "judges_flips_all_llm_used": false,
+    "judges_metric": 0.5,
+    "judges_stable_hits": 3,
+    "missing_hits": 1,
+    "n_hits": 6,
+    "n_runs": 5,
+    "strict_change_hit_ids": [
+      "H-000004",
+      "H-000006"
+    ],
+    "strict_change_hits": 2
+  },
+  "ui": {
+    "decision_legend": {
+      "DIFFERENT_ENTITY": "clear",
+      "MISSING": "missing",
+      "REVIEW": "review",
+      "SAME_ENTITY": "match"
+    },
+    "filters": {
+      "code_flip": [
+        "H-000003"
+      ],
+      "decision_flip": [
+        "H-000002"
+      ],
+      "evidence_flip": [
+        "H-000004"
+      ],
+      "flipped_only": [
+        "H-000002",
+        "H-000003",
+        "H-000004",
+        "H-000005",
+        "H-000006"
+      ],
+      "llm_sensitive": [
+        "H-000002"
+      ],
+      "missing": [
+        "H-000005"
+      ],
+      "thin_clearances": [
+        "H-000004"
+      ],
+      "thin_or_borderline_and_llm": [
+        "H-000002"
+      ]
+    },
+    "flip_types": [
+      "none",
+      "decision",
+      "code",
+      "evidence",
+      "other"
+    ],
+    "run_strip": {
+      "n_runs": 5,
+      "run_labels": [
+        "run-01",
+        "run-02",
+        "run-03",
+        "run-04",
+        "run-05"
+      ]
+    }
+  }
+}
