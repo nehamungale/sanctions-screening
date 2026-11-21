@@ -8,12 +8,11 @@ from ``life_status`` and ``deceased_date`` only.
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import time
 
-from stage1.load import DataStore
+from shared.io import load_table, load_variants, read_jsonl, write_jsonl
 from stage1.normalise import NameTools, parse_date
 
 _ABBR_TO_FULL = {
@@ -314,23 +313,18 @@ def summarise(profiles: list[dict]) -> dict:
 def run_stage2(data_folder: str, cache_dir: str, enabled: bool | None = None, client=None) -> dict:
     """Read the data folder and write ``hit_golden.jsonl`` under ``cache_dir``."""
     started = time.perf_counter()
-    store = DataStore(data_folder)
-    hits = store.read_jsonl("hits.jsonl")
-    search_results = store.read_jsonl("search_results.jsonl")
-    variants = store.read_json("name_variants.json")
+    hits = load_table(data_folder, "hits.jsonl")
+    search_results = load_table(data_folder, "search_results.jsonl")
+    variants = load_variants(data_folder)
     profiles, fallback = build_profiles(
         hits, search_results, variants, cache_dir=cache_dir, enabled=enabled, client=client
     )
-    os.makedirs(cache_dir, exist_ok=True)
     path = os.path.join(cache_dir, "hit_golden.jsonl")
-    with open(path, "w", encoding="utf-8") as handle:
-        for profile in profiles:
-            handle.write(json.dumps(profile, ensure_ascii=False, separators=(",", ":"), sort_keys=True))
-            handle.write("\n")
+    write_jsonl(path, profiles)
     stats = summarise(profiles)
     labels_path = os.path.join(data_folder, "practice_labels.jsonl")
     if os.path.isfile(labels_path):
-        labels = store.read_jsonl("practice_labels.jsonl")
+        labels = read_jsonl(labels_path)
         stats["practice"] = agreement(profiles, labels)
     stats["llm_enabled"] = fallback.enabled
     stats["llm_calls"] = fallback.calls

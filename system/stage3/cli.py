@@ -15,6 +15,7 @@ import os
 import sys
 import time
 
+from shared.io import load_table, load_variants, read_jsonl
 from stage3.resolve import dumps_jsonl, label_matches, resolve_alerts, summarise
 from stage3.stage1_adapter import load_catalog
 
@@ -26,10 +27,10 @@ def run_stage3(data_folder: str, output_file: str, cache_dir: str | None = None)
     customers_path = os.path.join(data_folder, "customers.jsonl")
     catalog = load_catalog(
         cache,
-        _read_json(os.path.join(data_folder, "name_variants.json")),
+        load_variants(data_folder),
         customers_path if os.path.isfile(customers_path) else None,
     )
-    alerts = _read_jsonl(os.path.join(data_folder, "alerts.jsonl"))
+    alerts = load_table(data_folder, "alerts.jsonl")
     rows = resolve_alerts(alerts, catalog)
     parent = os.path.dirname(output_file)
     if parent:
@@ -66,7 +67,7 @@ def _practice(rows: list[dict], data_folder: str) -> dict | None:
     path = os.path.join(data_folder, "practice_labels.jsonl")
     if not os.path.isfile(path):
         return None
-    labels = _read_jsonl(path)
+    labels = read_jsonl(path)
     by_alert = {row["alert_id"]: row for row in rows}
     matched = 0
     misses = []
@@ -89,21 +90,3 @@ def _practice(rows: list[dict], data_folder: str) -> dict | None:
         })
     misses.sort(key=lambda item: (str(item.get("hit_id") or ""), str(item.get("alert_id") or "")))
     return {"labels": len(labels), "matched": matched, "misses": misses}
-
-
-def _read_json(path: str) -> dict:
-    if not os.path.isfile(path):
-        raise FileNotFoundError(path)
-    with open(path, encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def _read_jsonl(path: str) -> list[dict]:
-    if not os.path.isfile(path):
-        raise FileNotFoundError(path)
-    rows = []
-    with open(path, encoding="utf-8") as handle:
-        for line in handle:
-            if line.strip():
-                rows.append(json.loads(line))
-    return rows

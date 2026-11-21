@@ -5,23 +5,15 @@ from __future__ import annotations
 import json
 import os
 
-
-def read_jsonl(path: str) -> list[dict]:
-    rows = []
-    with open(path, encoding="utf-8") as handle:
-        for line in handle:
-            if line.strip():
-                rows.append(json.loads(line))
-    return rows
+from shared.io import load_table, load_variants, read_jsonl
 
 
 def load_stage4(data_folder: str, cache_dir: str) -> dict:
-    alerts = read_jsonl(os.path.join(data_folder, "alerts.jsonl"))
-    hits = read_jsonl(os.path.join(data_folder, "hits.jsonl"))
+    alerts = load_table(data_folder, "alerts.jsonl")
+    hits = load_table(data_folder, "hits.jsonl")
     resolutions = read_jsonl(os.path.join(cache_dir, "alert_resolution.jsonl"))
     profiles = read_jsonl(os.path.join(cache_dir, "hit_golden.jsonl"))
-    with open(os.path.join(data_folder, "name_variants.json"), encoding="utf-8") as handle:
-        variants = json.load(handle)
+    variants = load_variants(data_folder)
     needed = set()
     for row in resolutions:
         for candidate in row.get("candidates") or []:
@@ -63,10 +55,7 @@ def _known_ids(data_folder: str, alerts: list[dict], hits: list[dict]) -> set[st
         ("search_results.jsonl", "result_id"),
     )
     for name, key in specs:
-        path = os.path.join(data_folder, name)
-        if not os.path.isfile(path):
-            continue
-        for row in read_jsonl(path):
+        for row in read_jsonl(os.path.join(data_folder, name), required=False):
             if row.get(key):
                 found.add(row[key])
     return found
