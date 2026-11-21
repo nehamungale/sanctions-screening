@@ -1,30 +1,84 @@
-# Same Person or Not?
+# Sanctions Screening: "Is my customer sanctioned?"
 
-Public submission for the "Same Person or Not?" fin-crime hackathon (sanctions watchlist entity resolution). A bank's screening system has flagged possible matches between customers and watchlist profiles. For every hit, the system must decide whether the two records are the same person or company (`SAME_ENTITY`), clearly different (`DIFFERENT_ENTITY`), or still uncertain (`REVIEW`). Identity is the only question: whether the listing would still be acceptable to the bank is out of scope. The runnable system will live in `system/` and be invoked as `system/run <data folder> <output file>`.
+A deterministic, fully traceable system that decides, for every screening **hit**, whether the listed profile is really the bank's customer.
 
-## Layout
+> Built for the Fin Crime Hackathon (sanctions name screening track).
 
-- `BRIEF.md` — the organisers' hackathon brief, copied verbatim.
-- `POLICY.md` — the bank's identity SOP, copied verbatim.
-- `output.schema.json` — JSON Schema for one output line, copied verbatim.
-- `validate.py` — the organisers' validator and practice scorer, copied verbatim.
-- `system/` — the runnable system. See `system/README.md`.
-- `output/` — predictions. Development-set output will go to `output/dev.jsonl`.
+## The problem
 
-## Data
+A payments company screens every customer against sanctions, PEP, enforcement and adverse-media lists. When a name looks similar, an **alert** is raised. Each alert has one or more **hits**: list profiles that might be the customer. For every hit we must decide:
 
-The `dev/` dataset is for event participants only and is not committed. Place it locally at `./dev/` before running or validating.
+| Decision | Meaning |
+|---|---|
+| `DIFFERENT_ENTITY` | The evidence shows the hit is someone else. The hit is cleared. |
+| `SAME_ENTITY` | The evidence shows the hit is the customer. It goes to compliance. |
+| `REVIEW` | The evidence can't settle it. A person looks at it. |
 
-## Validate
+Each decision comes with one reason code, the IDs of the records it rests on, and the customer record it resolved. Clearing a hit that really is the customer is the worst possible mistake, so **when in doubt, REVIEW**.
 
-`validate.py` checks an output file the way the organisers do. `--data` is the data folder the output was made from (required), `--output` is the output file with one JSON line per hit (required), and `--score` is an optional path to `practice_labels.jsonl`.
+The hard part is that the customer's identity is spread over five systems that share no common key, and the hit's facts can be hidden in free text.
 
-```bash
-python3 validate.py --data ./dev --output output/dev.jsonl
+## Architecture
+
+Three stages. Each one is deterministic and emits a record-level trace, so every final decision can be replayed step by step.
+
+```mermaid
+flowchart LR
+    classDef query fill:#dbeafe,stroke:#1d4ed8,color:#0f172a
+    classDef parse fill:#dcfce7,stroke:#15803d,color:#0f172a
+    classDef out fill:#fef3c7,stroke:#b45309,color:#0f172a
+    classDef src fill:#f1f5f9,stroke:#475569,color:#0f172a
+
+    subgraph IN["Data room: dev/*.jsonl"]
+        C[(Customers, accounts,<br/>onboarding, KYC, notes)]:::src
+        A[(Alerts)]:::src
+        H[(Hits + search results)]:::src
+    end
+
+    S1["Stage 1<br/>Customer golden record<br/>(person_id)"]:::query
+    S2["Stage 2<br/>Alert → person<br/>resolution"]:::query
+    HP["Hit golden profile<br/>(hit facts)"]:::parse
+    M["Matching engine<br/>SOP rules → decision,<br/>reason code, evidence"]:::query
+    O[["output/dev.jsonl"]]:::out
+
+    C --> S1 --> S2
+    A --> S2
+    H --> HP
+    S2 --> M
+    HP --> M
+    M --> O
 ```
 
-Score the practice hits as well:
+| Stage | What it does | Status |
+|---|---|---|
+| **1. Customer golden record** | Normalises customer data, groups records that are the same person into a `person_id`, and picks each fact (legal name, date of birth, countries, …) with its source record ID. | 📐 Designed: [docs/stage1-customer-golden-record.md](docs/stage1-customer-golden-record.md) |
+| **2. Alert → person resolution** | Follows the alert's link (account, login, email) or searches by the screened details to find the person(s) behind each alert. | Next |
+| **Hit profile + matching** | Collects each hit's facts (names, aliases, birth dates, countries, dated reports), then applies the screening SOP to produce the decision. | Planned |
 
-```bash
-python3 validate.py --data ./dev --output output/dev.jsonl --score ./dev/practice_labels.jsonl
+### Design principles
+
+- **Deterministic first.** Joins, filters and regex. No heuristics, no scores, no randomness. The same input always gives byte-identical output.
+- **Traceable.** Every fact carries the ID of the record it came from, and every decision cites the records it rests on.
+- **Verified beats declared.** An approved identity check outranks what's typed on the customer record.
+- **Unknown stays unknown.** Missing or unreadable data is never guessed. It is flagged, and it pushes towards `REVIEW`.
+- **Python standard library only.** An LLM is an optional, switched-off fallback for free text that regex can't read (not needed on the dev set).
+
+## Repository layout (planned)
+
 ```
+.
+├── README.md                  ← you are here
+├── docs/
+│   └── stage1-customer-golden-record.md
+├── system/
+│   ├── README.md              ← how to run the system
+│   └── run                    ← entry point: reads a data folder, writes decisions
+└── output/
+    └── dev.jsonl              ← our decisions for the development set
+```
+
+## Data and secrets
+
+- The hackathon data (`dev/` folder) is **participant-only** and is **never committed** to this repository. Point `system/run` at your local copy.
+- API keys (e.g. for the optional LLM fallback) are read from environment variables and are **never committed**.
+- All examples in the docs use **invented values**.
