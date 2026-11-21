@@ -204,3 +204,13 @@ Canonical facts are the attribute, the normalised value, and the source id. Quot
 - The hackathon data (`dev/` folder) is **participant-only** and is **never committed** to this repository. Point `system/run` at your local copy.
 - API keys (e.g. for the optional LLM fallback) are read from environment variables and are **never committed**.
 - All examples in the docs use **invented values**.
+
+### Keeping the data local
+
+You may keep the data at `dev/` in the repository root: git ignores `dev/`, `data/`, `working/`, traces and key files. To make that a hard rule, turn on the repository's hooks once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`pre-commit` then refuses any commit that stages the data, a run cache, a trace, an alerts file or an OpenRouter key, even with `git add -f`. `pre-push` checks the same paths again in every commit being pushed, so a commit made with `--no-verify` is still stopped. The synthetic `ui/fixtures/*.sample.*` files are allowed.

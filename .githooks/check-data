@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Refuse to commit or push the event data, run caches, traces or API keys.
+# Usage: check-data <file list on stdin>   (paths relative to the repo root)
+# Exit 1 and list the offending paths if any match.
+set -uo pipefail
+blocked='^(dev|data|working|repro-work)/|(^|/)trace[^/]*\.jsonl$|\.trace\.jsonl$|(^|/)alerts[^/]*\.jsonl$|(^|/)\.env|OPENROUTER|openrouter_api_key|\.xlsx$'
+allowed='^ui/fixtures/[^/]*\.sample\.'
+bad=$(grep -E "$blocked" | grep -Ev "$allowed" || true)
+if [ -n "$bad" ]; then
+  echo "BLOCKED: these files hold event data, run traces or secrets and must never be committed:" >&2
+  echo "$bad" | sed 's/^/  /' >&2
+  echo "Unstage them with: git restore --staged <path>" >&2
+  exit 1
+fi

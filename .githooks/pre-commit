@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Installed with: git config core.hooksPath .githooks
+set -uo pipefail
+here="$(dirname "$0")"
+git diff --cached --name-only --diff-filter=ACMR | "$here/check-data" || exit 1
+# An OpenRouter key pasted into any staged file.
+if git diff --cached -U0 --diff-filter=ACMR | grep -E '^\+' | grep -qE 'sk-or-[A-Za-z0-9_-]{20,}'; then
+  echo "BLOCKED: a staged change contains what looks like an OpenRouter API key (sk-or-...)." >&2
+  exit 1
+fi

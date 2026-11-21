@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Second line of defence: also catches commits made with --no-verify.
+set -uo pipefail
+here="$(dirname "$0")"
+zero=0000000000000000000000000000000000000000
+status=0
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue
+  if [ "$remote_sha" = "$zero" ]; then range="$local_sha"; else range="$remote_sha..$local_sha"; fi
+  git log --format= --name-only --diff-filter=ACMR "$range" 2>/dev/null | sort -u | grep -v '^$' | "$here/check-data" || status=1
+done
+exit $status
