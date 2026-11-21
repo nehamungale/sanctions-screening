@@ -68,6 +68,22 @@ _VERIFICATION_CUE = re.compile(
 )
 
 
+def safe_parse_note(note: dict, use_llm: bool | None = None, client=None) -> dict:
+    """``parse_note`` that never raises. A note we cannot read blocks clears for its person."""
+    try:
+        return parse_note(note, use_llm=use_llm, client=client)
+    except Exception:
+        return {
+            "kind": "ignored",
+            "event": None,
+            "flags": ["parse_error"],
+            "countries": [],
+            "verification_like": True,
+            "fully_parsed_verification": False,
+            "location_unresolved": True,
+        }
+
+
 def parse_note(note: dict, use_llm: bool | None = None, transport=None, client=None) -> dict:
     """Turn one note into ``noise``, ``verification``, ``residence``, or ``ignored``.
 

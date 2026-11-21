@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import time
 
 from shared.io import load_table, load_variants, read_jsonl, write_jsonl
@@ -252,13 +253,20 @@ def build_profiles(
     tools = NameTools(name_variants)
     by_query: dict[str, list[dict]] = {}
     for result in search_results:
-        by_query.setdefault(result["query"], []).append(result)
+        if result.get("query") and result.get("result_id"):
+            by_query.setdefault(result["query"], []).append(result)
     for rows in by_query.values():
         rows.sort(key=lambda row: row["result_id"])
     if enabled is None:
         enabled = llm_enabled()
     fallback = NoteFallback(cache_dir, enabled, client=client, transport=transport)
-    profiles = [build_hit(hit, tools, by_query, fallback) for hit in sorted(hits, key=lambda row: row["hit_id"])]
+    profiles = []
+    for hit in sorted((row for row in hits if row.get("hit_id")), key=lambda row: row["hit_id"]):
+        try:
+            profiles.append(build_hit(hit, tools, by_query, fallback))
+        except Exception as error:
+            # No profile: Stage 4 marks the hit not decided, so it goes to REVIEW.
+            print(f"warning: stage 2 skipped {hit['hit_id']}: {type(error).__name__}", file=sys.stderr)
     fallback.save()
     return profiles, fallback
 

@@ -19,7 +19,7 @@ from stage1.normalise import (
     parse_date,
 )
 from stage1.normalise_text import norm_text
-from stage1.notes import parse_note
+from stage1.notes import safe_parse_note
 
 _PRECISION_RANK = {"day": 3, "month": 2, "year": 1}
 
@@ -51,11 +51,11 @@ class UnionFind:
 
 def build_from_tables(tables: dict, use_llm: bool | None = None, client=None) -> tuple[list[dict], dict, dict]:
     """Return ``(people, indexes, stats)`` from already-loaded tables."""
-    customers = list(tables.get("customers") or [])
+    customers = [row for row in tables.get("customers") or [] if row.get("record_id")]
     accounts = list(tables.get("accounts") or [])
     onboarding = list(tables.get("onboarding") or [])
-    checks = list(tables.get("kyc_checks") or [])
-    notes = list(tables.get("notes") or [])
+    checks = [row for row in tables.get("kyc_checks") or [] if row.get("applicant_id")]
+    notes = [row for row in tables.get("notes") or [] if row.get("note_id")]
     names = NameTools(tables.get("name_variants"))
 
     customers_by_id = {}
@@ -102,7 +102,7 @@ def build_from_tables(tables: dict, use_llm: bool | None = None, client=None) ->
     }
     flag_counts: dict[str, int] = defaultdict(int)
     for note in sorted(notes, key=lambda row: row.get("note_id") or ""):
-        parsed = parse_note(note, use_llm=use_llm, client=client)
+        parsed = safe_parse_note(note, use_llm=use_llm, client=client)
         parsed_by_id[note["note_id"]] = parsed
         email = norm_email(note.get("requester_email"))
         if email:
@@ -344,7 +344,7 @@ def _assemble_person(
     for note in attached_notes:
         parsed = parsed_by_id.get(note["note_id"])
         if parsed is None:
-            parsed = parse_note(note)
+            parsed = safe_parse_note(note)
         if parsed["flags"]:
             flags.append(f"NOTE_FLAGGED:{note['note_id']}")
             flags.append("BLOCK_LOCATION_MISMATCH")
