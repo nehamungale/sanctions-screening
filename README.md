@@ -78,13 +78,34 @@ One `system/run` on the development folder, LLM off. Counts are from that run. T
 ```
 .
 ├── README.md
-├── docs/                      ← stage designs and review notes
+├── BRIEF.md  POLICY.md        ← the organisers' brief and the bank's SOP
+├── docs/                      ← one doc per stage + shared/pipeline (index: docs/README.md)
 ├── system/
-│   ├── run                    ← stages 1–3; writes a summary, not per-hit decisions
+│   ├── run                    ← entry point; stages 1–3 today, writes a summary, not per-hit decisions
+│   ├── pipeline.py
 │   ├── stage1/  stage2/  stage3/
-│   └── shared/
+│   ├── shared/                ← name agreement, Stage 4 contracts, LLM client
+│   └── tests/
 ├── tools/repro/               ← reproducibility report (repro.json)
+├── ui/                        ← read-only reviewer UI (local files only)
+├── validate.py                ← the organisers' output checker
 └── output/                    ← per-hit decisions, once Stage 4 exists
+```
+
+## Documentation
+
+| Doc | What's in it |
+|---|---|
+| [docs/README.md](docs/README.md) | Index and conventions |
+| [Stage 1](docs/stage1-customer-golden-record.md) · [Stage 2](docs/stage2-hit-golden-profile.md) · [Stage 3](docs/stage3-alert-resolution.md) | How each stage works, its code map, known gaps and planned refactor |
+| [Stage 4 notes](docs/stage4-notes.md) | Decision rules (being built separately) |
+| [Shared code and pipeline](docs/shared-and-pipeline.md) | `system/run`, shared modules, LLM client, tests, cross-stage refactor plan |
+| [Explainability and reproducibility](docs/explainability-and-reproducibility.md) | Per-hit trace, reasons, citations, determinism |
+
+Run the tests:
+
+```bash
+cd system && python3 -m unittest discover -s tests
 ```
 
 ## Reproducibility report

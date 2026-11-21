@@ -4,6 +4,13 @@
 >
 > **Later stages:** Stage 2 builds the hit golden profile. Stage 3 resolves each alert to a person in this table. Stage 4 decides the hit. This document is Stage 1 only.
 
+| | |
+|---|---|
+| **Status** | ✅ Built (`system/stage1/`). Hardened in PRs #5 and #10. 122 unit tests pass across the system. |
+| **Dev run** | 72,265 records → 72,142 persons (123 multi-record). 4 of 31,895 notes flagged. ~24 s. LLM off. |
+| **Code map** | [§11](#11-code-map) |
+| **Planned refactor** | [§13](#13-refactor-plan-to-be-done). Not started. |
+
 ---
 
 ## 1. Why this stage exists
@@ -166,11 +173,11 @@ All are pure functions, each with unit tests.
 
 - Two parts **match** when they are identical, belong to the same variant group in `name_variants.json` (a part can be in more than one group, so take the union), or are within edit distance 1 (shorter part 4–6 letters) or 2 (7+ letters). Parts under 4 letters must be identical. Edit distance counts insert/delete/substitute as 1, so swapping two letters costs 2.
 - **Written together or apart**: adjacent parts are also compared concatenated ("abdul salam" ↔ "abdulsalam"). Such a match counts once but covers both parts.
-- Two names **agree** when at least two parts match, or every part of the shorter name matches. Pairing is exhaustive and one-to-one (`shared.names.agree_parts`), with a fixed tie-break, not greedy longest-first. **Status:** Fixed (on main before PRs #7 to #9). **Status:** Open, fix pending in PR #10: when both names have the same number of parts, full coverage is checked on the left name only. The function returns the matched pairs for the trace.
+- Two names **agree** when at least two parts match, or every part of the shorter name matches. Pairing is exhaustive and one-to-one (`shared.names.agree_parts`), with a fixed tie-break, not greedy longest-first. When both names have the same number of parts, full coverage of **either** side counts, so the result does not depend on argument order (fixed in PR #10). The function returns the matched pairs for the trace.
 
 ### 4.2 Dates
 
-Dates come in mixed formats across tables. `parse_date` returns `{y, m, d, precision, value}` and keeps the original string on `raw`. Customer slash dates are day-first. **Status:** Fixed (on main before PRs #7 to #9): `mode="hit"` leaves a slash date UNKNOWN when both numeric parts are 12 or under.
+Dates come in mixed formats across tables. `parse_date` returns `{y, m, d, precision, value}` and keeps the original string on `raw`. It takes a `mode`. In `mode="customer"` (the default) slash dates are day-first. In `mode="hit"` a slash date whose two numeric parts are both 12 or under is left UNKNOWN (`UNKNOWN_DATE`), because watch-list providers don't all write dates day-first.
 
 | Pattern | Precision | Note |
 |---|---|---|
@@ -305,13 +312,14 @@ Verification notes contain **no** negative wording (failed, rejected, pending…
 
 ### 6.3 Optional LLM fallback 🟪 [LLM-optional]
 
-Regex covers the development set, so the LLM is **off by default** (`USE_LLM_NOTES=0`). It exists as insurance for unseen wording:
+Regex covers the development set, so the LLM is **off by default**. It exists as insurance for unseen wording. Code: `system/stage1/llm.py` (`fill_null_slots`), which calls the shared client in `system/shared/llm_client.py` (see [shared-and-pipeline.md](shared-and-pipeline.md#3-llm-client)).
 
-- **Called only for flagged notes**: unresolved date of birth, ambiguous name or country, negation keyword, unknown channel. On dev that would be well under 0.1% of notes.
-- **Contract:** temperature 0, strict JSON schema (`name`, `dob`, `doc_country`, `is_successful_verification`, `residence[]`, `evidence_span`), cached by SHA-256 of the note text.
-- **Validation:** every returned value must literally appear in the note (name as a substring, date re-parsed by `parse_date`, country in the lexicon). Anything else is discarded.
-- **Fills empty slots only, never overrides regex**, and is tagged `source_method: "llm"` in the trace.
-- **When switched off,** flagged notes are simply **not evidence**. That steers the hit towards `REVIEW`, the safe direction.
+- **Switches:** on only when `USE_LLM_NOTES=1`. `SANCTIONS_LLM=0` forces every stage off.
+- **Called only for null slots** of a note the regex could not fully read. On dev that is well under 0.1% of notes.
+- **Contract:** pinned free model and provider, temperature 0, fixed seed, strict JSON schema, **3 identical calls** required, a shared per-run call budget. **Nothing is cached**, so a judge's run gets no benefit from our local runs.
+- **Validation:** every returned string must appear verbatim in the note, and dates must re-parse with `parse_date`. Anything else is discarded and the slot stays UNKNOWN.
+- **Fills empty slots only, never overrides regex.** The fact is tagged `method: "llm"` and `may_solely_support_different_entity: false`. The team rule is stricter: an LLM-read fact must not contribute to a clear at all (enforced in Stage 4).
+- **When switched off,** an unread note is simply **not evidence**, and the person gets a block flag (§8.1). That steers the hit towards `REVIEW`, the safe direction.
 
 ---
 
@@ -463,6 +471,38 @@ One JSON object per person, keys sorted. The example below uses **invented value
 | `UNPARSED_DATE` / `UNMAPPED_COUNTRY` | a value couldn't be normalised (kept raw) |
 | `NOTE_FLAGGED:<note_id>` | a note the parser couldn't read with confidence |
 
+### 8.1 Block flags and contracts (what Stage 4 must obey)
+
+Missing, unread or unmappable evidence **blocks** a clear. It never causes one. Each person carries flags and a `contracts` object; `system/shared/contracts.py` has helper functions (`name_mismatch_verified_allowed`, `location_mismatch_allowed`, `dob_mismatch_allowed`) that read them.
+
+| Flag | Stage 4 must not emit | Set when |
+|---|---|---|
+| `BLOCK_NAME_MISMATCH_VERIFIED` | `NAME_MISMATCH_VERIFIED` | `legal_name.verified` is false, or the legal name came only from the LLM |
+| `BLOCK_NAME_CLEAR` / `NAME_TOO_SHORT` | any name-based confirm or clear | the legal name of an individual has fewer than two real parts, or is placeholder-only. Each form in `names_all` also carries `blocks_name_clear` and `real_part_count` |
+| `BLOCK_DOB_AGE_NAME_CLEAR` | `DOB_MISMATCH`, `TEMPORAL_IMPOSSIBILITY`, `NAME_MISMATCH_VERIFIED` | a note looks like a verification but did not fully parse (name, DOB and one document country), or a `kyc` note has a negative or pending outcome |
+| `BLOCK_LOCATION_MISMATCH` | `LOCATION_MISMATCH` | any non-noise note failed to parse, a note's places are not exactly one mapped country, a note is `NOTE_FLAGGED`, or a structured country is `UNMAPPED_COUNTRY` |
+| `UNMAPPED_COUNTRY` | `LOCATION_MISMATCH` | a country value the table doesn't know (raw text kept) |
+
+Other contracts:
+
+- **`DOB_MISMATCH` needs every declared date to contradict.** It is allowed only when every `declared_dobs` entry is comparable and contradicts the hit. One agreeing or uncomparable date blocks it (`contracts.dob_mismatch_only_if_every_declared_contradicts` is always true).
+- **Output IDs.** `customer_record_ids` lists the person's `CUS-` IDs. Decision output must use one of those, never the internal `P-` ID.
+- **Every decisive fact keeps `source_id`** and a `method` (`regex` or `llm`).
+
+### 8.2 Record-level artefacts (for Stage 3)
+
+Besides `person_golden.jsonl`, Stage 1 writes a per-**record** view and lookup indexes that Stage 3 searches. The screened details must be matched against what each record declares, not against the person's verified facts. Full field guide: [`system/stage1/SCHEMA.md`](../system/stage1/SCHEMA.md).
+
+| File | Key → value |
+|---|---|
+| `record_view.jsonl` | one row per `record_id`: names (full, preferred, login, each with parts), declared DOB (incorporation date for companies), city, address, nationality, residence, phone, email, accounts. No verified legal name |
+| `index_record_id.json` | `record_id` → `person_id` |
+| `index_account_record_id.json`, `index_login_record_id.json`, `index_email_record_id.json` | link value → `record_id`s (a joint account has two) |
+| `index_name_part_record_id.json` | exact name part → `record_id`s (no variants, no edit distance) |
+| `index_account_id.json`, `index_login_handle.json`, `index_email.json`, `index_name.json` | the same keys → `person_id`s. **Stage 3 doesn't read these** (see §13, R1.4) |
+
+All files are in `working/` (or `$SANCTIONS_CACHE`), with sorted keys and rows.
+
 ---
 
 ## 9. Edge cases and tests
@@ -507,3 +547,47 @@ Each item is a unit or integration test. Test fixtures use synthetic records.
 - It does not look at alerts or hits. Finding the person behind an alert is **Stage 3**, and deciding `SAME_ENTITY / DIFFERENT_ENTITY / REVIEW` is **Stage 4**.
 - It never uses one person's records to fill in another person's facts.
 - It never invents a value. Missing stays missing, and is flagged.
+
+---
+
+## 11. Code map
+
+| File | Lines | What it does |
+|---|---|---|
+| `system/stage1/load.py` | ~55 | `DataStore`: reads the five customer tables plus `name_variants.json` from the data folder |
+| `system/stage1/normalise_text.py` | ~50 | `norm_text`, `country_fold`: Unicode folding shared by names and countries |
+| `system/stage1/normalise.py` | ~285 | `parse_date` (customer/hit modes), `dates_compatible`, `dates_identical_full`, `norm_phone`, `norm_email`, `norm_docno`, `levenshtein`, and `NameTools` (name parts, part matching, `names_agree`, which calls `shared.names.agree_parts`) |
+| `system/stage1/countries.py` | ~610 | Country table (ISO codes, names, demonyms, watch-list spellings), `norm_country`, `countries_in_note`, `country_leaves` |
+| `system/stage1/notes.py` | ~305 | `parse_note`: classifies a note as verification, residence or noise, and extracts its slots with regex |
+| `system/stage1/llm.py` | ~90 | Optional LLM fill for null note slots (§6.3) |
+| `system/stage1/build.py` | ~980 | `build_from_tables`: union-find clustering (§5), attaching records, fact picking (§7), flags and contracts (§8.1), record views and indexes (§8.2). `run_stage1` writes the 11 artefacts |
+| `system/stage1/cli.py`, `__main__.py` | ~80 | `python -m stage1 <data> [cache]` for running Stage 1 alone |
+| `system/stage1/SCHEMA.md` | | Field guide for the record-level artefacts |
+
+Tests: `system/tests/test_golden.py` (clustering and facts), `test_hardening.py` (name matcher, contracts), `test_normalise.py`, `test_notes.py`, `test_repro.py` (dev-folder determinism, skipped when `dev/` is absent).
+
+```bash
+cd system && python3 -m unittest discover -s tests
+```
+
+## 12. Known gaps
+
+| Gap | Effect | Owner |
+|---|---|---|
+| Dev-only assumptions: customer dates always day-first, verification notes never negative, the regex coverage figures | Must be re-checked on the **updated dataset** the organisers released | Stage 1 |
+| `person_golden.jsonl` and the person-level indexes are written but nothing reads them yet | Stage 4 is expected to read `person_golden` | Stage 4 |
+| `accounts.phone` is not used for clustering | Probably fine (SOP only names customer records), but unchecked | Stage 1 |
+| The LLM fact flag only blocks an LLM fact that is the *sole* ground for a clear | The stricter team rule ("never contributes to a clear") must be enforced in Stage 4 | Stage 4 |
+
+## 13. Refactor plan (to be done)
+
+Goal: same behaviour and byte-identical output, less code, one place for each rule. Each step keeps all tests green and is checked with a dev-folder diff of the artefacts before and after. When a step lands, change its status to **Done** and add the commit.
+
+| ID | Change | Why | Status |
+|---|---|---|---|
+| R1.1 | Move the generic helpers out of Stage 1 into `system/shared/`: `normalise_text.py` → `shared/text.py`; dates, phone, email, document number and `levenshtein` → `shared/normalise.py`; `NameTools` → `shared/names.py` (next to `agree_parts`); `countries.py` → `shared/countries.py`. Update every import | Stages 2 and 3 import these from `stage1.*` today, so "Stage 1" really holds the whole system's shared toolkit | To do |
+| R1.2 | Split `build.py` (~980 lines) into `cluster.py` (union-find and edges), `facts.py` (verification events, legal name, DOB, countries, flags, contracts) and `views.py` (record views and indexes). `build.py` keeps `build_from_tables` and `run_stage1` as thin glue | One file per concern, easier to review | To do |
+| R1.3 | `run_stage1` returns the people, views and indexes **in memory** as well as writing them. The pipeline hands them straight to Stage 3 (see the Stage 3 doc, R3.2) | Removes a write-then-read-back round trip through `working/` | To do |
+| R1.4 | Stop writing person-level indexes that no stage reads (`index_account_id`, `index_login_handle`, `index_email`, `index_name`), unless Stage 4 or the UI needs them. Check with the Stage 4 owner first | Fewer artefacts to keep in sync | To do |
+| R1.5 | Use the shared JSONL reader (shared doc, RS.2) in `DataStore` | One reader | To do |
+| R1.6 | Fold `stage1/cli.py` and `__main__.py` into the single pipeline entry point, keeping a `--stage 1` option if it's still useful for debugging | One entry point (shared doc, RS.4) | To do |
