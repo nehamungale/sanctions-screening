@@ -27,6 +27,7 @@ from .metrics import (
 )
 from .parse import load_labels, load_output_files
 from .report import label_inventory, render_report
+from .stages import stage_diagnostics
 
 
 def grade(
@@ -125,6 +126,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--policy", type=Path, default=None,
         help=f"Name variants JSON (or Policy.txt). Default: <data>/{NAME_VARIANTS_FILENAME}",
     )
+    p.add_argument(
+        "--cache", type=Path, default=None,
+        help="system/run cache folder (working/ or $SANCTIONS_CACHE). Adds Stage 2 and Stage 3 checks against the labels.",
+    )
     p.add_argument("--report", type=Path, default=None, help="Write a Markdown report here (optional).")
     p.add_argument("--metrics", type=Path, default=None, help="Write metrics JSON here (optional).")
     p.add_argument(
@@ -166,6 +171,11 @@ def main(argv: list[str] | None = None) -> int:
         policy_path=args.policy,
         boilerplate_min=args.boilerplate_min,
     )
+    stages = None
+    if args.cache:
+        labels_path = args.labels or Path(args.data) / LABELS_FILENAME
+        stages = stage_diagnostics(args.cache, labels_path)
+        result["metrics"]["stages"] = stages
     write_outputs(result, args.report, args.metrics)
     acc = result["accuracy"]
     repro = result["repro"]
@@ -191,4 +201,16 @@ def main(argv: list[str] | None = None) -> int:
         f"differing_hits={repro['n_hits_differing']}  "
         f"explainability_issues={explain['n_hits_with_issues']}/{explain['n_rows']}"
     )
+    if stages:
+        profiles = stages.get("stage2_hit_profiles")
+        if profiles:
+            print(
+                f"stage2_hit_profiles: individuals {profiles['individual_agree']}/{profiles['individual']}  "
+                f"companies {profiles['company_agree']}/{profiles['company']}"
+            )
+        resolution = stages.get("stage3_alert_resolution")
+        if resolution:
+            print(f"stage3_alert_resolution: {resolution['matched']}/{resolution['labels']}")
+            for miss in resolution["misses"]:
+                print(f"  {miss['hit_id']} {miss['alert_id']}: {miss['reason']}")
     return 0

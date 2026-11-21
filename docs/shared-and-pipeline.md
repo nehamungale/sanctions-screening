@@ -95,7 +95,7 @@ Cross-stage steps. Stage-specific steps are in each stage doc (R1.x, R2.x, R3.x)
 | RS.2 | One JSON/JSONL reader and writer (`shared/io.py`) | Four copies of the same loop | **Done** (`881953b`) |
 | RS.3 | One LLM switch helper and one quote check in `shared/llm_client.py` | Duplicated switch logic and quote checks | To do |
 | RS.4 | One entry point; drop per-stage `cli.py` / `__main__.py` once nothing imports them | Four CLIs plus the pipeline | To do |
-| RS.5 | One evaluation tool. Practice-label scoring exists in five places: `validate.py` (organisers', keep), `tools/eval/`, `stage4/build._practice`, `stage2/practice.py`, `stage3/cli._practice`. Keep `tools/eval` and drop the three in-pipeline copies (the clearance log would then get its label columns from `tools/eval`) | The judged program should only produce answers | To do. Agree with the `tools/eval` owner |
+| RS.5 | One evaluation tool. Practice-label scoring lived in five places. `validate.py` (organisers') and `tools/eval/` stay; the Stage 2, 3 and 4 copies moved into `tools/eval/stages.py` (`--cache working` checks hit profiles and alert resolution) and `system/run` no longer reads the labels | The judged program only produces answers | **Done** |
 | RS.6 | Stages pass data in memory; cache files only on request | Removes the disk round trip and the adapter's file path | To do |
 | RS.7 | Run summary out of the output file | The output file must pass `validate.py` | **Done** (Stage 4 PR: `run_summary.json` in the cache) |
 | RS.8 | One doc per stage plus this one | | **Done** |

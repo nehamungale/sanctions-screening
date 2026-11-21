@@ -335,14 +335,13 @@ and says the form is worded the same in the unseen set. One line-anchored regex 
 
 | File | Lines | What it does |
 |---|---|---|
-| `system/stage2/build.py` | ~340 | `build_hit` assembles one profile (§4.4 tiers, death, reports); `build_profiles` runs every hit in `hit_id` order; `run_stage2` writes `hit_golden.jsonl` and returns stats (including the practice-label check) |
+| `system/stage2/build.py` | ~340 | `build_hit` assembles one profile (§4.4 tiers, death, reports); `build_profiles` runs every hit in `hit_id` order; `run_stage2` writes `hit_golden.jsonl` and returns stats |
 | `system/stage2/names.py` | ~90 | `hit_names`: name, aliases, best-matching and structured names → parts via Stage 1 `NameTools` (§4.1) |
 | `system/stage2/listing.py` | ~35 | `listing`: category → listing phrase (§4.2) |
 | `system/stage2/countries.py` | ~55 | `hit_countries`: last comma part of each country field via Stage 1 `norm_country` (§4.3) |
 | `system/stage2/notes.py` | ~250 | `parse_note_dob` (first-paragraph birth and age sentences), `parse_dated_reports` (§4.4 tier 1b, §4.6) |
 | `system/stage2/search.py` | ~100 | `evaluate_search`: tier 2 search-result acceptance and age/year extraction |
 | `system/stage2/llm.py` | ~215 | `NoteFallback`: optional LLM for unresolved birth sentences (§5) |
-| `system/stage2/practice.py` | ~90 | Checks profiles against `practice_labels.jsonl` (evaluation, not pipeline logic) |
 
 Tests: `system/tests/test_stage2.py`, `test_stage2_repro.py` (dev folder, skipped when absent).
 
@@ -363,5 +362,5 @@ Same output, byte for byte. When a step lands, change its status to **Done** and
 | R2.1 | Import names, dates and countries from `system/shared/` after the Stage 1 move (Stage 1 doc, R1.1) | No stage should import another stage's internals | To do |
 | R2.2 | Remove the duplicate `_age_years` (in both `notes.py` and `llm.py`): keep one in `notes.py` and import it | Same rule in two places can drift | To do |
 | R2.3 | Use the shared quote check: `llm.py` has its own `_quoted`, and `shared/llm_client.py` has another. Keep the shared one, plus the Stage 2-specific "non-empty quote" rule as a small wrapper | One validation rule | To do |
-| R2.4 | Move `practice.py` and the practice call in `run_stage2` into the evaluation tool (shared doc, RS.5) | The pipeline produces answers; evaluation is separate | To do |
+| R2.4 | Move `practice.py` and the practice call in `run_stage2` into the evaluation tool (shared doc, RS.5) | The pipeline produces answers; evaluation is separate | **Done**: `tools/eval/stages.py`, run with `python -m tools.eval --cache working` |
 | R2.5 | Use the shared JSONL reader and the single LLM switch helper (shared doc, RS.2, RS.3) | One reader, one switch | To do |

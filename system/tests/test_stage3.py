@@ -14,7 +14,7 @@ from stage1.normalise import NameTools, parse_date
 from stage1.normalise_text import norm_text
 from stage3.cli import main as stage3_main
 from stage3.recall import agreeing_records, unlinked_recall
-from stage3.resolve import dumps_jsonl, label_matches, resolve_alerts
+from stage3.resolve import dumps_jsonl, resolve_alerts
 from stage3.stage1_adapter import load_catalog
 
 SYSTEM = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -1029,37 +1029,6 @@ class Stage3Tests(unittest.TestCase):
                 catalog, tuple(tools.parts("Tony Smith", "Individual")), "Individual", use_index=True
             ))
 
-    def test_label_matcher(self):
-        resolved = {
-            "alert_id": "A-1",
-            "status": "RESOLVED",
-            "customer_record_id": "CUS-SYN010",
-            "chosen_person_ids": ["P-CUS-SYN010"],
-            "candidates": [{
-                "person_id": "P-CUS-SYN010",
-                "record_ids": ["CUS-SYN010", "CUS-SYN020"],
-                "matched_records": ["CUS-SYN020"],
-                "why": {},
-            }],
-        }
-        good, reason = label_matches(resolved, ["CUS-SYN020", "CUS-SYN010"])
-        self.assertTrue(good, reason)
-        bad, reason = label_matches(resolved, ["CUS-SYN010"])
-        self.assertFalse(bad)
-        self.assertIn("records", reason)
-        ambiguous = {
-            "status": "AMBIGUOUS",
-            "customer_record_id": "AMBIGUOUS",
-            "chosen_person_ids": ["P-1", "P-2"],
-            "candidates": [{"person_id": "P-1"}, {"person_id": "P-2"}],
-        }
-        good, reason = label_matches(ambiguous, ["AMBIGUOUS"])
-        self.assertTrue(good, reason)
-        person_id = dict(resolved)
-        person_id["customer_record_id"] = "P-CUS-SYN010"
-        bad, _reason = label_matches(person_id, ["CUS-SYN010", "CUS-SYN020"])
-        self.assertFalse(bad)
-
     @unittest.skipUnless(_dev_folder(), "dev data is not on this machine")
     def test_unlinked_name_recall_matches_full_scan(self):
         from stage1.build import run_stage1
@@ -1079,30 +1048,6 @@ class Stage3Tests(unittest.TestCase):
         self.assertGreater(report["compared"], 0)
         self.assertEqual(report["mismatches"], [], report["mismatches"][:5])
         self.assertTrue(report["match"])
-
-    @unittest.skipUnless(os.environ.get("STAGE3_DEV"), "set STAGE3_DEV to run the 50-label regression")
-    def test_practice_labels(self):
-        data = os.environ["STAGE3_DEV"]
-        cache = os.environ.get("SANCTIONS_CACHE", "working")
-        catalog = load_catalog(cache, json.load(open(os.path.join(data, "name_variants.json"), encoding="utf-8")))
-        alerts = []
-        with open(os.path.join(data, "alerts.jsonl"), encoding="utf-8") as handle:
-            for line in handle:
-                if line.strip():
-                    alerts.append(json.loads(line))
-        rows = {row["alert_id"]: row for row in resolve_alerts(alerts, catalog)}
-        labels = []
-        with open(os.path.join(data, "practice_labels.jsonl"), encoding="utf-8") as handle:
-            for line in handle:
-                if line.strip():
-                    labels.append(json.loads(line))
-        misses = []
-        for label in labels:
-            good, reason = label_matches(rows[label["alert_id"]], label["customer_record_ids"])
-            if not good:
-                misses.append(f"{label['hit_id']} {label['alert_id']} {reason}")
-        self.assertEqual(misses, [])
-        self.assertEqual(len(labels), 50)
 
 
 if __name__ == "__main__":

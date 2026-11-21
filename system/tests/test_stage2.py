@@ -14,7 +14,6 @@ from stage1.normalise import NameTools
 from stage2.build import build_profiles
 from stage2.llm import NoteFallback, candidate_from_model, llm_enabled
 from stage2.notes import parse_dated_reports, parse_note_dob
-from stage2.practice import label_agrees
 from stage2.search import evaluate_search, search_key
 
 VARIANTS = {"groups": [["robert", "bob"]], "company_legal_forms": ["ltd", "inc", "sa", "gmbh"]}
@@ -521,45 +520,6 @@ class LlmTests(unittest.TestCase):
             json.dumps(second, sort_keys=True, ensure_ascii=False),
         )
         self.assertEqual([row["hit_id"] for row in first], ["H-SYN0AA", "H-SYN0BB"])
-
-
-class PracticeTests(unittest.TestCase):
-    def test_label_years_and_search_ids(self):
-        profile = {
-            "entity_type": "Individual",
-            "dob_candidates": [{
-                "years": [1976, 1977], "month": None, "day": None, "source": "search_result",
-            }],
-            "incorporation_dates": [],
-            "search_results": {"accepted": [{"result_id": "SR-000001"}]},
-            "earliest_dated_report": {"date": "2020-01-08"},
-        }
-        self.assertTrue(label_agrees(profile, {
-            "reference_reason": "agrees with the hit's 1976 or 1977.",
-            "evidence": ["SR-000001"],
-        }))
-        self.assertFalse(label_agrees(profile, {
-            "reference_reason": "agrees with the hit's 1976 or 1977.",
-            "evidence": ["SR-000099"],
-        }))
-        listed = {
-            "entity_type": "Individual",
-            "dob_candidates": [
-                {"years": [1994], "month": None, "day": None},
-                {"years": [1995], "month": None, "day": None},
-            ],
-            "incorporation_dates": [],
-            "search_results": {"accepted": []},
-            "earliest_dated_report": None,
-        }
-        self.assertTrue(label_agrees(listed, {
-            "reference_reason": "agrees with the hit's 1994, 1995.",
-            "evidence": [],
-        }))
-        self.assertTrue(label_agrees(profile, {
-            "reference_reason": "The hit's dated report on 2020-01-08.",
-            "evidence": ["SR-000001"],
-        }))
 
 
 if __name__ == "__main__":

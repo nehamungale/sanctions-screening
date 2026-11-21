@@ -166,37 +166,6 @@ def summarise(rows: list[dict]) -> dict:
     }
 
 
-def label_matches(row: dict, expected_record_ids: list[str]) -> tuple[bool, str]:
-    """Whether one practice label's customer resolution matches this alert.
-
-    ``["AMBIGUOUS"]`` matches status AMBIGUOUS. Any other list must be exactly
-    the resolved person's record ids, and ``customer_record_id`` one of them.
-    """
-    expected = list(expected_record_ids)
-    if expected == ["AMBIGUOUS"]:
-        if row["status"] != "AMBIGUOUS" or row["customer_record_id"] != "AMBIGUOUS":
-            return False, f"expected AMBIGUOUS, got {row['status']} {row['customer_record_id']!r}"
-        if not row["candidates"] or not row["chosen_person_ids"]:
-            return False, "ambiguous alert dropped its candidates"
-        return True, ""
-    if row["status"] != "RESOLVED":
-        return False, f"status {row['status']}"
-    record_id = row["customer_record_id"]
-    if not isinstance(record_id, str) or record_id.startswith("P-"):
-        return False, f"customer_record_id {record_id!r}"
-    chosen = row["chosen_person_ids"]
-    if len(chosen) != 1:
-        return False, f"chosen {chosen}"
-    candidate = next((item for item in row["candidates"] if item["person_id"] == chosen[0]), None)
-    if candidate is None:
-        return False, "missing candidate"
-    if set(candidate["record_ids"]) != set(expected):
-        return False, f"records {candidate['record_ids']} != {sorted(expected)}"
-    if record_id not in set(expected):
-        return False, f"customer_record_id {record_id} not in {sorted(expected)}"
-    return True, ""
-
-
 def dumps_jsonl(rows: list[dict]) -> str:
     """Canonical file body. Two calls on the same rows are byte-identical."""
     return "".join(dump_line(row) + "\n" for row in rows)

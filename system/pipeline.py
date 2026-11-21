@@ -114,11 +114,9 @@ def _report(stage1: dict, stage2: dict, stage3: dict, stage4: dict, cache_dir: s
         "notes": stage1["notes"],
         "persons": stage1["persons"],
         "phone_dob_edges": stage1["phone_dob_edges"],
-        "practice": stage2.get("practice"),
         "records": stage1["records"],
         "deadline_fired": deadline_fired(),
         "decisions": stage4["decisions"],
-        "practice_score": stage4.get("practice"),
         "review_rate": stage4["review_rate"],
         "rules_version": stage4["rules_version"],
         "shared_time_cap_seconds": SHARED_TIME_CAP_SECONDS,
@@ -147,12 +145,6 @@ def _report(stage1: dict, stage2: dict, stage3: dict, stage4: dict, cache_dir: s
         f"reports {stage2['dated_report_lines']} lines / {stage2['dated_report_hits']} hits; "
         f"llm calls {stage2['llm_calls']}; {stage2['elapsed_seconds']}s"
     )
-    practice = stage2.get("practice")
-    if practice:
-        print(
-            f"practice: individuals {practice['individual_agree']}/{practice['individual']}; "
-            f"companies {practice['company_agree']}/{practice['company']}"
-        )
     resolution = summary["alert_resolution"]
     status = resolution["status"]
     print(
@@ -162,24 +154,12 @@ def _report(stage1: dict, stage2: dict, stage3: dict, stage4: dict, cache_dir: s
         + f"clean {resolution['resolution_clean']}; "
         + f"{stage3['elapsed_seconds']}s"
     )
-    alert_practice = resolution.get("practice")
-    if alert_practice:
-        print(
-            f"stage 3 practice: {alert_practice['matched']}/{alert_practice['labels']}"
-        )
     decisions = stage4["decisions"]
     print(
         f"stage 4: {stage4['hits']} hits; "
         + ", ".join(f"{key} {decisions[key]}" for key in sorted(decisions))
         + f"; review rate {stage4['review_rate']}; {stage4['elapsed_seconds']}s"
     )
-    scored = stage4.get("practice")
-    if scored:
-        print(
-            f"stage 4 practice: {scored['right']}/{scored['labels']} decisions; "
-            f"reason codes {scored['reason_codes_on_right']}/{scored['right'] or 0} on right; "
-            f"unsafe {scored['unsafe']}; score {scored['decision_score']}"
-        )
     print(f"artefacts: {cache_dir}")
     print(f"output: {output_file}")
     print(f"summary: {summary_path}")
@@ -206,6 +186,4 @@ def _alert_resolution(stage3: dict) -> dict:
         "unlinked_alerts": stage3["unlinked_alerts"],
         "unlinked_status": stage3["unlinked_status"],
     }
-    if "practice" in stage3:
-        kept["practice"] = stage3["practice"]
     return kept

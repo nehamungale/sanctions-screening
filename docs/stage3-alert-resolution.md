@@ -293,7 +293,7 @@ Nothing here decides a hit. These are the rules Stage 4 must apply to Stage 3's 
 | `system/stage3/stage1_adapter.py` | ~260 | `load_catalog`: reads the Stage 1 record view and record-level indexes back from `working/`, and re-reads `customers.jsonl` to put a company's declared DOB back |
 | `system/stage3/blocking.py` | ~80 | `PartBlock`: expands exact-part index keys with variants, edit distance and joins, to find name candidates fast |
 | `system/stage3/recall.py` | ~75 | Checks that the index search finds the same records as a full scan (a safety check, not pipeline logic) |
-| `system/stage3/cli.py`, `__main__.py` | ~120 | `run_stage3` (called by the pipeline), a standalone CLI, and the practice-label check |
+| `system/stage3/cli.py`, `__main__.py` | ~70 | `run_stage3` (called by the pipeline) and a standalone CLI |
 
 Tests: `system/tests/test_stage3.py`.
 
@@ -314,5 +314,5 @@ Same output, byte for byte, with practice labels still 50/50. When a step lands,
 | R3.2 | Take Stage 1's record views and indexes **in memory** from the pipeline (Stage 1 doc, R1.3). `load_catalog` keeps a file-reading path only for running Stage 3 alone | Removes the write-then-read-back round trip through `working/` | To do |
 | R3.3 | Have Stage 1's record view carry the company's **declared** DOB next to the incorporation date, and remove `_overlay_company_declared_dobs`, which re-reads `customers.jsonl` | Stage 3 should not reach around Stage 1 into raw files | To do |
 | R3.4 | Import names, dates, countries and text folding from `system/shared/` (Stage 1 doc, R1.1) | No stage imports another's internals | To do |
-| R3.5 | Move `recall.py` and `cli._practice` into the evaluation tool (shared doc, RS.5), and replace the private `_read_json` and `_read_jsonl` with the shared reader (RS.2) | Evaluation separate from the pipeline; one reader | Reader **done** (`881953b`); evaluation move to do |
+| R3.5 | Move `cli._practice` (and `resolve.label_matches`) into the evaluation tool (RS.5); use the shared reader (RS.2). `recall.py` stays: its dev-only test checks the index search against a full scan | Evaluation separate from the pipeline; one reader | **Done** |
 | R3.6 | Split `resolve.py` (~810 lines): link following and joint pick, search cascade, and candidate filters and fragility | Easier to review | To do |

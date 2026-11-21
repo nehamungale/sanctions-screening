@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import time
 
@@ -18,13 +17,6 @@ from stage4.output import dumps_jsonl, line_from
 from stage4.reasons import render
 from stage4.rollup import roll_up
 from stage4.trace import dumps_trace, hit_trace
-
-_COST = {
-    "DIFFERENT_ENTITY": {"DIFFERENT_ENTITY": 0, "SAME_ENTITY": 3, "REVIEW": 3},
-    "SAME_ENTITY": {"DIFFERENT_ENTITY": 60, "SAME_ENTITY": 0, "REVIEW": 2},
-    "REVIEW": {"DIFFERENT_ENTITY": 60, "SAME_ENTITY": 2, "REVIEW": 0},
-}
-
 
 def run_stage4(data_folder: str, cache_dir: str, output_file: str) -> dict:
     """Write the official JSONL file and a trace under the cache (or TRACE_PATH)."""
@@ -110,15 +102,8 @@ def run_stage4(data_folder: str, cache_dir: str, output_file: str) -> dict:
     with open(trace_path, "w", encoding="utf-8") as handle:
         handle.write(dumps_trace(traces))
 
-    practice = _practice(data_folder, lines)
-    for row in log_rows:
-        if practice and row["hit_id"] in practice["by_id"]:
-            label = practice["by_id"][row["hit_id"]]
-            row["label_decision"] = label["decision"]
-            row["label_codes"] = ";".join(label["reason_codes"])
-            row["unsafe"] = "1" if label["decision"] != "DIFFERENT_ENTITY" and row["final_decision"] == "DIFFERENT_ENTITY" else "0"
     write_csv(os.path.join(cache_dir, "clearance_log.csv"), log_rows)
-    counts = log_summary(log_rows, lines, _practice_public(practice))
+    counts = log_summary(log_rows, lines)
     with open(os.path.join(cache_dir, "clearance_summary.json"), "w", encoding="utf-8") as handle:
         handle.write(dumps_summary(counts))
 
@@ -128,7 +113,6 @@ def run_stage4(data_folder: str, cache_dir: str, output_file: str) -> dict:
         "hits": len(lines),
         "decisions": counts["decisions"],
         "review_rate": counts["review_rate"],
-        "practice": _practice_public(practice),
         "rules_version": RULES_VERSION,
         "trace": trace_path,
         "output_sha256": _sha256(payload.encode("utf-8")),
@@ -202,75 +186,6 @@ def _trace(item: dict, persons: dict) -> dict:
         item.get("check_id") for item in (person.get("ignored_checks") or []) if item.get("check_id")
     ]
     return record
-
-
-def _practice(data_folder: str, lines: list[dict]) -> dict | None:
-    path = os.path.join(data_folder, "practice_labels.jsonl")
-    if not os.path.isfile(path):
-        return None
-    labels = []
-    with open(path, encoding="utf-8") as handle:
-        for line in handle:
-            if line.strip():
-                labels.append(_normalise_label(json.loads(line)))
-    answers = {row["hit_id"]: row for row in lines}
-    by_id = {row["hit_id"]: row for row in labels}
-    right = 0
-    unsafe = 0
-    code_on_right = 0
-    code_ok = 0
-    record_on_right = 0
-    cost = 0
-    baseline = 0
-    for label in labels:
-        answer = answers.get(label["hit_id"], {})
-        said = answer.get("decision", "REVIEW")
-        cost += _COST[label["decision"]][said]
-        baseline += _COST[label["decision"]]["REVIEW"]
-        if said == "DIFFERENT_ENTITY" and label["decision"] != "DIFFERENT_ENTITY":
-            unsafe += 1
-        if answer.get("reason_code") in label["reason_codes"]:
-            code_ok += 1
-        if said == label["decision"]:
-            right += 1
-            if answer.get("reason_code") in label["reason_codes"]:
-                code_on_right += 1
-            record = answer.get("customer_record_id")
-            if record in label["customer_record_ids"] or (
-                label["customer_record_ids"] == ["AMBIGUOUS"] and record in (None, "", "AMBIGUOUS")
-            ):
-                record_on_right += 1
-    return {
-        "by_id": by_id,
-        "labels": len(labels),
-        "right": right,
-        "unsafe": unsafe,
-        "reason_codes": code_ok,
-        "reason_codes_on_right": code_on_right,
-        "records_on_right": record_on_right,
-        "decision_score": round(100 * max(0.0, 1 - cost / baseline), 1) if baseline else 0,
-    }
-
-
-def _practice_public(practice: dict | None) -> dict | None:
-    if not practice:
-        return None
-    return {key: practice[key] for key in (
-        "labels", "right", "unsafe", "reason_codes", "reason_codes_on_right",
-        "records_on_right", "decision_score",
-    )}
-
-
-def _normalise_label(row: dict) -> dict:
-    codes = row.get("reason_codes")
-    if isinstance(codes, str):
-        codes = [part.strip() for part in codes.split(";") if part.strip()]
-    records = row.get("customer_record_ids")
-    if isinstance(records, str):
-        records = [part.strip() for part in records.split(";") if part.strip()]
-    row["reason_codes"] = list(codes or [])
-    row["customer_record_ids"] = list(records or [])
-    return row
 
 
 def _sha256(payload: bytes) -> str:

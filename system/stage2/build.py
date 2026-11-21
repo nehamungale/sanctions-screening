@@ -13,7 +13,7 @@ import re
 import sys
 import time
 
-from shared.io import load_table, load_variants, read_jsonl, write_jsonl
+from shared.io import load_table, load_variants, write_jsonl
 from stage1.normalise import NameTools, parse_date
 
 _ABBR_TO_FULL = {
@@ -33,7 +33,6 @@ from stage2.listing import listing
 from stage2.llm import NoteFallback, llm_enabled
 from stage2.names import hit_names
 from stage2.notes import first_paragraph, parse_dated_reports, parse_note_dob
-from stage2.practice import agreement
 from stage2.search import evaluate_search, not_consulted, search_key
 
 def parse_hit_dob(raw: str) -> tuple[dict | None, list[str]]:
@@ -330,10 +329,6 @@ def run_stage2(data_folder: str, cache_dir: str, enabled: bool | None = None, cl
     path = os.path.join(cache_dir, "hit_golden.jsonl")
     write_jsonl(path, profiles)
     stats = summarise(profiles)
-    labels_path = os.path.join(data_folder, "practice_labels.jsonl")
-    if os.path.isfile(labels_path):
-        labels = read_jsonl(labels_path)
-        stats["practice"] = agreement(profiles, labels)
     stats["llm_enabled"] = fallback.enabled
     stats["llm_calls"] = fallback.calls
     stats["llm_hits"] = fallback.hits_called

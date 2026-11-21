@@ -42,9 +42,6 @@ class Stage2DevTests(unittest.TestCase):
         # Strict single-space lines are 639/214. Whitespace after ";" keeps one more.
         self.assertEqual(first["dated_report_lines"], 640)
         self.assertEqual(first["dated_report_hits"], 215)
-        practice = first["practice"]
-        self.assertEqual(practice["individual"], 41)
-        self.assertEqual(practice["individual_agree"], 41)
         self.assertEqual(first["llm_calls"], 0)
         self.assertFalse(first["llm_enabled"])
         self.assertEqual(second["note_birth_statements"], first["note_birth_statements"])

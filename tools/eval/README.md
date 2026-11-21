@@ -14,6 +14,9 @@ python -m tools.eval --data dev --outputs output/dev.jsonl
 python -m tools.eval --data dev --outputs runs/run1.jsonl runs/run2.jsonl runs/run3.jsonl runs/run4.jsonl runs/run5.jsonl \
     --report eval-report.md --metrics eval-metrics.json
 
+# Also check the pipeline's intermediate files (Stage 2 hit profiles, Stage 3 alert resolution)
+python -m tools.eval --data dev --outputs output/dev.jsonl --cache working
+
 # Tests (synthetic data only)
 python -m unittest discover -s tools/eval/tests -v
 ```
@@ -55,6 +58,12 @@ same facts, so treat boilerplate as a prompt to look, not a failure.
 hits whose decision **and** reason code are identical in all runs. Every hit whose
 decision, reason code, cited IDs or reason text differs is listed with per-run values.
 Citation or wording changes are listed but do not lower the official rate.
+
+**Stage diagnostics (`--cache`).** Reads the cache `system/run` writes and checks one step
+before the decision, so a wrong answer can be traced to its stage: whether each labelled
+hit's profile (`hit_golden.jsonl`) holds the dates and search results the label's reason
+relies on, and whether each labelled alert (`alert_resolution.jsonl`) resolves to exactly
+the labelled customer records. `system/run` itself never reads the practice labels.
 
 **Error analysis.** The same accuracy metrics (cost, score, evidence precision) grouped by
 evidence path (from the label `path`: account_ref / login_handle / email / unlinked link,

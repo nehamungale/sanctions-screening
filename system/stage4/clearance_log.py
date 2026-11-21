@@ -1,4 +1,8 @@
-"""Local tuning log. Counts only belong in the summary; the CSV stays in the cache."""
+"""Local tuning log: every contradiction that fired and what the gate did with it.
+
+Counts go in the summary; the CSV stays in the cache. To join it with the practice
+labels, use ``python -m tools.eval``.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +17,7 @@ COLUMNS = (
     "gate_passed", "gate_flags", "sole_blocker", "frag_note_only_country",
     "frag_sentence_dob", "frag_search_result_dob", "frag_fuzzy_name",
     "frag_partial_date_edge", "frag_single_source", "fragility", "llm_used",
-    "veto", "evidence_n", "label_decision", "label_codes", "unsafe",
+    "evidence_n",
 )
 
 
@@ -47,11 +51,7 @@ def rows_for(hit: dict, resolution: dict | None, decision, person_id: str | None
             "frag_single_source": "1" if len(set(dim.sources)) <= 1 else "0",
             "fragility": decision.fragility,
             "llm_used": "1" if dim.llm_used else "0",
-            "veto": "none",
             "evidence_n": str(len(decision.evidence or [])),
-            "label_decision": "",
-            "label_codes": "",
-            "unsafe": "",
         })
     return out
 
@@ -65,7 +65,7 @@ def write_csv(path: str, rows: list[dict]) -> None:
             writer.writerow({key: row.get(key, "") for key in COLUMNS})
 
 
-def summary(rows: list[dict], decisions: list[dict], practice: dict | None) -> dict:
+def summary(rows: list[dict], decisions: list[dict]) -> dict:
     by_code: dict[str, dict] = {}
     for row in rows:
         slot = by_code.setdefault(row["code"], {
@@ -97,8 +97,6 @@ def summary(rows: list[dict], decisions: list[dict], practice: dict | None) -> d
         "hits": len(decisions),
         "review_rate": round(counts["REVIEW"] / len(decisions), 4) if decisions else 0,
     }
-    if practice:
-        payload["practice"] = practice
     return payload
 
 
