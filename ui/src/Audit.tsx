@@ -37,19 +37,26 @@ export function Audit({ model, repro, filters, alertId, hitId, onFilters, onOpen
       {visible.length === 0 ? (
         <p className="rounded-xl border bg-card px-4 py-6 text-center text-sm text-muted-foreground">No hits match these filters.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border bg-card">
-          <table className="w-full text-sm">
+        <div className="flex flex-col gap-1.5">
+          {!compact ? (
+            <p className="flex flex-wrap items-center justify-end gap-x-2 text-xs text-muted-foreground lg:hidden" aria-hidden="true">
+              <span>Alert column hidden at this width (it is in the hit panel).</span>
+              <span className="font-medium md:hidden">More columns: scroll sideways →</span>
+            </p>
+          ) : null}
+          <div className="overflow-x-auto rounded-xl border bg-card [scrollbar-gutter:stable] [scrollbar-width:thin]" tabIndex={0} aria-label="Hits table">
+          <table className={cn('w-full text-sm', !compact && 'min-w-[40rem] lg:min-w-[54rem]')}>
             <thead className="text-left text-xs text-muted-foreground">
               <tr className="border-b">
-                <th className="px-4 py-2.5 font-medium">Hit</th>
-                {!compact ? <th className="px-4 py-2.5 font-medium">Alert</th> : null}
-                <th className="px-4 py-2.5 font-medium">Verdict</th>
+                <th className="px-3 py-2.5 lg:px-4 font-medium">Hit</th>
+                {!compact ? <th className="px-3 py-2.5 lg:px-4 font-medium max-lg:hidden">Alert</th> : null}
+                <th className="px-3 py-2.5 lg:px-4 font-medium">Verdict</th>
                 {!compact ? (
                   <>
-                    <th className="px-4 py-2.5 font-medium">Reason code</th>
-                    <th className="px-4 py-2.5 font-medium">Fragility</th>
-                    {report ? <th className="px-4 py-2.5 font-medium">Runs</th> : null}
-                    <th className="px-4 py-2.5 font-medium">LLM</th>
+                    <th className="px-3 py-2.5 lg:px-4 font-medium">Reason code</th>
+                    <th className="px-3 py-2.5 lg:px-4 font-medium">Fragility</th>
+                    {report ? <th className="px-3 py-2.5 lg:px-4 font-medium">Runs</th> : null}
+                    <th className="px-3 py-2.5 lg:px-4 font-medium">LLM</th>
                   </>
                 ) : null}
               </tr>
@@ -64,25 +71,25 @@ export function Audit({ model, repro, filters, alertId, hitId, onFilters, onOpen
                     onClick={() => onOpen(r)}
                     className={cn('cursor-pointer border-b last:border-0 hover:bg-muted/50', isActive && 'bg-muted', unstable.unstable.has(r.hit_id) && !compact && 'bg-amber-50/60')}
                   >
-                    <td className="px-4 py-2.5 font-mono">
+                    <td className="px-3 py-2.5 lg:px-4 font-mono whitespace-nowrap">
                       <button type="button" className="cursor-pointer underline-offset-4 hover:underline" onClick={() => onOpen(r)}>
                         {r.hit_id}
                       </button>
                     </td>
-                    {!compact ? <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{r.alert_id ?? '—'}</td> : null}
-                    <td className="px-4 py-2.5">
+                    {!compact ? <td className="px-3 py-2.5 lg:px-4 font-mono text-xs whitespace-nowrap text-muted-foreground max-lg:hidden">{r.alert_id ?? '—'}</td> : null}
+                    <td className="px-3 py-2.5 lg:px-4">
                       <DecisionBadge decision={r.decision} />
                     </td>
                     {!compact ? (
                       <>
-                        <td className="px-4 py-2.5">
+                        <td className="px-3 py-2.5 lg:px-4 max-lg:[&_.reason-label]:hidden">
                           <ReasonCode code={r.reason_code} />
                         </td>
-                        <td className="px-4 py-2.5 text-xs">{r.fragility ?? '—'}</td>
+                        <td className="px-3 py-2.5 lg:px-4 text-xs">{r.fragility ?? '—'}</td>
                         {report ? (
-                          <td className="px-4 py-2.5">{strip ? <RunStrip cells={strip} labels={report.run_labels} /> : <span className="text-xs text-muted-foreground">not in report</span>}</td>
+                          <td className="px-3 py-2.5 lg:px-4">{strip ? <RunStrip cells={strip} labels={report.run_labels} /> : <span className="text-xs text-muted-foreground">not in report</span>}</td>
                         ) : null}
-                        <td className="px-4 py-2.5 text-xs text-muted-foreground">{r.llm_used === true ? 'used' : r.llm_used === false ? '—' : 'unknown'}</td>
+                        <td className="px-3 py-2.5 lg:px-4 text-xs text-muted-foreground">{r.llm_used === true ? 'used' : r.llm_used === false ? '—' : 'unknown'}</td>
                       </>
                     ) : null}
                   </tr>
@@ -90,6 +97,7 @@ export function Audit({ model, repro, filters, alertId, hitId, onFilters, onOpen
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>
@@ -119,7 +127,7 @@ export function Audit({ model, repro, filters, alertId, hitId, onFilters, onOpen
             <option value="">All</option>
             {[...Object.values(REASON_CODES).flat(), HIT_NOT_DECIDED].map((c) => (
               <option key={c} value={c}>
-                {c} · {reasonLabel(c)}
+                {c === HIT_NOT_DECIDED ? 'Hit has no decision' : `${c} · ${reasonLabel(c)}`}
               </option>
             ))}
           </select>
@@ -148,7 +156,7 @@ export function Audit({ model, repro, filters, alertId, hitId, onFilters, onOpen
             disabled={!unstable.available}
             onChange={(e) => unstable.setUnstableOnly(e.target.checked)}
           />
-          Unstable across runs only{!unstable.available ? ' (load repro.json)' : ''}
+          Not identical in all runs only{!unstable.available ? ' (load repro.json)' : ''}
         </label>
         <div className="ml-auto flex items-center gap-3 text-sm">
           <span className="tabular-nums">
@@ -162,6 +170,7 @@ export function Audit({ model, repro, filters, alertId, hitId, onFilters, onOpen
         </div>
       </div>
 
+      {hitId && !selected ? <MissingHit hitId={hitId} /> : null}
       <HitWorkspace list={list} selected={selected} onClose={() => onOpen(null)} />
     </div>
   )
@@ -175,5 +184,13 @@ function Filter({ label, children }: { label: string; children: ReactNode }) {
       {label}
       {children}
     </label>
+  )
+}
+
+export function MissingHit({ hitId }: { hitId: string }) {
+  return (
+    <p className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800" role="alert">
+      Hit <span className="font-mono whitespace-nowrap">{hitId}</span> is not in the loaded files. Pick a hit from the list.
+    </p>
   )
 }

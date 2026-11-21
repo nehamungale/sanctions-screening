@@ -100,13 +100,11 @@ export function Overview(p: Props) {
               <h2 className="text-lg font-semibold">Alerts</h2>
               <span className="text-sm text-muted-foreground">
                 {counts.alertsTotal} alerts · click a tile to list them
-                {model.alertSource === 'alerts'
-                  ? model.verified
-                    ? ''
-                    : ' · clears withheld'
-                  : model.alertSource === 'summaries'
-                    ? ' · alert list from alerts.trace.jsonl; load alerts.jsonl to confirm clears'
-                    : ' · grouped from the trace; load alerts.jsonl to confirm clears'}
+                {model.alertSource === 'summaries'
+                  ? ' · hit lists from alerts.trace.jsonl'
+                  : model.alertSource === 'trace'
+                    ? ' · hit lists grouped from the trace, so a hit missing from the trace can’t be seen'
+                    : ''}
               </span>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
@@ -127,6 +125,7 @@ export function Overview(p: Props) {
                     <span className="text-sm font-medium">{STATUS_LABELS[s].label}</span>
                     <span className="text-4xl font-semibold tabular-nums">{counts.alerts[s]}</span>
                     <span className="text-xs text-muted-foreground">{STATUS_LABELS[s].sub}</span>
+                    {s === 'NOT_VERIFIED' ? <span className="text-xs font-medium text-slate-700">{notVerifiedNote(model.badAlertLines)}</span> : null}
                   </button>
                 )
               })}
@@ -166,7 +165,7 @@ export function Overview(p: Props) {
                 </div>
               )
             ) : null}
-            {status ? <AlertList status={status} alerts={listed} onAlert={p.onAlert} /> : null}
+            {status ? <AlertList status={status} alerts={listed} onAlert={p.onAlert} unavailable={status === 'CLEARED' && !model.verified ? notVerifiedNote(model.badAlertLines) : null} /> : null}
           </section>
 
           {p.repro ? <ReproCard report={p.repro.report} metrics={p.repro.metrics} onHit={p.onReproHit} /> : null}
@@ -260,7 +259,39 @@ export function Overview(p: Props) {
   )
 }
 
-function AlertList({ status, alerts, onAlert }: { status: RollupStatus; alerts: AlertSummary[]; onAlert: (id: string) => void }) {
+/** One line under the Not verified tile; the same text whatever the hit lists came from. */
+function notVerifiedNote(badLines: number): string {
+  return badLines > 0
+    ? 'The alerts file has unreadable lines, so nothing can be shown as Cleared'
+    : 'No original alerts file loaded, so nothing can be shown as Cleared'
+}
+
+function AlertList({
+  status,
+  alerts,
+  onAlert,
+  unavailable,
+}: {
+  status: RollupStatus
+  alerts: AlertSummary[]
+  onAlert: (id: string) => void
+  unavailable: string | null
+}) {
+  if (unavailable) {
+    return (
+      <Card className="gap-3 py-5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <StatusBadge status={status} />
+            <span className="font-normal text-muted-foreground">Not available until the alerts file is loaded</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">{unavailable}.</p>
+        </CardContent>
+      </Card>
+    )
+  }
   return (
     <Card className="gap-3 py-5">
       <CardHeader>
@@ -289,7 +320,7 @@ function AlertList({ status, alerts, onAlert }: { status: RollupStatus; alerts: 
                 return (
                   <TableRow key={a.alert_id} className="cursor-pointer hover:bg-muted/50" onClick={() => onAlert(a.alert_id)}>
                     <TableCell className="py-3">
-                      <button type="button" className="cursor-pointer font-mono text-sm underline-offset-4 hover:underline" onClick={() => onAlert(a.alert_id)}>
+                      <button type="button" className="cursor-pointer font-mono text-sm whitespace-nowrap underline-offset-4 hover:underline" onClick={() => onAlert(a.alert_id)}>
                         {a.alert_id}
                       </button>
                     </TableCell>
@@ -298,7 +329,7 @@ function AlertList({ status, alerts, onAlert }: { status: RollupStatus; alerts: 
                       <div className="flex flex-col gap-1">
                         {shown.map((h) => (
                           <span key={h.hit_id} className="flex items-baseline gap-2">
-                            <span className="font-mono text-xs">{h.hit_id}</span>
+                            <span className="font-mono text-xs whitespace-nowrap">{h.hit_id}</span>
                             <ReasonCode code={h.reason_code ?? HIT_NOT_DECIDED} />
                           </span>
                         ))}

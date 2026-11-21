@@ -1,6 +1,6 @@
 import type { RunCell } from '@/lib/repro'
 import { reasonLabel, STATUS_LABELS } from '@/lib/labels'
-import type { Decision, RollupStatus } from '@/lib/policy'
+import { HIT_NOT_DECIDED, type Decision, type RollupStatus } from '@/lib/policy'
 import { cn } from '@/lib/utils'
 
 export const DECISION_TONE: Record<Decision, { dot: string; pill: string }> = {
@@ -20,13 +20,13 @@ export const STATUS_TONE: Record<RollupStatus, { border: string; pill: string }>
 export function DecisionBadge({ decision, className }: { decision: Decision | null; className?: string }) {
   if (!decision) {
     return (
-      <span className={cn('inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-xs text-slate-700', className)}>
+      <span className={cn('inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-xs whitespace-nowrap text-slate-700', className)}>
         no decision
       </span>
     )
   }
   return (
-    <span className={cn('inline-flex rounded-md border px-2 py-0.5 font-mono text-xs font-medium', DECISION_TONE[decision].pill, className)}>
+    <span className={cn('inline-flex rounded-md border px-2 py-0.5 font-mono text-xs font-medium whitespace-nowrap', DECISION_TONE[decision].pill, className)}>
       {decision}
     </span>
   )
@@ -42,7 +42,7 @@ export function DecisionDot({ decision, muted = false }: { decision: Decision | 
 
 export function StatusBadge({ status }: { status: RollupStatus }) {
   return (
-    <span className={cn('inline-flex rounded-md border px-2 py-0.5 text-xs font-medium', STATUS_TONE[status].pill)}>
+    <span className={cn('inline-flex rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap', STATUS_TONE[status].pill)}>
       {STATUS_LABELS[status].label}
     </span>
   )
@@ -50,22 +50,32 @@ export function StatusBadge({ status }: { status: RollupStatus }) {
 
 /** A reason code with its plain-English label beside it. */
 export function ReasonCode({ code, className }: { code: string; className?: string }) {
+  if (code === HIT_NOT_DECIDED) {
+    // Never shown as a raw code on screen: plain words, the code only in the tooltip (and the raw trace).
+    return (
+      <span className={cn('inline-flex text-xs font-medium whitespace-nowrap text-slate-700', className)} title={code}>
+        Hit has no decision
+      </span>
+    )
+  }
   return (
     <span className={cn('inline-flex flex-wrap items-baseline gap-x-2', className)}>
-      <span className="font-mono text-xs">{code}</span>
-      <span className="text-xs text-muted-foreground">{reasonLabel(code)}</span>
+      <span className="font-mono text-xs whitespace-nowrap" title={reasonLabel(code)}>
+        {code}
+      </span>
+      <span className="reason-label text-xs text-muted-foreground">{reasonLabel(code)}</span>
     </span>
   )
 }
 
-/** One dot per run for a hit (repro.json hits[].per_run). Hollow dot: the run has no line for the hit. */
+/** One dot per run for a hit (repro.json hits[].per_run). Hollow dot: missing in that run. */
 export function RunStrip({ cells, labels }: { cells: RunCell[]; labels: string[] }) {
   return (
-    <span className="inline-flex items-center gap-1" aria-label="Verdict in each run">
+    <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap" aria-label="Verdict in each run">
       {cells.map((c, i) => (
         <span
           key={i}
-          title={`${labels[i] ?? `run ${i + 1}`}: ${c ? `${c.decision ?? '?'} · ${c.reason_code ?? '?'}` : 'no line for this hit'}`}
+          title={`run ${i + 1}${labels[i] ? ` (${labels[i]})` : ''}: ${c ? `${c.decision ?? '?'} · ${c.reason_code ?? '?'}` : `missing in run ${i + 1}`}`}
           className={cn(
             'inline-block size-2.5 rounded-full',
             c?.decision ? DECISION_TONE[c.decision].dot : 'border border-muted-foreground/60 bg-transparent',

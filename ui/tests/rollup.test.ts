@@ -21,7 +21,9 @@ import { HIT_NOT_DECIDED, REASON_CODES, ROLLUP_STATUSES } from '../src/lib/polic
 import { alertsFromHits, crossCheckSummaries, overviewCounts, rollUpAlerts } from '../src/lib/rollup.ts'
 import { readComparison, readDecidingDims, readIdentity, unknownFacts } from '../src/lib/trace-view.ts'
 import { buildModel, buildRepro, type Loaded } from '../src/lib/model.ts'
-import { getUnstableHitIds, isFlippedClear, parseRepro, reproMetrics } from '../src/lib/repro.ts'
+import {
+  getUnstableHitIds, instabilityLabel, isDecisionFlip, isDecisionStable, isFlippedClear, isJudgesStable, isMissingOutput, isReasonOnlyChange, missingRuns, parseRepro, reproMetrics,
+} from '../src/lib/repro.ts'
 import { allHitRows, filterRows, NO_FILTERS, queueGroups, whatsMissingLine } from '../src/lib/worklist.ts'
 
 const fixture = (name: string) => readFileSync(new URL(`../fixtures/${name}`, import.meta.url), 'utf8')
@@ -290,34 +292,64 @@ test('5: explicit deciding_dims wins; invalid falls back to the reason code; REV
 
 // --- 6: repro.json ---
 
-test('repro sample: parses, 10 of 11 judges-stable, 2 unstable, 0 flipped clears, summary agrees', () => {
+test('repro sample: official 8/11, decision-stable 9/11, each case named, 0 flipped clears', () => {
   const r = parseRepro(fixture('repro.sample.json'))
   assert.deepEqual(r.issues, [])
   const m = reproMetrics(r.report!)
   assert.equal(m.n_hits, 11)
-  assert.equal(m.judges_stable, 10)
+  assert.equal(m.official_stable, 8)
+  assert.equal(m.decision_stable, 9)
   assert.deepEqual(m.flipped_clear_ids, [])
-  assert.deepEqual(m.unstable_ids, ['H-SYN004', 'H-SYN006'])
+  assert.deepEqual(m.reason_only_ids, ['H-SYN002'])
+  assert.deepEqual(m.decision_flip_ids, ['H-SYN006'])
+  assert.deepEqual(m.missing_output_ids, ['H-SYN007'])
+  assert.deepEqual(m.other_change_ids, ['H-SYN004'])
+  assert.deepEqual(m.unstable_ids, ['H-SYN002', 'H-SYN006', 'H-SYN007'])
   assert.deepEqual(m.summary_mismatches, [])
-  assert.deepEqual(getUnstableHitIds(r.report), ['H-SYN004', 'H-SYN006'])
+  assert.equal(r.report!.summary.judges_stable_hits, m.official_stable)
+  assert.deepEqual(getUnstableHitIds(r.report), ['H-SYN002', 'H-SYN006', 'H-SYN007'])
   assert.deepEqual(getUnstableHitIds(null), [])
+  const byId = (id: string) => r.report!.hits.find((h) => h.hit_id === id)!
+  assert.equal(instabilityLabel(byId('H-SYN007')), 'missing output: missing in run 3')
+  assert.equal(instabilityLabel(byId('H-SYN002')), 'reason code changed (not a flip)')
+  assert.equal(instabilityLabel(byId('H-SYN006')), 'verdict changed')
 })
 
-test('repro flipped variant: exactly one flipped clear (H-SYN008)', () => {
-  const m = reproMetrics(parseRepro(fixture('repro-flipped.sample.json')).report!)
-  assert.deepEqual(m.flipped_clear_ids, ['H-SYN008'])
-  assert.equal(m.judges_stable, 9)
+test('repro flipped variant: decision-flip clear (H-SYN008) and missing clear (H-SYN010)', () => {
+  const r = parseRepro(fixture('repro-flipped.sample.json')).report!
+  const m = reproMetrics(r)
+  assert.deepEqual(m.flipped_clear_ids, ['H-SYN008', 'H-SYN010'])
+  assert.deepEqual(m.missing_output_ids, ['H-SYN007'])
+  assert.equal(m.official_stable, 6)
+  assert.equal(m.decision_stable, 7)
+  assert.equal(instabilityLabel(r.hits.find((h) => h.hit_id === 'H-SYN010')!), 'clear flipped: missing in run 4')
 })
 
-test('flipped clear rule: missing run counts, code-only change between clears does not', () => {
+test('flipped clear vs missing output vs reason-only change', () => {
   const h = (cells: ([string, string] | null)[]) => ({
     hit_id: 'H', alert_id: null, stable: false, flip_type: 'decision' as const, modal_decision: null, modal_reason_code: null, llm_used: null, fragility: null,
     per_run: cells.map((c) => (c ? { decision: c[0] as 'DIFFERENT_ENTITY', reason_code: c[1] } : null)),
   })
-  assert.equal(isFlippedClear(h([['DIFFERENT_ENTITY', 'DOB_MISMATCH'], null])), true)
+  const missingClear = h([['DIFFERENT_ENTITY', 'DOB_MISMATCH'], null])
+  assert.equal(isFlippedClear(missingClear), true)
+  assert.equal(isMissingOutput(missingClear), false)
+  assert.deepEqual(missingRuns(missingClear), [1])
+  const missingReview = h([['REVIEW', 'INSUFFICIENT_DATA'], null])
+  assert.equal(isFlippedClear(missingReview), false)
+  assert.equal(isMissingOutput(missingReview), true)
+  assert.equal(isJudgesStable(missingReview), false)
+  assert.equal(isDecisionStable(missingReview), false)
+  assert.equal(isMissingOutput(h([['SAME_ENTITY', 'NAME_DOB_MATCH'], null, ['SAME_ENTITY', 'NAME_DOB_MATCH']])), true)
+  assert.equal(isFlippedClear(h([null, null])), false)
   assert.equal(isFlippedClear(h([['DIFFERENT_ENTITY', 'DOB_MISMATCH'], ['REVIEW', 'INSUFFICIENT_DATA']])), true)
-  assert.equal(isFlippedClear(h([['DIFFERENT_ENTITY', 'DOB_MISMATCH'], ['DIFFERENT_ENTITY', 'LOCATION_MISMATCH']])), false)
+  assert.equal(isFlippedClear(h([['DIFFERENT_ENTITY', 'DOB_MISMATCH'], ['REVIEW', 'INSUFFICIENT_DATA'], null])), true)
+  const reasonOnly = h([['DIFFERENT_ENTITY', 'DOB_MISMATCH'], ['DIFFERENT_ENTITY', 'LOCATION_MISMATCH']])
+  assert.equal(isFlippedClear(reasonOnly), false)
+  assert.equal(isReasonOnlyChange(reasonOnly), true)
+  assert.equal(isJudgesStable(reasonOnly), false)
+  assert.equal(isDecisionStable(reasonOnly), true)
   assert.equal(isFlippedClear(h([['REVIEW', 'INSUFFICIENT_DATA'], ['SAME_ENTITY', 'NAME_DOB_MATCH']])), false)
+  assert.equal(isDecisionFlip(h([['REVIEW', 'INSUFFICIENT_DATA'], ['SAME_ENTITY', 'NAME_DOB_MATCH']])), true)
 })
 
 test('repro parsing is defensive: bad JSON, wrong version, bad rows', () => {
@@ -370,7 +402,7 @@ test('audit: all hits incl. undecided; filters combine; unstable uses the repro 
   assert.deepEqual(filterRows(rows, { ...NO_FILTERS, verdict: 'REVIEW' }, unstable).map((r) => r.hit_id), ['H-SYN004', 'H-SYN006', 'H-SYN007'])
   assert.deepEqual(filterRows(rows, { ...NO_FILTERS, verdict: 'none' }, unstable).map((r) => r.hit_id), ['H-SYN009'])
   assert.deepEqual(filterRows(rows, { ...NO_FILTERS, code: 'DOB_MISMATCH' }, unstable).map((r) => r.hit_id), ['H-SYN001'])
-  assert.deepEqual(filterRows(rows, { ...NO_FILTERS, unstable: true }, unstable).map((r) => r.hit_id), ['H-SYN004', 'H-SYN006'])
+  assert.deepEqual(filterRows(rows, { ...NO_FILTERS, unstable: true }, unstable).map((r) => r.hit_id), ['H-SYN002', 'H-SYN006', 'H-SYN007'])
   assert.deepEqual(filterRows(rows, { ...NO_FILTERS, llm: 'yes' }, unstable).map((r) => r.hit_id), ['H-SYN006'])
   assert.equal(filterRows(rows, { ...NO_FILTERS, fragility: 'thin', verdict: 'DIFFERENT_ENTITY' }, unstable).length, 3)
 })
@@ -407,6 +439,19 @@ test('duplicate summary lines are flagged in the cross-check', () => {
   const sums = rollUpAlerts(p.summaries, t.hits, { alertsVerified: false })
   assert.equal(sums[0].alert_status, 'NEEDS_REVIEW')
   assert.ok(crossCheckSummaries(sums, p.summaries, false).some((x) => x.kind === 'duplicate'))
+})
+
+test('Q1: conflicting duplicate lines + a SAME_ENTITY hit stay "Goes to compliance team", warning kept', () => {
+  const a = parseAlerts(['{"alert_id":"A-1","hit_ids":["H-1","H-2"]}', '{"alert_id":"A-1","hit_ids":["H-1"]}'].join('\n'))
+  const t = parseTraceJsonl([line('H-1', 'SAME_ENTITY', 'NAME_DOB_MATCH'), line('H-2', 'DIFFERENT_ENTITY', 'DOB_MISMATCH')].join('\n'))
+  const [s1] = rollUpAlerts(a.alerts, t.hits, { alertsVerified: true })
+  assert.equal(s1.alert_status, 'ESCALATED')
+  assert.equal(STATUS_LABELS[s1.alert_status].label, 'Goes to compliance team')
+  assert.deepEqual(s1.conflicting_lines, [1, 2])
+  const m = buildModel({ trace: { name: 't', result: t }, alerts: { name: 'alerts.jsonl', result: a }, summaries: null, repro: null } as Loaded)!
+  assert.deepEqual(m.conflictingAlerts, [{ alert_id: 'A-1', lines: [1, 2] }])
+  assert.equal(m.summariesById.get('A-1')!.alert_status, 'ESCALATED')
+  assert.equal(m.counts.alerts.ESCALATED, 1)
 })
 
 test('MUST-FIX 2: only alerts.jsonl lines verify; a summaries file in the alerts slot does not', () => {

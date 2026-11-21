@@ -1,3 +1,4 @@
+import { MissingHit } from '@/Audit'
 import { HitWorkspace, rowKey } from '@/HitWorkspace'
 import { DecisionBadge, ReasonCode } from '@/components/verdict'
 import type { Model } from '@/lib/data'
@@ -49,10 +50,10 @@ export function Queue({ model, alertId, hitId, onOpen }: Props) {
                         )}
                       >
                         <span className="flex items-center gap-2">
-                          <span className="font-mono text-sm">{r.hit_id}</span>
+                          <span className="font-mono text-sm whitespace-nowrap">{r.hit_id}</span>
                           {compact ? <DecisionBadge decision={r.decision} /> : null}
                         </span>
-                        <span className="font-mono text-xs text-muted-foreground">{r.alert_id ?? '—'}</span>
+                        <span className="font-mono text-xs whitespace-nowrap text-muted-foreground">{r.alert_id ?? '—'}</span>
                         <ReasonCode code={r.reason_code} />
                         <span className="text-sm">{whatsMissingLine(r)}</span>
                       </button>
@@ -76,6 +77,7 @@ export function Queue({ model, alertId, hitId, onOpen }: Props) {
           their alert), then SAME_ENTITY (goes to the compliance team). Within a group: by alert, then hit.
         </p>
       </div>
+      {hitId && !selected ? <MissingHit hitId={hitId} /> : null}
       <HitWorkspace list={list} selected={selected} onClose={() => onOpen(null)} />
     </div>
   )

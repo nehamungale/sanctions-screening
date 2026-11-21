@@ -144,7 +144,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-8 py-10">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-8 sm:py-10">
         {nav.screen === 'queue' ? (
           model ? <Queue model={model} alertId={nav.alert} hitId={nav.hit} onOpen={openRow} /> : noData
         ) : nav.screen === 'audit' ? (

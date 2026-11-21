@@ -34,7 +34,7 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
     return (
       <PanelShell>
         <div className="flex flex-wrap items-center gap-3">
-          <span className="font-mono text-sm font-semibold">{hitId}</span>
+          <span className="font-mono text-sm font-semibold whitespace-nowrap">{hitId}</span>
           <DecisionBadge decision={null} />
         </div>
         <Section title="Verdict">
@@ -69,7 +69,7 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
       {/* 1. Verdict line + badges */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="font-mono text-sm font-semibold">{hit.hit_id}</span>
+          <span className="font-mono text-sm font-semibold whitespace-nowrap">{hit.hit_id}</span>
           <DecisionBadge decision={v.decision} />
           <ReasonCode code={v.reason_code} />
         </div>
@@ -160,7 +160,34 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
               : undefined
         }
       >
-        <div className="overflow-x-auto rounded-lg border">
+        {/* Narrow screens: one card per fact, nothing to scroll sideways. */}
+        <ul className="flex flex-col gap-2 sm:hidden" aria-label="Comparison">
+          {rows.map((r) => {
+            const isDeciding = deciding.has(r.dim)
+            return (
+              <li key={r.dim} className={cn('rounded-lg border p-3 text-sm', isDeciding && 'border-l-4 border-l-sky-500 bg-sky-50')}>
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className={cn(isDeciding && 'font-medium')}>
+                    {DIM_LABELS[r.dim] ?? r.dim}
+                    {isDeciding ? <span className="ml-2 text-[11px] font-normal text-sky-700">deciding</span> : null}
+                  </span>
+                  <StatusText status={r.status} />
+                </div>
+                <dl className="mt-2 grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+                  <dt className="text-muted-foreground">Customer</dt>
+                  <dd className={cn('break-words', isEmpty(r.customer) && 'text-muted-foreground italic')}>
+                    {isEmpty(r.customer) ? (ambiguous ? MISSING_TEXT.ambiguousCustomer : MISSING_TEXT.customer) : formatValue(r.customer)}
+                  </dd>
+                  <dt className="text-muted-foreground">Hit</dt>
+                  <dd className={cn('break-words', isEmpty(r.hit) && 'text-muted-foreground italic')}>{isEmpty(r.hit) ? MISSING_TEXT.hit : formatValue(r.hit)}</dd>
+                  <dt className="text-muted-foreground">Records</dt>
+                  <dd className="flex flex-wrap gap-1">{r.src.length ? r.src.map((x) => <Id key={x}>{x}</Id>) : <span className="text-muted-foreground">—</span>}</dd>
+                </dl>
+              </li>
+            )
+          })}
+        </ul>
+        <div className="hidden overflow-x-auto rounded-lg border sm:block">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
               <tr>
@@ -236,7 +263,7 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
       {/* 5. Collapsed layers */}
       <div className="flex flex-col gap-2">
         <Collapsed title="Who is who" count={identity.merged.length + identity.facts.length}>
-          <dl className="grid grid-cols-[10rem_1fr] gap-x-4 gap-y-2 text-sm">
+          <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-y-2">
             <dt className="text-muted-foreground">person_id</dt>
             <dd>{identity.person_id ? <Id>{identity.person_id}</Id> : '—'}</dd>
             <dt className="text-muted-foreground">Merged records</dt>
@@ -338,17 +365,17 @@ export function HitPanel({ hitId, hit, undecided }: Props) {
 }
 
 function PanelShell({ children }: { children: ReactNode }) {
-  return <div className="flex flex-col gap-8 rounded-xl border bg-card p-6 shadow-sm">{children}</div>
+  return <div className="flex min-w-0 flex-col gap-8 rounded-xl border bg-card p-4 shadow-sm sm:p-6">{children}</div>
 }
 
 function Section({ title, aside, children }: { title: string; aside?: string; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold">{title}</h3>
         {aside ? <span className="text-xs text-muted-foreground">{aside}</span> : null}
       </div>
-      <div>{children}</div>
+      <div className="min-w-0">{children}</div>
     </section>
   )
 }
@@ -363,7 +390,7 @@ function Collapsed({ title, count, children }: { title: string; count?: number; 
         </span>
         <span className="text-muted-foreground transition-transform group-open:rotate-90">›</span>
       </summary>
-      <div className="border-t px-4 py-4">{children}</div>
+      <div className="overflow-x-auto border-t px-4 py-4">{children}</div>
     </details>
   )
 }
@@ -377,12 +404,12 @@ function RawJson({ value }: { value: unknown }) {
 }
 
 function Id({ children }: { children: ReactNode }) {
-  return <span className="rounded border bg-muted/40 px-1.5 py-0.5 font-mono text-[11px]">{children}</span>
+  return <span className="rounded border bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] whitespace-nowrap">{children}</span>
 }
 
 function Chip({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5', tone)}>
+    <span className={cn('inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 whitespace-nowrap', tone)}>
       <span className="text-muted-foreground">{label}</span>
       <span className="font-medium">{value}</span>
     </span>

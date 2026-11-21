@@ -145,60 +145,124 @@ export function parseRepro(text: string): ReproParseResult {
   }
 }
 
-/** Present in every run with one decision and one reason code (the judges' rule). */
+/** Run indexes (0-based) with no line for the hit. Shown to people as "missing in run N" (1-based). */
+export function missingRuns(h: ReproHit): number[] {
+  return h.per_run.flatMap((c, i) => (c === null ? [i] : []))
+}
+
+/**
+ * Official reproducibility (brief, "How you'll be judged"): "The same decision and reason code in all
+ * five runs". A hit counts only when it is present in every run with one decision and one reason code.
+ */
 export function isJudgesStable(h: ReproHit): boolean {
   const first = h.per_run[0]
   return h.per_run.every((c) => c !== null && first !== null && c.decision === first.decision && c.reason_code === first.reason_code)
 }
 
-/**
- * A clear that ever flipped: DIFFERENT_ENTITY in at least one run, and in some run the
- * hit is not DIFFERENT_ENTITY (another decision, or missing). A change of reason code
- * between two clears is not counted here (it is still a judges flip). Must be 0.
- */
-export function isFlippedClear(h: ReproHit): boolean {
-  const cleared = h.per_run.some((c) => c?.decision === 'DIFFERENT_ENTITY')
-  return cleared && h.per_run.some((c) => c === null || c.decision !== 'DIFFERENT_ENTITY')
+/** Secondary: present in every run with one decision (reason code may differ). */
+export function isDecisionStable(h: ReproHit): boolean {
+  const first = h.per_run[0]
+  return h.per_run.every((c) => c !== null && first !== null && c.decision === first.decision)
+}
+
+const present = (h: ReproHit) => h.per_run.filter((c): c is NonNullable<RunCell> => c !== null)
+
+/** The decision differs between runs that produced the hit. */
+export function isDecisionFlip(h: ReproHit): boolean {
+  const p = present(h)
+  return p.some((c) => c.decision !== p[0]?.decision)
+}
+
+/** Same decision wherever present, but the reason code differs. Counts against the official rate, not as a flip. */
+export function isReasonOnlyChange(h: ReproHit): boolean {
+  const p = present(h)
+  return !isDecisionFlip(h) && p.some((c) => c.reason_code !== p[0]?.reason_code)
 }
 
 /**
- * Unstable = anything the report does not mark stable (flip_type other than none: decision,
- * code, evidence or other), plus anything that fails the judges' rule on per_run.
- * Exported for the Audit screen's filter. Sorted.
+ * A clear that ever flipped (must be 0):
+ * - the decision differs between runs and at least one run cleared it (DIFFERENT_ENTITY), or
+ * - the hit is missing from a run and every run that did produce it cleared it.
+ * A reason-code change between two clears is not a flip.
+ */
+export function isFlippedClear(h: ReproHit): boolean {
+  const p = present(h)
+  if (p.length === 0) return false
+  if (isDecisionFlip(h)) return p.some((c) => c.decision === 'DIFFERENT_ENTITY')
+  return missingRuns(h).length > 0 && p.every((c) => c.decision === 'DIFFERENT_ENTITY')
+}
+
+/** Missing from at least one run and not a flipped clear: broken output, counted separately. */
+export function isMissingOutput(h: ReproHit): boolean {
+  return missingRuns(h).length > 0 && !isFlippedClear(h)
+}
+
+/**
+ * Unstable = not officially reproducible: the decision or reason code is not identical in all runs,
+ * or the hit is missing from a run. Evidence-only or trace-only changes (repro flip_type "evidence" /
+ * "other" with identical verdicts) are NOT unstable under this definition. Used by Audit. Sorted.
  */
 export function getUnstableHitIds(report: ReproReport | null): string[] {
   if (!report) return []
   return report.hits
-    .filter((h) => !h.stable || !isJudgesStable(h))
+    .filter((h) => !isJudgesStable(h))
     .map((h) => h.hit_id)
     .sort()
 }
 
 export interface ReproMetrics {
   n_hits: number
-  judges_stable: number
-  /** judges_stable / n_hits, or null with no hits. */
-  share: number | null
+  /** Official: same decision and reason code in all runs. */
+  official_stable: number
+  official_share: number | null
+  /** Secondary: same decision in all runs. */
+  decision_stable: number
+  decision_share: number | null
   flipped_clear_ids: string[]
+  missing_output_ids: string[]
+  /** Decision changed, no clear involved. */
+  decision_flip_ids: string[]
+  reason_only_ids: string[]
   unstable_ids: string[]
+  /** Verdict identical in every run, but evidence or other trace content changed (not counted). */
+  other_change_ids: string[]
   /** Where summary disagrees with the numbers recomputed from hits[]. */
   summary_mismatches: string[]
 }
 
 export function reproMetrics(r: ReproReport): ReproMetrics {
   const n = r.hits.length
-  const stable = r.hits.filter(isJudgesStable).length
+  const ids = (f: (h: ReproHit) => boolean) => r.hits.filter(f).map((h) => h.hit_id).sort()
+  const official = r.hits.filter(isJudgesStable).length
+  const decision = r.hits.filter(isDecisionStable).length
   const mismatches: string[] = []
   if (r.summary.n_hits !== null && r.summary.n_hits !== n) mismatches.push(`summary.n_hits is ${r.summary.n_hits}, hits[] has ${n}`)
-  if (r.summary.judges_stable_hits !== null && r.summary.judges_stable_hits !== stable) {
-    mismatches.push(`summary.judges_stable_hits is ${r.summary.judges_stable_hits}, recomputed ${stable}`)
+  if (r.summary.judges_stable_hits !== null && r.summary.judges_stable_hits !== official) {
+    mismatches.push(`summary.judges_stable_hits is ${r.summary.judges_stable_hits}, recomputed ${official}`)
   }
   return {
     n_hits: n,
-    judges_stable: stable,
-    share: n ? stable / n : null,
-    flipped_clear_ids: r.hits.filter(isFlippedClear).map((h) => h.hit_id).sort(),
+    official_stable: official,
+    official_share: n ? official / n : null,
+    decision_stable: decision,
+    decision_share: n ? decision / n : null,
+    flipped_clear_ids: ids(isFlippedClear),
+    missing_output_ids: ids(isMissingOutput),
+    decision_flip_ids: ids((h) => isDecisionFlip(h) && !isFlippedClear(h)),
+    reason_only_ids: ids(isReasonOnlyChange),
     unstable_ids: getUnstableHitIds(r),
+    other_change_ids: ids((h) => isJudgesStable(h) && !h.stable),
     summary_mismatches: mismatches,
   }
+}
+
+/** Plain-English label for why a hit is listed on the repro card. */
+export function instabilityLabel(h: ReproHit): string {
+  const miss = missingRuns(h).map((i) => `missing in run ${i + 1}`).join(', ')
+  if (isFlippedClear(h)) return isDecisionFlip(h) ? 'clear flipped: verdict changed' : `clear flipped: ${miss}`
+  if (isMissingOutput(h)) return `missing output: ${miss}`
+  if (isDecisionFlip(h)) return 'verdict changed'
+  if (isReasonOnlyChange(h)) return 'reason code changed (not a flip)'
+  if (!h.stable) return 'cited records or trace changed (not counted)'
+  return 'same every run'
 }

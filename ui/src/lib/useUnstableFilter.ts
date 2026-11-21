@@ -1,4 +1,6 @@
 // "Unstable only" filter over hit rows, driven by repro.json. Used by the Audit screen.
+// Unstable = not officially reproducible (decision or reason code not identical in all runs, or missing
+// from a run); see getUnstableHitIds.
 // Pass `controlled` to keep the toggle in the URL; otherwise it keeps its own state.
 import { useMemo, useState } from 'react'
 

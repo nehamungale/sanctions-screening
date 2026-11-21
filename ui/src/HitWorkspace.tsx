@@ -11,12 +11,12 @@ export function rowKey(r: { hit_id: string; alert_id: string | null }) {
 export function HitWorkspace({ list, selected, onClose }: { list: ReactNode; selected: HitRow | null; onClose: () => void }) {
   if (!selected) return <>{list}</>
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-      <div className="lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">{list}</div>
-      <div className="flex flex-col gap-2">
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+      <div className="min-w-0 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">{list}</div>
+      <div className="flex min-w-0 flex-col gap-2">
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>
-            Alert <span className="font-mono text-foreground">{selected.alert_id ?? '—'}</span>
+            Alert <span className="font-mono whitespace-nowrap text-foreground">{selected.alert_id ?? '—'}</span>
           </span>
           <button type="button" className="cursor-pointer hover:text-foreground" onClick={onClose}>
             Close ✕

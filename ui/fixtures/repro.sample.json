@@ -137,7 +137,7 @@
       [
         "REVIEW",
         "REVIEW",
-        "REVIEW",
+        null,
         "REVIEW",
         "REVIEW"
       ],
@@ -195,7 +195,7 @@
         "ENTITY_TYPE_MISMATCH",
         "ENTITY_TYPE_MISMATCH",
         "ENTITY_TYPE_MISMATCH",
-        "ENTITY_TYPE_MISMATCH",
+        "LOCATION_MISMATCH",
         "ENTITY_TYPE_MISMATCH"
       ],
       [
@@ -229,7 +229,7 @@
       [
         "AMBIGUOUS_CUSTOMER_RECORD",
         "AMBIGUOUS_CUSTOMER_RECORD",
-        "AMBIGUOUS_CUSTOMER_RECORD",
+        null,
         "AMBIGUOUS_CUSTOMER_RECORD",
         "AMBIGUOUS_CUSTOMER_RECORD"
       ],
@@ -375,7 +375,7 @@
         "evidence": false,
         "missing": false,
         "output_trace_mismatch": false,
-        "reason_code": false,
+        "reason_code": true,
         "steps": false
       },
       "customer_record_id_per_run": [
@@ -409,11 +409,11 @@
       ],
       "first_divergent_fact": null,
       "first_divergent_step": null,
-      "flip_type": "none",
+      "flip_type": "code",
       "fragility": "solid",
       "fragility_conflict": false,
       "hit_id": "H-SYN002",
-      "judges_stable": true,
+      "judges_stable": false,
       "llm_used": false,
       "llm_used_per_run": [
         false,
@@ -441,14 +441,14 @@
         ],
         [
           "DIFFERENT_ENTITY",
-          "ENTITY_TYPE_MISMATCH"
+          "LOCATION_MISMATCH"
         ],
         [
           "DIFFERENT_ENTITY",
           "ENTITY_TYPE_MISMATCH"
         ]
       ],
-      "stable": true,
+      "stable": false,
       "trace_present_per_run": [
         true,
         true,
@@ -844,7 +844,7 @@
         "customer_record_id": false,
         "decision": false,
         "evidence": false,
-        "missing": false,
+        "missing": true,
         "output_trace_mismatch": false,
         "reason_code": false,
         "steps": false
@@ -852,7 +852,7 @@
       "customer_record_id_per_run": [
         "AMBIGUOUS",
         "AMBIGUOUS",
-        "AMBIGUOUS",
+        null,
         "AMBIGUOUS",
         "AMBIGUOUS"
       ],
@@ -867,11 +867,7 @@
           "CUS-SYN005",
           "H-SYN007"
         ],
-        [
-          "CUS-SYN004",
-          "CUS-SYN005",
-          "H-SYN007"
-        ],
+        null,
         [
           "CUS-SYN004",
           "CUS-SYN005",
@@ -885,20 +881,22 @@
       ],
       "first_divergent_fact": null,
       "first_divergent_step": null,
-      "flip_type": "none",
+      "flip_type": "other",
       "fragility": "thin",
       "fragility_conflict": false,
       "hit_id": "H-SYN007",
-      "judges_stable": true,
+      "judges_stable": false,
       "llm_used": false,
       "llm_used_per_run": [
         false,
         false,
-        false,
+        null,
         false,
         false
       ],
-      "missing_from_runs": [],
+      "missing_from_runs": [
+        2
+      ],
       "modal_decision": "REVIEW",
       "modal_reason_code": "AMBIGUOUS_CUSTOMER_RECORD",
       "output_trace_mismatch_runs": [],
@@ -911,10 +909,7 @@
           "REVIEW",
           "AMBIGUOUS_CUSTOMER_RECORD"
         ],
-        [
-          "REVIEW",
-          "AMBIGUOUS_CUSTOMER_RECORD"
-        ],
+        null,
         [
           "REVIEW",
           "AMBIGUOUS_CUSTOMER_RECORD"
@@ -924,11 +919,11 @@
           "AMBIGUOUS_CUSTOMER_RECORD"
         ]
       ],
-      "stable": true,
+      "stable": false,
       "trace_present_per_run": [
         true,
         true,
-        true,
+        false,
         true,
         true
       ]
@@ -1325,7 +1320,7 @@
   },
   "schema_version": 1,
   "summary": {
-    "code_only_flip_hits": 0,
+    "code_only_flip_hits": 1,
     "decision_counts_per_run": [
       {
         "DIFFERENT_ENTITY": 6,
@@ -1339,7 +1334,7 @@
       },
       {
         "DIFFERENT_ENTITY": 6,
-        "REVIEW": 3,
+        "REVIEW": 2,
         "SAME_ENTITY": 2
       },
       {
@@ -1362,10 +1357,10 @@
         "other": 0
       },
       "not_llm_used": {
-        "code": 0,
+        "code": 1,
         "decision": 0,
         "evidence": 1,
-        "other": 0
+        "other": 1
       },
       "unknown": {
         "code": 0,
@@ -1374,12 +1369,14 @@
         "other": 0
       }
     },
-    "hits_missing_from_some_runs": [],
-    "judges_flip_hits": 1,
-    "judges_flips_all_llm_used": true,
-    "judges_metric": 0.9090909091,
-    "judges_stable_hits": 10,
-    "missing_hits": 0,
+    "hits_missing_from_some_runs": [
+      "H-SYN007"
+    ],
+    "judges_flip_hits": 2,
+    "judges_flips_all_llm_used": false,
+    "judges_metric": 0.7272727273,
+    "judges_stable_hits": 8,
+    "missing_hits": 1,
     "n_hits": 11,
     "n_runs": 5,
     "strict_change_hit_ids": [
@@ -1395,7 +1392,9 @@
       "SAME_ENTITY": "match"
     },
     "filters": {
-      "code_flip": [],
+      "code_flip": [
+        "H-SYN002"
+      ],
       "decision_flip": [
         "H-SYN006"
       ],
@@ -1403,11 +1402,15 @@
         "H-SYN004"
       ],
       "flipped_only": [
+        "H-SYN002",
         "H-SYN004",
-        "H-SYN006"
+        "H-SYN006",
+        "H-SYN007"
       ],
       "llm_sensitive": [],
-      "missing": [],
+      "missing": [
+        "H-SYN007"
+      ],
       "thin_clearances": [
         "H-SYN001",
         "H-SYN008",

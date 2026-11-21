@@ -102,7 +102,18 @@ Pipeline CLEARED against UI "Not verified" is not a disagreement. Duplicate summ
 | `config_check.all_identical` | ✓/✗ per config field | "config cannot be compared" |
 | `meta.generated_at` | shown | omitted |
 
-Metrics are recomputed from `per_run`: judges-stable = present in every run with one decision and one reason code;
-**clear that ever flipped** = `DIFFERENT_ENTITY` in at least one run and, in some run, another decision or no line (a reason-code
-change between two clears is not counted; it is still a judges flip). Must be 0; shown in red otherwise.
-**Unstable** (`getUnstableHitIds`, `useUnstableFilter`) = `stable: false` or not judges-stable.
+No repro fields changed; only how the UI reads `per_run` did. `per_run[i] === null` means the hit is
+**missing in run i+1** (dot tooltip, legend and list say exactly that). `missing_from_runs` and `flip_type` are not used for the
+counts; everything is recomputed from `per_run`:
+
+- **Reproducibility (headline, official)**: the brief's measure, "the same decision and reason code in all five runs". A hit
+  counts only if it is present in every run with one decision and one reason code. Must equal `summary.judges_stable_hits`.
+- **Same decision in all runs (secondary)**: present in every run with one decision; the reason code may differ.
+- **Clear that ever flipped** (must be 0, red otherwise): the decision differs between runs and at least one run said
+  `DIFFERENT_ENTITY`, **or** the hit is missing from a run and every run that produced it said `DIFFERENT_ENTITY`.
+- **Missing output** (counted separately, red-flagged as broken output): missing from at least one run and not a flipped clear.
+  Unstable, but not a flip.
+- **Reason code changed**: same decision wherever present, different reason code. Counts against the official rate, not a flip.
+- **Unstable** (`getUnstableHitIds`, `useUnstableFilter`, Audit "Not identical in all runs only") = **not officially
+  reproducible** (the headline definition). Hits with `stable: false` but identical verdicts in every run (evidence or other
+  trace changes) are *not* unstable; the card lists them in one muted "not counted" line.

@@ -27,18 +27,27 @@ def set_verdict(rec, decision, code):
     rec["verdict"]["decision"], rec["verdict"]["reason_code"] = decision, code
 
 def runs(flipped: bool):
+    """Five runs. Each case the repro card distinguishes appears once:
+    base:    decision flip without a clear (H-SYN006), reason-code-only change (H-SYN002),
+             missing output for a non-clear (H-SYN007 absent from run 3), evidence-only change (H-SYN004).
+    flipped: base + a clear that turns into REVIEW (H-SYN008, run 3)
+             + a clear missing from a run (H-SYN010 absent from run 4) -> both are flipped clears.
+    """
     out = []
     for i in range(5):
         recs = {r["hit_id"]: copy.deepcopy(r) for r in BASE}
-        # Unstable but no clear involved: an LLM-touched REVIEW hit reads as SAME_ENTITY in run 5.
-        if i == 4:
+        if i == 4:  # REVIEW read as SAME_ENTITY in run 5: a decision flip, no clear involved
             set_verdict(recs["H-SYN006"], "SAME_ENTITY", "NAME_DOB_MATCH")
-        # Evidence-only change: same verdict and code, one extra evidence id in run 3.
-        if i == 2:
+        if i == 2:  # evidence-only change: same verdict and code
             recs["H-SYN004"]["verdict"]["evidence"].append("H-SYN004#sources")
-        # Variant: a clear (LOCATION_MISMATCH) turns into REVIEW in run 3.
-        if flipped and i == 2:
+        if i == 3:  # reason-code-only change between two clears
+            set_verdict(recs["H-SYN002"], "DIFFERENT_ENTITY", "LOCATION_MISMATCH")
+        if i == 2:  # missing output: a REVIEW hit has no line in run 3
+            del recs["H-SYN007"]
+        if flipped and i == 2:  # a clear turns into REVIEW
             set_verdict(recs["H-SYN008"], "REVIEW", "INSUFFICIENT_DATA")
+        if flipped and i == 3:  # a clear has no line in run 4
+            del recs["H-SYN010"]
         out.append(list(recs.values()))
     return out
 
