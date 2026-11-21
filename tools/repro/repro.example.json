@@ -136,12 +136,12 @@
       ]
     ],
     "hit_ids": [
-      "H-000001",
-      "H-000002",
-      "H-000003",
-      "H-000004",
-      "H-000005",
-      "H-000006"
+      "H-SYN001",
+      "H-SYN002",
+      "H-SYN003",
+      "H-SYN004",
+      "H-SYN005",
+      "H-SYN006"
     ],
     "reason_codes": [
       [
@@ -197,7 +197,7 @@
   },
   "hits": [
     {
-      "alert_id": "A-000001",
+      "alert_id": "A-SYN001",
       "alert_id_conflict": false,
       "changes": {
         "alert_id": false,
@@ -211,27 +211,27 @@
         "steps": false
       },
       "customer_record_id_per_run": [
-        "CUS-000001",
-        "CUS-000001",
-        "CUS-000001",
-        "CUS-000001",
-        "CUS-000001"
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001"
       ],
       "evidence_per_run": [
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ]
       ],
       "first_divergent_fact": null,
@@ -239,7 +239,7 @@
       "flip_type": "none",
       "fragility": "solid",
       "fragility_conflict": false,
-      "hit_id": "H-000001",
+      "hit_id": "H-SYN001",
       "judges_stable": true,
       "llm_used": false,
       "llm_used_per_run": [
@@ -285,7 +285,7 @@
       ]
     },
     {
-      "alert_id": "A-000002",
+      "alert_id": "A-SYN002",
       "alert_id_conflict": false,
       "changes": {
         "alert_id": false,
@@ -299,27 +299,27 @@
         "steps": false
       },
       "customer_record_id_per_run": [
-        "CUS-000001",
-        "CUS-000001",
-        "CUS-000001",
-        "CUS-000001",
-        "CUS-000001"
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001"
       ],
       "evidence_per_run": [
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ]
       ],
       "first_divergent_fact": null,
@@ -327,7 +327,7 @@
       "flip_type": "decision",
       "fragility": "borderline",
       "fragility_conflict": false,
-      "hit_id": "H-000002",
+      "hit_id": "H-SYN002",
       "judges_stable": false,
       "llm_used": true,
       "llm_used_per_run": [
@@ -373,7 +373,7 @@
       ]
     },
     {
-      "alert_id": "A-000003",
+      "alert_id": "A-SYN003",
       "alert_id_conflict": false,
       "changes": {
         "alert_id": false,
@@ -387,27 +387,27 @@
         "steps": false
       },
       "customer_record_id_per_run": [
-        "CUS-000001",
-        "CUS-000001",
-        "CUS-000001",
-        "CUS-000001",
-        "CUS-000001"
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001"
       ],
       "evidence_per_run": [
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ]
       ],
       "first_divergent_fact": null,
@@ -415,7 +415,7 @@
       "flip_type": "code",
       "fragility": "thin",
       "fragility_conflict": false,
-      "hit_id": "H-000003",
+      "hit_id": "H-SYN003",
       "judges_stable": false,
       "llm_used": false,
       "llm_used_per_run": [
@@ -461,7 +461,7 @@
       ]
     },
     {
-      "alert_id": "A-000004",
+      "alert_id": "A-SYN004",
       "alert_id_conflict": false,
       "changes": {
         "alert_id": false,
@@ -475,27 +475,27 @@
         "steps": false
       },
       "customer_record_id_per_run": [
-        "CUS-000001",
-        "CUS-000001",
-        "CUS-000001",
-        "CUS-000001",
-        "CUS-000001"
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001"
       ],
       "evidence_per_run": [
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000002"
+          "KYC-SYN002"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ]
       ],
       "first_divergent_fact": null,
@@ -503,7 +503,7 @@
       "flip_type": "evidence",
       "fragility": "thin",
       "fragility_conflict": false,
-      "hit_id": "H-000004",
+      "hit_id": "H-SYN004",
       "judges_stable": true,
       "llm_used": false,
       "llm_used_per_run": [
@@ -549,7 +549,7 @@
       ]
     },
     {
-      "alert_id": "A-000005",
+      "alert_id": "A-SYN005",
       "alert_id_conflict": false,
       "changes": {
         "alert_id": false,
@@ -563,25 +563,25 @@
         "steps": false
       },
       "customer_record_id_per_run": [
-        "CUS-000001",
-        "CUS-000001",
-        "CUS-000001",
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001",
         null,
-        "CUS-000001"
+        "CUS-SYN001"
       ],
       "evidence_per_run": [
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         null,
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ]
       ],
       "first_divergent_fact": null,
@@ -589,7 +589,7 @@
       "flip_type": "other",
       "fragility": "solid",
       "fragility_conflict": false,
-      "hit_id": "H-000005",
+      "hit_id": "H-SYN005",
       "judges_stable": false,
       "llm_used": false,
       "llm_used_per_run": [
@@ -634,7 +634,7 @@
       ]
     },
     {
-      "alert_id": "A-000006",
+      "alert_id": "A-SYN006",
       "alert_id_conflict": false,
       "changes": {
         "alert_id": false,
@@ -648,27 +648,27 @@
         "steps": true
       },
       "customer_record_id_per_run": [
-        "CUS-000001",
-        "CUS-000001",
-        "CUS-000001",
-        "CUS-000001",
-        "CUS-000001"
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001",
+        "CUS-SYN001"
       ],
       "evidence_per_run": [
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ],
         [
-          "KYC-000001"
+          "KYC-SYN001"
         ]
       ],
       "first_divergent_fact": null,
@@ -707,7 +707,7 @@
       "flip_type": "other",
       "fragility": "solid",
       "fragility_conflict": false,
-      "hit_id": "H-000006",
+      "hit_id": "H-SYN006",
       "judges_stable": true,
       "llm_used": false,
       "llm_used_per_run": [
@@ -756,12 +756,12 @@
   "llm_sensitivity": {
     "compared": true,
     "hit_ids": [
-      "H-000002"
+      "H-SYN002"
     ],
     "hits": [
       {
-        "alert_id": "A-000002",
-        "hit_id": "H-000002",
+        "alert_id": "A-SYN002",
+        "hit_id": "H-SYN002",
         "llm_off_decision": "REVIEW",
         "llm_off_reason_code": "INSUFFICIENT_DATA",
         "llm_on_modal_decision": "SAME_ENTITY",
@@ -838,7 +838,7 @@
       }
     },
     "hits_missing_from_some_runs": [
-      "H-000005"
+      "H-SYN005"
     ],
     "judges_flip_hits": 2,
     "judges_flips_all_llm_used": false,
@@ -848,8 +848,8 @@
     "n_hits": 6,
     "n_runs": 5,
     "strict_change_hit_ids": [
-      "H-000004",
-      "H-000006"
+      "H-SYN004",
+      "H-SYN006"
     ],
     "strict_change_hits": 2
   },
@@ -862,32 +862,32 @@
     },
     "filters": {
       "code_flip": [
-        "H-000003"
+        "H-SYN003"
       ],
       "decision_flip": [
-        "H-000002"
+        "H-SYN002"
       ],
       "evidence_flip": [
-        "H-000004"
+        "H-SYN004"
       ],
       "flipped_only": [
-        "H-000002",
-        "H-000003",
-        "H-000004",
-        "H-000005",
-        "H-000006"
+        "H-SYN002",
+        "H-SYN003",
+        "H-SYN004",
+        "H-SYN005",
+        "H-SYN006"
       ],
       "llm_sensitive": [
-        "H-000002"
+        "H-SYN002"
       ],
       "missing": [
-        "H-000005"
+        "H-SYN005"
       ],
       "thin_clearances": [
-        "H-000004"
+        "H-SYN004"
       ],
       "thin_or_borderline_and_llm": [
-        "H-000002"
+        "H-SYN002"
       ]
     },
     "flip_types": [

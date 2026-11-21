@@ -195,13 +195,13 @@ Evidence for an ambiguous alert cites every candidate's customer records plus th
   "status": "AMBIGUOUS",
   "filter_counts": {"F0_type": 64000, "F1_name": 85, "F2_dob": 3, "F3_country": 2},
   "candidates": [
-    {"person_id": "P-CUS-000111", "record_ids": ["CUS-000111"], "matched_records": ["CUS-000111"],
+    {"person_id": "P-CUS-SYN111", "record_ids": ["CUS-SYN111"], "matched_records": ["CUS-SYN111"],
      "why": {"name": {"field": "full_name", "pairs": ["jane=jane", "example=example"]}, "dob": "compatible", "country": "Ireland"}},
-    {"person_id": "P-CUS-000222", "record_ids": ["CUS-000222", "CUS-000333"], "matched_records": ["CUS-000333"],
+    {"person_id": "P-CUS-SYN222", "record_ids": ["CUS-SYN222", "CUS-SYN333"], "matched_records": ["CUS-SYN333"],
      "why": {"name": {"field": "preferred_name", "pairs": ["jane=jane", "example=exampel"]}, "dob": "compatible", "country": "Ireland"}}
   ],
   "rejected_holders": [],
-  "chosen_person_ids": ["P-CUS-000111", "P-CUS-000222"],
+  "chosen_person_ids": ["P-CUS-SYN111", "P-CUS-SYN222"],
   "customer_record_id": "AMBIGUOUS",
   "trace": [
     "no link",

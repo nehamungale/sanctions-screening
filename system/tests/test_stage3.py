@@ -150,7 +150,7 @@ def alert(alert_id, name, *, entity="Individual", dob=None, country=None, city=N
             "name": name,
         },
         "email": email,
-        "hit_ids": ["H-000001"],
+        "hit_ids": ["H-SYN001"],
         "login_handle": login,
         "screened_at": "2026-01-01",
     }
@@ -300,16 +300,16 @@ class Stage3Tests(unittest.TestCase):
 
     def test_account_link_single_holder(self):
         rows = self.resolve(
-            [view("CUS-000010", ["alice", "smith"], dob="1980-01-02", residence="Ireland")],
+            [view("CUS-SYN010", ["alice", "smith"], dob="1980-01-02", residence="Ireland")],
             [alert("A-000001", "Alice Smith", dob="1980-01-02", country="Ireland", account="ACC-1")],
-            accounts={"ACC-1": ["CUS-000010"]},
+            accounts={"ACC-1": ["CUS-SYN010"]},
         )
         row = rows[0]
         self.assertEqual(row["status"], "RESOLVED")
         self.assertEqual(row["method"], "LINK_ACCOUNT")
-        self.assertEqual(row["customer_record_id"], "CUS-000010")
-        self.assertEqual(row["chosen_person_ids"], ["P-CUS-000010"])
-        self.assertEqual(row["candidates"][0]["record_ids"], ["CUS-000010"])
+        self.assertEqual(row["customer_record_id"], "CUS-SYN010")
+        self.assertEqual(row["chosen_person_ids"], ["P-CUS-SYN010"])
+        self.assertEqual(row["candidates"][0]["record_ids"], ["CUS-SYN010"])
         self.assertEqual(row["rejected_holders"], [])
         self.assertEqual(row["flags"], [])
         self.assertEqual(row["filter_counts"], {})
@@ -317,51 +317,51 @@ class Stage3Tests(unittest.TestCase):
         self.assertEqual(row["resolution_status"], "resolved_single")
         self.assertTrue(row["resolution_clean"])
         self.assertEqual(row["fragility_flags"], [])
-        self.assertIn("CUS-000010", row["evidence_ids"])
+        self.assertIn("CUS-SYN010", row["evidence_ids"])
         self.assertIn("ACC-1", row["evidence_ids"])
 
     def test_joint_one_holder_fits_and_records_the_other(self):
         records = [
-            view("CUS-000010", ["alice", "smith"], dob="1980-05-02", residence="Ireland", city="Dublin"),
-            view("CUS-000020", ["bob", "jones"], dob="1980-05-02", residence="Ireland", city="Dublin"),
+            view("CUS-SYN010", ["alice", "smith"], dob="1980-05-02", residence="Ireland", city="Dublin"),
+            view("CUS-SYN020", ["bob", "jones"], dob="1980-05-02", residence="Ireland", city="Dublin"),
         ]
         rows = self.resolve(
             records,
             [alert("A-000001", "Alice Smith", dob="1980-05-02", country="Ireland", city="Dublin", account="ACC-9")],
-            accounts={"ACC-9": ["CUS-000010", "CUS-000020"]},
+            accounts={"ACC-9": ["CUS-SYN010", "CUS-SYN020"]},
         )
         row = rows[0]
         self.assertEqual(row["status"], "RESOLVED")
         self.assertEqual(row["method"], "LINK_ACCOUNT_JOINT")
-        self.assertEqual(row["customer_record_id"], "CUS-000010")
+        self.assertEqual(row["customer_record_id"], "CUS-SYN010")
         self.assertEqual(row["filter_counts"]["F1_name"], 1)
         self.assertEqual(row["filter_counts"]["F2_dob"], 1)
-        self.assertEqual([item["record_id"] for item in row["rejected_holders"]], ["CUS-000020"])
+        self.assertEqual([item["record_id"] for item in row["rejected_holders"]], ["CUS-SYN020"])
         self.assertEqual(row["rejected_holders"][0]["why"]["name"], "no agree")
         self.assertNotIn("LINK_SUSPECT", row["flags"])
         self.assertIn("joint_account_tiebreak", row["fragility_flags"])
         self.assertEqual(row["resolution_method"], "link_account")
         self.assertEqual(row["resolution_status"], "resolved_single")
         self.assertFalse(row["resolution_clean"])
-        self.assertIn("CUS-000020", row["considered_ids"])
-        self.assertNotIn("CUS-000020", row["evidence_ids"])
+        self.assertIn("CUS-SYN020", row["considered_ids"])
+        self.assertNotIn("CUS-SYN020", row["evidence_ids"])
         self.assertTrue(any(line.startswith("joint pick:") for line in row["trace"]))
 
     def test_joint_both_fit_is_ambiguous(self):
         records = [
-            view("CUS-000010", ["alice", "smith"], dob="1980-05-02", residence="Ireland"),
-            view("CUS-000020", ["alice", "smith"], dob="1980-05-02", residence="Ireland"),
+            view("CUS-SYN010", ["alice", "smith"], dob="1980-05-02", residence="Ireland"),
+            view("CUS-SYN020", ["alice", "smith"], dob="1980-05-02", residence="Ireland"),
         ]
         rows = self.resolve(
             records,
             [alert("A-000001", "Alice Smith", dob="1980-05-02", country="IE", account="ACC-9")],
-            accounts={"ACC-9": ["CUS-000010", "CUS-000020"]},
+            accounts={"ACC-9": ["CUS-SYN010", "CUS-SYN020"]},
         )
         row = rows[0]
         self.assertEqual(row["status"], "AMBIGUOUS")
         self.assertEqual(row["method"], "LINK_ACCOUNT_JOINT")
         self.assertEqual(row["customer_record_id"], "AMBIGUOUS")
-        self.assertEqual(row["chosen_person_ids"], ["P-CUS-000010", "P-CUS-000020"])
+        self.assertEqual(row["chosen_person_ids"], ["P-CUS-SYN010", "P-CUS-SYN020"])
         self.assertEqual(row["rejected_holders"], [])
         self.assertEqual(row["filter_counts"]["F1_name"], 2)
         self.assertEqual(row["resolution_status"], "ambiguous")
@@ -371,14 +371,14 @@ class Stage3Tests(unittest.TestCase):
 
     def test_joint_neither_fit_does_not_search_the_rest(self):
         records = [
-            view("CUS-000010", ["bob", "jones"], dob="1970-01-01"),
-            view("CUS-000020", ["cara", "nguyen"], dob="1971-01-01"),
-            view("CUS-000030", ["alice", "smith"], dob="1980-05-02", residence="Ireland"),
+            view("CUS-SYN010", ["bob", "jones"], dob="1970-01-01"),
+            view("CUS-SYN020", ["cara", "nguyen"], dob="1971-01-01"),
+            view("CUS-SYN030", ["alice", "smith"], dob="1980-05-02", residence="Ireland"),
         ]
         rows = self.resolve(
             records,
             [alert("A-000001", "Alice Smith", dob="1980-05-02", country="Ireland", account="ACC-9")],
-            accounts={"ACC-9": ["CUS-000010", "CUS-000020"]},
+            accounts={"ACC-9": ["CUS-SYN010", "CUS-SYN020"]},
         )
         row = rows[0]
         self.assertEqual(row["status"], "UNRESOLVED_LINK")
@@ -388,16 +388,16 @@ class Stage3Tests(unittest.TestCase):
         self.assertEqual(row["resolution_method"], "link_account")
         self.assertIsNone(row["customer_record_id"])
         self.assertEqual(row["evidence_ids"], [])
-        self.assertEqual(row["considered_ids"], ["CUS-000010", "CUS-000020"])
+        self.assertEqual(row["considered_ids"], ["CUS-SYN010", "CUS-SYN020"])
         self.assertFalse(row["resolution_clean"])
         self.assertEqual(row["candidates"], [])
-        self.assertEqual([item["record_id"] for item in row["rejected_holders"]], ["CUS-000010", "CUS-000020"])
-        self.assertNotIn("CUS-000030", json.dumps(row))
+        self.assertEqual([item["record_id"] for item in row["rejected_holders"]], ["CUS-SYN010", "CUS-SYN020"])
+        self.assertNotIn("CUS-SYN030", json.dumps(row))
 
     def test_login_and_email_links(self):
         records = [
-            view("CUS-000010", ["ann", "lee"], email="ann@example.com"),
-            view("CUS-000020", ["bob", "lee"]),
+            view("CUS-SYN010", ["ann", "lee"], email="ann@example.com"),
+            view("CUS-SYN020", ["bob", "lee"]),
         ]
         rows = self.resolve(
             records,
@@ -406,61 +406,61 @@ class Stage3Tests(unittest.TestCase):
                 alert("A-000001", "Wrong Name", email="Ann@Example.com"),
                 alert("A-000003", "Wrong Name", login="ann.lee"),
             ],
-            logins={"Ann.Lee": ["CUS-000020"]},
+            logins={"Ann.Lee": ["CUS-SYN020"]},
         )
         by_id = {row["alert_id"]: row for row in rows}
         self.assertEqual([row["alert_id"] for row in rows], ["A-000001", "A-000002", "A-000003"])
         email_row = by_id["A-000001"]
         self.assertEqual(email_row["status"], "RESOLVED")
         self.assertEqual(email_row["method"], "LINK_EMAIL")
-        self.assertEqual(email_row["customer_record_id"], "CUS-000010")
+        self.assertEqual(email_row["customer_record_id"], "CUS-SYN010")
         login_row = by_id["A-000002"]
         self.assertEqual(login_row["status"], "RESOLVED")
         self.assertEqual(login_row["method"], "LINK_LOGIN")
-        self.assertEqual(login_row["customer_record_id"], "CUS-000020")
+        self.assertEqual(login_row["customer_record_id"], "CUS-SYN020")
         folded = by_id["A-000003"]
         self.assertEqual(folded["status"], "RESOLVED")
         self.assertEqual(folded["method"], "LINK_LOGIN")
-        self.assertEqual(folded["customer_record_id"], "CUS-000020")
+        self.assertEqual(folded["customer_record_id"], "CUS-SYN020")
         self.assertEqual(folded["resolution_quality"], "LINK_SUSPECT")
         self.assertNotIn("DANGLING_LINK", folded["flags"])
 
     def test_dangling_link_falls_back_to_name_search(self):
         rows = self.resolve(
-            [view("CUS-000010", ["alice", "smith"], dob="1980-05-02", residence="Ireland")],
+            [view("CUS-SYN010", ["alice", "smith"], dob="1980-05-02", residence="Ireland")],
             [alert("A-000001", "Alice Smith", dob="1980-05-02", country="Ireland", account="ACC-MISSING")],
-            accounts={"ACC-1": ["CUS-000010"]},
+            accounts={"ACC-1": ["CUS-SYN010"]},
         )
         row = rows[0]
         self.assertEqual(row["status"], "RESOLVED")
         self.assertEqual(row["method"], "NAME_SEARCH")
         self.assertEqual(row["resolution_method"], "name_search")
         self.assertEqual(row["resolution_reason"], "dangling_link")
-        self.assertEqual(row["customer_record_id"], "CUS-000010")
+        self.assertEqual(row["customer_record_id"], "CUS-SYN010")
         self.assertEqual(row["flags"], ["DANGLING_LINK"])
         self.assertTrue(any(line.startswith("dangling account ACC-MISSING") for line in row["trace"]))
 
     def test_linked_record_expands_to_the_whole_person(self):
         records = [
-            view("CUS-000010", ["alice", "smith"], person_id="P-CUS-000010", dob="1980-05-02"),
-            view("CUS-000020", ["alice", "smith"], person_id="P-CUS-000010", dob="1980-05-02"),
+            view("CUS-SYN010", ["alice", "smith"], person_id="P-CUS-SYN010", dob="1980-05-02"),
+            view("CUS-SYN020", ["alice", "smith"], person_id="P-CUS-SYN010", dob="1980-05-02"),
         ]
         rows = self.resolve(
             records,
             [alert("A-000001", "Alice Smith", dob="1980-05-02", account="ACC-1")],
-            accounts={"ACC-1": ["CUS-000020"]},
+            accounts={"ACC-1": ["CUS-SYN020"]},
         )
         row = rows[0]
         self.assertEqual(row["status"], "RESOLVED")
-        self.assertEqual(row["customer_record_id"], "CUS-000020")
-        self.assertEqual(row["candidates"][0]["record_ids"], ["CUS-000010", "CUS-000020"])
-        self.assertEqual(row["candidates"][0]["person_id"], "P-CUS-000010")
+        self.assertEqual(row["customer_record_id"], "CUS-SYN020")
+        self.assertEqual(row["candidates"][0]["record_ids"], ["CUS-SYN010", "CUS-SYN020"])
+        self.assertEqual(row["candidates"][0]["person_id"], "P-CUS-SYN010")
         self.assertEqual(len(row["chosen_person_ids"]), 1)
 
     def test_link_suspect_is_followed_not_replaced(self):
         records = [
-            view("CUS-000010", ["bob", "jones"], dob="1970-01-01", residence="France"),
-            view("CUS-000099", ["alice", "smith"], dob="1990-05-05", residence="Ireland"),
+            view("CUS-SYN010", ["bob", "jones"], dob="1970-01-01", residence="France"),
+            view("CUS-SYN099", ["alice", "smith"], dob="1990-05-05", residence="Ireland"),
         ]
         rows = self.resolve(
             records,
@@ -468,12 +468,12 @@ class Stage3Tests(unittest.TestCase):
                 alert("A-000001", "Alice Smith", dob="1990-05-05", account="ACC-1"),
                 alert("A-000002", "Bob Jones", dob="1990-05-05", account="ACC-1"),
             ],
-            accounts={"ACC-1": ["CUS-000010"]},
+            accounts={"ACC-1": ["CUS-SYN010"]},
         )
         by_id = {row["alert_id"]: row for row in rows}
         both = by_id["A-000001"]
         self.assertEqual(both["status"], "RESOLVED")
-        self.assertEqual(both["customer_record_id"], "CUS-000010")
+        self.assertEqual(both["customer_record_id"], "CUS-SYN010")
         self.assertEqual(both["method"], "LINK_ACCOUNT")
         self.assertEqual(both["resolution_method"], "link_account")
         self.assertEqual(both["resolution_status"], "resolved_single")
@@ -481,21 +481,21 @@ class Stage3Tests(unittest.TestCase):
         self.assertIn("link_contradicts_screened", both["candidates"][0]["fragility_flags"])
         self.assertNotIn("LINK_SUSPECT", both["flags"])
         self.assertFalse(both["resolution_clean"])
-        self.assertNotEqual(both["customer_record_id"], "CUS-000099")
+        self.assertNotEqual(both["customer_record_id"], "CUS-SYN099")
         self.assertTrue(any("link_contradicts_screened" in line for line in both["trace"]))
         dob_only = by_id["A-000002"]
-        self.assertEqual(dob_only["customer_record_id"], "CUS-000010")
+        self.assertEqual(dob_only["customer_record_id"], "CUS-SYN010")
         self.assertIn("link_contradicts_screened", dob_only["fragility_flags"])
         self.assertFalse(dob_only["resolution_clean"])
         self.assertTrue(any("dob" in line and "link_contradicts_screened" in line for line in dob_only["trace"]))
 
     def test_nickname_typo_join_and_order(self):
         records = [
-            view("CUS-000010", ["anthony", "smith"]),
-            view("CUS-000020", ["jonathan", "smith"]),
-            view("CUS-000030", ["abdul", "salam"]),
-            view("CUS-000040", ["josephsmith"]),
-            view("CUS-000050", ["alice", "smith"]),
+            view("CUS-SYN010", ["anthony", "smith"]),
+            view("CUS-SYN020", ["jonathan", "smith"]),
+            view("CUS-SYN030", ["abdul", "salam"]),
+            view("CUS-SYN040", ["josephsmith"]),
+            view("CUS-SYN050", ["alice", "smith"]),
         ]
         rows = self.resolve(
             records,
@@ -509,37 +509,37 @@ class Stage3Tests(unittest.TestCase):
             ],
         )
         by_id = {row["alert_id"]: row for row in rows}
-        self.assertEqual(by_id["A-000001"]["customer_record_id"], "CUS-000010")
+        self.assertEqual(by_id["A-000001"]["customer_record_id"], "CUS-SYN010")
         self.assertEqual(by_id["A-000001"]["candidates"][0]["why"]["name"]["field"], "full_name")
-        self.assertEqual(by_id["A-000002"]["customer_record_id"], "CUS-000020")
-        self.assertEqual(by_id["A-000003"]["customer_record_id"], "CUS-000030")
-        self.assertEqual(by_id["A-000004"]["customer_record_id"], "CUS-000040")
-        self.assertEqual(by_id["A-000005"]["customer_record_id"], "CUS-000050")
-        jr = view("CUS-000060", ["jr", "smith"])
+        self.assertEqual(by_id["A-000002"]["customer_record_id"], "CUS-SYN020")
+        self.assertEqual(by_id["A-000003"]["customer_record_id"], "CUS-SYN030")
+        self.assertEqual(by_id["A-000004"]["customer_record_id"], "CUS-SYN040")
+        self.assertEqual(by_id["A-000005"]["customer_record_id"], "CUS-SYN050")
+        jr = view("CUS-SYN060", ["jr", "smith"])
         jr_rows = self.resolve([jr], [alert("A-000007", "J.R. Smith")])
-        self.assertEqual(jr_rows[0]["customer_record_id"], "CUS-000060")
+        self.assertEqual(jr_rows[0]["customer_record_id"], "CUS-SYN060")
         self.assertEqual(jr_rows[0]["screened"]["parts"], ["jr", "smith"])
 
     def test_preferred_and_login_names_not_only_full(self):
         records = [
-            view("CUS-000010", ["robert", "jones"], preferred=["bob", "jones"]),
-            view("CUS-000020", ["alice", "smith"], login=["xqvntblr"]),
+            view("CUS-SYN010", ["robert", "jones"], preferred=["bob", "jones"]),
+            view("CUS-SYN020", ["alice", "smith"], login=["xqvntblr"]),
         ]
         rows = self.resolve(
             records,
             [alert("A-000001", "Bob Jones"), alert("A-000002", "xqvntblr")],
         )
         by_id = {row["alert_id"]: row for row in rows}
-        self.assertEqual(by_id["A-000001"]["customer_record_id"], "CUS-000010")
+        self.assertEqual(by_id["A-000001"]["customer_record_id"], "CUS-SYN010")
         self.assertEqual(by_id["A-000001"]["candidates"][0]["why"]["name"]["field"], "preferred_name")
-        self.assertEqual(by_id["A-000002"]["customer_record_id"], "CUS-000020")
+        self.assertEqual(by_id["A-000002"]["customer_record_id"], "CUS-SYN020")
         self.assertEqual(by_id["A-000002"]["candidates"][0]["why"]["name"]["field"], "login_name")
 
     def test_year_only_dob_is_compatible_and_a_full_date_checks_the_day(self):
         records = [
-            view("CUS-000010", ["alice", "smith"], dob="1980-05-02", residence="Ireland"),
-            view("CUS-000020", ["alice", "smith"], dob="1980-05-03", residence="Ireland"),
-            view("CUS-000030", ["alice", "smith"], dob="1979-05-02", residence="Ireland"),
+            view("CUS-SYN010", ["alice", "smith"], dob="1980-05-02", residence="Ireland"),
+            view("CUS-SYN020", ["alice", "smith"], dob="1980-05-03", residence="Ireland"),
+            view("CUS-SYN030", ["alice", "smith"], dob="1979-05-02", residence="Ireland"),
         ]
         rows = self.resolve(
             records,
@@ -551,17 +551,17 @@ class Stage3Tests(unittest.TestCase):
         by_id = {row["alert_id"]: row for row in rows}
         year = by_id["A-000001"]
         self.assertEqual(year["status"], "AMBIGUOUS")
-        self.assertEqual(sorted(item["matched_records"][0] for item in year["candidates"]), ["CUS-000010", "CUS-000020"])
-        self.assertNotIn("CUS-000030", [item["matched_records"][0] for item in year["candidates"]])
+        self.assertEqual(sorted(item["matched_records"][0] for item in year["candidates"]), ["CUS-SYN010", "CUS-SYN020"])
+        self.assertNotIn("CUS-SYN030", [item["matched_records"][0] for item in year["candidates"]])
         full = by_id["A-000002"]
         self.assertEqual(full["status"], "RESOLVED")
-        self.assertEqual(full["customer_record_id"], "CUS-000010")
+        self.assertEqual(full["customer_record_id"], "CUS-SYN010")
         self.assertEqual(full["candidates"][0]["why"]["dob"], "compatible")
 
     def test_record_without_dob_is_kept_and_flagged(self):
         records = [
-            view("CUS-000010", ["alice", "smith"], dob=None, residence="Ireland"),
-            view("CUS-000020", ["alice", "smith"], dob="1970-01-01", residence="Ireland"),
+            view("CUS-SYN010", ["alice", "smith"], dob=None, residence="Ireland"),
+            view("CUS-SYN020", ["alice", "smith"], dob="1970-01-01", residence="Ireland"),
         ]
         rows = self.resolve(
             records,
@@ -569,18 +569,18 @@ class Stage3Tests(unittest.TestCase):
         )
         row = rows[0]
         self.assertEqual(row["status"], "RESOLVED")
-        self.assertEqual(row["customer_record_id"], "CUS-000010")
+        self.assertEqual(row["customer_record_id"], "CUS-SYN010")
         self.assertEqual(row["flags"], ["RECORD_DOB_MISSING_KEPT"])
         self.assertEqual(row["candidates"][0]["why"]["dob"], "record dob missing -> unknown")
         self.assertEqual(row["filter_counts"]["F2_dob"], 1)
 
     def test_country_code_name_and_adjective(self):
         records = [
-            view("CUS-000010", ["alice", "smith"], dob="1980-01-01", residence="United Kingdom"),
-            view("CUS-000020", ["alice", "smith"], dob="1980-01-01", residence="France"),
-            view("CUS-000030", ["bob", "jones"], dob="1980-01-01", residence="Macao"),
-            view("CUS-000040", ["cara", "nunez"], dob="1980-01-01", residence="Palestine"),
-            view("CUS-000050", ["dan", "kovac"], dob="1980-01-01", residence="Kosovo"),
+            view("CUS-SYN010", ["alice", "smith"], dob="1980-01-01", residence="United Kingdom"),
+            view("CUS-SYN020", ["alice", "smith"], dob="1980-01-01", residence="France"),
+            view("CUS-SYN030", ["bob", "jones"], dob="1980-01-01", residence="Macao"),
+            view("CUS-SYN040", ["cara", "nunez"], dob="1980-01-01", residence="Palestine"),
+            view("CUS-SYN050", ["dan", "kovac"], dob="1980-01-01", residence="Kosovo"),
         ]
         rows = self.resolve(
             records,
@@ -596,21 +596,21 @@ class Stage3Tests(unittest.TestCase):
         )
         by_id = {row["alert_id"]: row for row in rows}
         for alert_id in ("A-000001", "A-000002", "A-000003"):
-            self.assertEqual(by_id[alert_id]["customer_record_id"], "CUS-000010", alert_id)
+            self.assertEqual(by_id[alert_id]["customer_record_id"], "CUS-SYN010", alert_id)
             self.assertEqual(by_id[alert_id]["screened"]["country"], "United Kingdom")
-        self.assertEqual(by_id["A-000004"]["customer_record_id"], "CUS-000020")
-        self.assertEqual(by_id["A-000005"]["customer_record_id"], "CUS-000030")
+        self.assertEqual(by_id["A-000004"]["customer_record_id"], "CUS-SYN020")
+        self.assertEqual(by_id["A-000005"]["customer_record_id"], "CUS-SYN030")
         self.assertEqual(by_id["A-000005"]["screened"]["country"], "Macao")
-        self.assertEqual(by_id["A-000006"]["customer_record_id"], "CUS-000040")
-        self.assertEqual(by_id["A-000007"]["customer_record_id"], "CUS-000050")
+        self.assertEqual(by_id["A-000006"]["customer_record_id"], "CUS-SYN040")
+        self.assertEqual(by_id["A-000007"]["customer_record_id"], "CUS-SYN050")
         self.assertEqual(by_id["A-000001"]["filter_counts"]["F3_country"], 1)
 
     def test_city_matches_via_address_and_a_missing_city_is_kept(self):
         records = [
-            view("CUS-000010", ["alice", "smith"], city="Oslo", address="Marienplatz, München", residence="Germany"),
-            view("CUS-000020", ["alice", "smith"], city="Paris", address="1 Rue de Rivoli, Paris", residence="Germany"),
-            view("CUS-000030", ["bob", "jones"], city=None, address="1 High Street", residence="Germany"),
-            view("CUS-000040", ["bob", "jones"], city="Paris", address="2 High Street, Paris", residence="Germany"),
+            view("CUS-SYN010", ["alice", "smith"], city="Oslo", address="Marienplatz, München", residence="Germany"),
+            view("CUS-SYN020", ["alice", "smith"], city="Paris", address="1 Rue de Rivoli, Paris", residence="Germany"),
+            view("CUS-SYN030", ["bob", "jones"], city=None, address="1 High Street", residence="Germany"),
+            view("CUS-SYN040", ["bob", "jones"], city="Paris", address="2 High Street, Paris", residence="Germany"),
         ]
         rows = self.resolve(
             records,
@@ -622,20 +622,20 @@ class Stage3Tests(unittest.TestCase):
         )
         by_id = {row["alert_id"]: row for row in rows}
         via_address = by_id["A-000001"]
-        self.assertEqual(via_address["customer_record_id"], "CUS-000010")
+        self.assertEqual(via_address["customer_record_id"], "CUS-SYN010")
         self.assertEqual(via_address["candidates"][0]["why"]["city"], "address")
         via_city = by_id["A-000002"]
-        self.assertEqual(via_city["customer_record_id"], "CUS-000010")
+        self.assertEqual(via_city["customer_record_id"], "CUS-SYN010")
         self.assertEqual(via_city["candidates"][0]["why"]["city"], "city")
         missing = by_id["A-000003"]
         self.assertEqual(missing["status"], "RESOLVED")
-        self.assertEqual(missing["customer_record_id"], "CUS-000030")
+        self.assertEqual(missing["customer_record_id"], "CUS-SYN030")
         self.assertEqual(missing["candidates"][0]["why"]["city"], "record city missing -> unknown")
 
     def test_company_uses_declared_dob_not_registry_incorporation(self):
         records = [
             view(
-                "CUS-000010",
+                "CUS-SYN010",
                 ["acme", "holdings"],
                 entity="Company",
                 dob="2010-01-01",
@@ -643,7 +643,7 @@ class Stage3Tests(unittest.TestCase):
                 role="incorporation",
             ),
             view(
-                "CUS-000020",
+                "CUS-SYN020",
                 ["acme", "holdings"],
                 entity="Company",
                 dob="2010-01-01",
@@ -652,8 +652,8 @@ class Stage3Tests(unittest.TestCase):
             ),
         ]
         customers = [
-            {"record_id": "CUS-000010", "entity_type": "Company", "dob": "1998-08-11"},
-            {"record_id": "CUS-000020", "entity_type": "Company", "dob": "1970-01-01"},
+            {"record_id": "CUS-SYN010", "entity_type": "Company", "dob": "1998-08-11"},
+            {"record_id": "CUS-SYN020", "entity_type": "Company", "dob": "1970-01-01"},
         ]
         rows = self.resolve(
             records,
@@ -662,14 +662,14 @@ class Stage3Tests(unittest.TestCase):
         )
         row = rows[0]
         self.assertEqual(row["status"], "RESOLVED")
-        self.assertEqual(row["customer_record_id"], "CUS-000010")
+        self.assertEqual(row["customer_record_id"], "CUS-SYN010")
         self.assertNotIn("NAME_TOO_SHORT", row["flags"])
         self.assertEqual(row["screened"]["parts"], ["acme"])
         self.assertNotIn("limited", row["screened"]["parts"])
 
     def test_other_entity_type_is_excluded_by_type_filter(self):
         rows = self.resolve(
-            [view("CUS-000010", ["alice", "smith"], entity="Individual", dob="1980-01-01")],
+            [view("CUS-SYN010", ["alice", "smith"], entity="Individual", dob="1980-01-01")],
             [alert("A-000001", "Alice Smith", entity="Vessel", dob="1980-01-01")],
         )
         row = rows[0]
@@ -680,9 +680,9 @@ class Stage3Tests(unittest.TestCase):
 
     def test_two_records_of_one_person_are_not_ambiguous(self):
         records = [
-            view("CUS-000001", ["other", "person"], person_id="P-CUS-000001", dob="1980-05-02", residence="Ireland"),
-            view("CUS-000009", ["alice", "smith"], person_id="P-CUS-000001", dob="1980-05-02", residence="Ireland"),
-            view("CUS-000020", ["alice", "smith"], person_id="P-CUS-000001", dob="1980-05-02", residence="Ireland"),
+            view("CUS-SYN001", ["other", "person"], person_id="P-CUS-SYN001", dob="1980-05-02", residence="Ireland"),
+            view("CUS-SYN009", ["alice", "smith"], person_id="P-CUS-SYN001", dob="1980-05-02", residence="Ireland"),
+            view("CUS-SYN020", ["alice", "smith"], person_id="P-CUS-SYN001", dob="1980-05-02", residence="Ireland"),
         ]
         rows = self.resolve(
             records,
@@ -690,17 +690,17 @@ class Stage3Tests(unittest.TestCase):
         )
         row = rows[0]
         self.assertEqual(row["status"], "RESOLVED")
-        self.assertEqual(row["chosen_person_ids"], ["P-CUS-000001"])
-        self.assertEqual(row["customer_record_id"], "CUS-000009")
-        self.assertEqual(row["candidates"][0]["record_ids"], ["CUS-000001", "CUS-000009", "CUS-000020"])
-        self.assertEqual(row["candidates"][0]["matched_records"], ["CUS-000009", "CUS-000020"])
+        self.assertEqual(row["chosen_person_ids"], ["P-CUS-SYN001"])
+        self.assertEqual(row["customer_record_id"], "CUS-SYN009")
+        self.assertEqual(row["candidates"][0]["record_ids"], ["CUS-SYN001", "CUS-SYN009", "CUS-SYN020"])
+        self.assertEqual(row["candidates"][0]["matched_records"], ["CUS-SYN009", "CUS-SYN020"])
 
     def test_two_persons_stay_ambiguous_with_counts(self):
         records = [
-            view("CUS-000010", ["alice", "smith"], dob="1980-05-02", residence="Ireland", city="Dublin"),
-            view("CUS-000020", ["alice", "smith"], dob="1980-05-02", residence="Ireland", city="Dublin"),
-            view("CUS-000030", ["alice", "smith"], dob="1970-01-01", residence="Ireland", city="Dublin"),
-            view("CUS-000040", ["bob", "jones"], dob="1980-05-02", residence="Ireland", city="Dublin"),
+            view("CUS-SYN010", ["alice", "smith"], dob="1980-05-02", residence="Ireland", city="Dublin"),
+            view("CUS-SYN020", ["alice", "smith"], dob="1980-05-02", residence="Ireland", city="Dublin"),
+            view("CUS-SYN030", ["alice", "smith"], dob="1970-01-01", residence="Ireland", city="Dublin"),
+            view("CUS-SYN040", ["bob", "jones"], dob="1980-05-02", residence="Ireland", city="Dublin"),
         ]
         rows = self.resolve(
             records,
@@ -709,13 +709,13 @@ class Stage3Tests(unittest.TestCase):
         row = rows[0]
         self.assertEqual(row["status"], "AMBIGUOUS")
         self.assertEqual(row["customer_record_id"], "AMBIGUOUS")
-        self.assertEqual(row["chosen_person_ids"], ["P-CUS-000010", "P-CUS-000020"])
+        self.assertEqual(row["chosen_person_ids"], ["P-CUS-SYN010", "P-CUS-SYN020"])
         self.assertEqual(row["filter_counts"], {"F0_type": 4, "F1_name": 3, "F2_dob": 2, "F3_country": 2, "F4_city": 2})
         self.assertTrue(any("name 3" in line and "dob 2" in line for line in row["trace"]))
 
     def test_nobody_survives(self):
         rows = self.resolve(
-            [view("CUS-000010", ["alice", "smith"], dob="1980-01-01", residence="Ireland")],
+            [view("CUS-SYN010", ["alice", "smith"], dob="1980-01-01", residence="Ireland")],
             [alert("A-000001", "Zora Quill", dob="1980-01-01", country="Ireland")],
         )
         row = rows[0]
@@ -727,7 +727,7 @@ class Stage3Tests(unittest.TestCase):
 
     def test_placeholders_removed_and_short_name_flagged(self):
         rows = self.resolve(
-            [view("CUS-000010", ["alice", "berg"], dob="1980-01-01")],
+            [view("CUS-SYN010", ["alice", "berg"], dob="1980-01-01")],
             [alert("A-000001", "N/A Alice", dob="1980-01-01")],
         )
         row = rows[0]
@@ -735,16 +735,16 @@ class Stage3Tests(unittest.TestCase):
         self.assertNotIn("na", row["screened"]["parts"])
         self.assertIn("NAME_TOO_SHORT", row["flags"])
         self.assertEqual(row["status"], "RESOLVED")
-        self.assertEqual(row["customer_record_id"], "CUS-000010")
+        self.assertEqual(row["customer_record_id"], "CUS-SYN010")
 
     def test_verified_style_name_is_not_used_when_record_names_differ(self):
-        records = [view("CUS-000010", ["alice", "smith"], dob="1980-01-01", residence="Ireland")]
+        records = [view("CUS-SYN010", ["alice", "smith"], dob="1980-01-01", residence="Ireland")]
         with tempfile.TemporaryDirectory() as folder:
             cache = os.path.join(folder, "cache")
             write_cache(cache, records)
             with open(os.path.join(cache, "index_name.json"), "w", encoding="utf-8") as handle:
                 json.dump(
-                    {"by_part": {"verified": ["CUS-000010"], "person": ["CUS-000010"]}},
+                    {"by_part": {"verified": ["CUS-SYN010"], "person": ["CUS-SYN010"]}},
                     handle,
                 )
             catalog = load_catalog(cache, VARIANTS)
@@ -758,8 +758,8 @@ class Stage3Tests(unittest.TestCase):
 
     def test_determinism_and_output_order(self):
         records = [
-            view("CUS-000020", ["bob", "jones"], dob="1970-01-01"),
-            view("CUS-000010", ["alice", "smith"], dob="1980-05-02", residence="Ireland"),
+            view("CUS-SYN020", ["bob", "jones"], dob="1970-01-01"),
+            view("CUS-SYN010", ["alice", "smith"], dob="1980-05-02", residence="Ireland"),
         ]
         alerts = [
             alert("A-000002", "Nobody Here", dob="1980-01-01"),
@@ -767,7 +767,7 @@ class Stage3Tests(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as folder:
             cache = os.path.join(folder, "cache")
-            write_cache(cache, records, accounts={"ACC-9": ["CUS-000010", "CUS-000020"]})
+            write_cache(cache, records, accounts={"ACC-9": ["CUS-SYN010", "CUS-SYN020"]})
             first_catalog = load_catalog(cache, VARIANTS)
             second_catalog = load_catalog(cache, VARIANTS)
             first = resolve_alerts(alerts, first_catalog)
@@ -784,7 +784,7 @@ class Stage3Tests(unittest.TestCase):
             data = os.path.join(folder, "data")
             cache = os.path.join(folder, "cache")
             os.makedirs(data)
-            records = [view("CUS-000010", ["alice", "smith"], dob="1980-05-02", residence="Ireland")]
+            records = [view("CUS-SYN010", ["alice", "smith"], dob="1980-05-02", residence="Ireland")]
             write_cache(cache, records)
             with open(os.path.join(data, "name_variants.json"), "w", encoding="utf-8") as handle:
                 json.dump(VARIANTS, handle)
@@ -828,7 +828,7 @@ class Stage3Tests(unittest.TestCase):
 
     def test_fragility_flags_and_resolution_clean(self):
         exact = view(
-            "CUS-000010",
+            "CUS-SYN010",
             ["alice", "smith"],
             dob="1980-05-02",
             residence="Ireland",
@@ -836,7 +836,7 @@ class Stage3Tests(unittest.TestCase):
             address="1 High Street, Dublin",
         )
         fuzzy = view(
-            "CUS-000020",
+            "CUS-SYN020",
             ["jonathan", "quill"],
             dob="1980-05-02",
             residence="Ireland",
@@ -844,7 +844,7 @@ class Stage3Tests(unittest.TestCase):
             address="2 High Street, Dublin",
         )
         partial = view(
-            "CUS-000030",
+            "CUS-SYN030",
             ["alice", "smith"],
             dob="1981-06-07",
             residence="Ireland",
@@ -852,7 +852,7 @@ class Stage3Tests(unittest.TestCase):
             address="3 High Street, Dublin",
         )
         missing_dob = view(
-            "CUS-000040",
+            "CUS-SYN040",
             ["nora", "keane"],
             dob=None,
             residence="Ireland",
@@ -860,7 +860,7 @@ class Stage3Tests(unittest.TestCase):
             address="4 High Street, Dublin",
         )
         note_country = view(
-            "CUS-000050",
+            "CUS-SYN050",
             ["piotr", "nowak"],
             dob="1975-03-03",
             residence="Ireland",
@@ -869,7 +869,7 @@ class Stage3Tests(unittest.TestCase):
             address="5 High Street, Dublin",
         )
         plain = view(
-            "CUS-000060",
+            "CUS-SYN060",
             ["piotr", "nowak"],
             dob="1975-03-03",
             residence="France",
@@ -894,7 +894,7 @@ class Stage3Tests(unittest.TestCase):
         self.assertTrue(clean["resolution_clean"])
         self.assertEqual(clean["candidates"][0]["filters"]["passed"], ["name", "dob", "country", "city"])
         self.assertEqual(clean["candidates"][0]["filters"]["skipped_missing"], [])
-        self.assertEqual(clean["evidence_ids"], ["CUS-000010"])
+        self.assertEqual(clean["evidence_ids"], ["CUS-SYN010"])
 
         fuzzy_row = by_id["A-000002"]
         self.assertIn("name_match_fuzzy_only", fuzzy_row["fragility_flags"])
@@ -914,9 +914,9 @@ class Stage3Tests(unittest.TestCase):
         self.assertFalse(missing["resolution_clean"])
 
         noted = by_id["A-000005"]
-        self.assertEqual(noted["customer_record_id"], "CUS-000050")
+        self.assertEqual(noted["customer_record_id"], "CUS-SYN050")
         self.assertIn("resolved_via_note_country", noted["fragility_flags"])
-        self.assertNotIn("CUS-000060", noted["evidence_ids"])
+        self.assertNotIn("CUS-SYN060", noted["evidence_ids"])
         self.assertFalse(noted["resolution_clean"])
 
         no_city = by_id["A-000006"]
@@ -926,8 +926,8 @@ class Stage3Tests(unittest.TestCase):
 
     def test_ambiguous_fragility_is_per_candidate(self):
         records = [
-            view("CUS-000010", ["alice", "smith"], dob="1980-05-02", residence="Ireland", city="Dublin"),
-            view("CUS-000020", ["alyce", "smyth"], dob="1980-05-02", residence="Ireland", city="Dublin"),
+            view("CUS-SYN010", ["alice", "smith"], dob="1980-05-02", residence="Ireland", city="Dublin"),
+            view("CUS-SYN020", ["alyce", "smyth"], dob="1980-05-02", residence="Ireland", city="Dublin"),
         ]
         rows = self.resolve(
             records,
@@ -937,15 +937,15 @@ class Stage3Tests(unittest.TestCase):
         self.assertEqual(row["resolution_status"], "ambiguous")
         self.assertFalse(row["resolution_clean"])
         by_person = {candidate["person_id"]: candidate for candidate in row["candidates"]}
-        self.assertEqual(by_person["P-CUS-000010"]["fragility_flags"], [])
-        self.assertEqual(by_person["P-CUS-000020"]["fragility_flags"], ["name_match_fuzzy_only"])
+        self.assertEqual(by_person["P-CUS-SYN010"]["fragility_flags"], [])
+        self.assertEqual(by_person["P-CUS-SYN020"]["fragility_flags"], ["name_match_fuzzy_only"])
         self.assertEqual(row["fragility_flags"], ["name_match_fuzzy_only"])
-        self.assertEqual(row["evidence_ids"], ["CUS-000010", "CUS-000020"])
+        self.assertEqual(row["evidence_ids"], ["CUS-SYN010", "CUS-SYN020"])
         self.assertEqual(len(row["candidates"]), 2)
 
     def test_note_text_is_not_added_to_the_country_filter(self):
         record = view(
-            "CUS-000010",
+            "CUS-SYN010",
             ["alice", "smith"],
             dob="1980-05-02",
             residence="France",
@@ -961,18 +961,18 @@ class Stage3Tests(unittest.TestCase):
 
     def test_nickname_with_an_exact_part_is_not_fuzzy_only(self):
         rows = self.resolve(
-            [view("CUS-000010", ["anthony", "smith"], dob="1980-05-02", residence="Ireland", city="Dublin")],
+            [view("CUS-SYN010", ["anthony", "smith"], dob="1980-05-02", residence="Ireland", city="Dublin")],
             [alert("A-000001", "Tony Smith", dob="1980-05-02", country="Ireland", city="Dublin")],
         )
-        self.assertEqual(rows[0]["customer_record_id"], "CUS-000010")
+        self.assertEqual(rows[0]["customer_record_id"], "CUS-SYN010")
         self.assertNotIn("name_match_fuzzy_only", rows[0]["fragility_flags"])
         self.assertTrue(rows[0]["resolution_clean"])
 
     def test_missing_country_is_kept(self):
         records = [
-            view("CUS-000010", ["alice", "smith"], dob="1980-05-02", residence="Ireland", city="Dublin"),
-            view("CUS-000020", ["alice", "smith"], dob="1980-05-02", residence=None, city="Dublin"),
-            view("CUS-000030", ["alice", "smith"], dob="1980-05-02", residence="France", city="Dublin"),
+            view("CUS-SYN010", ["alice", "smith"], dob="1980-05-02", residence="Ireland", city="Dublin"),
+            view("CUS-SYN020", ["alice", "smith"], dob="1980-05-02", residence=None, city="Dublin"),
+            view("CUS-SYN030", ["alice", "smith"], dob="1980-05-02", residence="France", city="Dublin"),
         ]
         rows = self.resolve(
             records,
@@ -981,11 +981,11 @@ class Stage3Tests(unittest.TestCase):
         row = rows[0]
         self.assertEqual(row["resolution_quality"], "ambiguous")
         ids = {candidate["person_id"] for candidate in row["candidates"]}
-        self.assertEqual(ids, {"P-CUS-000010", "P-CUS-000020"})
-        blank = next(candidate for candidate in row["candidates"] if candidate["person_id"] == "P-CUS-000020")
+        self.assertEqual(ids, {"P-CUS-SYN010", "P-CUS-SYN020"})
+        blank = next(candidate for candidate in row["candidates"] if candidate["person_id"] == "P-CUS-SYN020")
         self.assertIn("candidate_kept_on_missing_field", blank["fragility_flags"])
         self.assertIn({"filter": "country", "side": "record"}, blank["filters"]["skipped_missing"])
-        self.assertNotIn("P-CUS-000030", ids)
+        self.assertNotIn("P-CUS-SYN030", ids)
 
     def test_symmetric_name_agreement_accepts_either_side_when_lengths_match(self):
         # Equal part counts agree when either side is fully covered, in both
@@ -1008,10 +1008,10 @@ class Stage3Tests(unittest.TestCase):
 
     def test_index_candidates_match_a_full_scan(self):
         records = [
-            view("CUS-000010", ["jonathan", "quill"]),
-            view("CUS-000020", ["abdul", "salam"]),
-            view("CUS-000030", ["anthony", "smith"]),
-            view("CUS-000040", ["zora", "unrelated"]),
+            view("CUS-SYN010", ["jonathan", "quill"]),
+            view("CUS-SYN020", ["abdul", "salam"]),
+            view("CUS-SYN030", ["anthony", "smith"]),
+            view("CUS-SYN040", ["zora", "unrelated"]),
         ]
         with tempfile.TemporaryDirectory() as folder:
             cache = os.path.join(folder, "cache")
@@ -1023,13 +1023,13 @@ class Stage3Tests(unittest.TestCase):
                 indexed = agreeing_records(catalog, parts, "Individual", use_index=True)
                 scanned = agreeing_records(catalog, parts, "Individual", use_index=False)
                 self.assertEqual(indexed, scanned, screened_name)
-            self.assertIn("CUS-000010", agreeing_records(
+            self.assertIn("CUS-SYN010", agreeing_records(
                 catalog, tuple(tools.parts("Jonathon Quille", "Individual")), "Individual", use_index=True
             ))
-            self.assertIn("CUS-000020", agreeing_records(
+            self.assertIn("CUS-SYN020", agreeing_records(
                 catalog, tuple(tools.parts("Abdulsalam", "Individual")), "Individual", use_index=True
             ))
-            self.assertIn("CUS-000030", agreeing_records(
+            self.assertIn("CUS-SYN030", agreeing_records(
                 catalog, tuple(tools.parts("Tony Smith", "Individual")), "Individual", use_index=True
             ))
 
@@ -1037,18 +1037,18 @@ class Stage3Tests(unittest.TestCase):
         resolved = {
             "alert_id": "A-1",
             "status": "RESOLVED",
-            "customer_record_id": "CUS-000010",
-            "chosen_person_ids": ["P-CUS-000010"],
+            "customer_record_id": "CUS-SYN010",
+            "chosen_person_ids": ["P-CUS-SYN010"],
             "candidates": [{
-                "person_id": "P-CUS-000010",
-                "record_ids": ["CUS-000010", "CUS-000020"],
-                "matched_records": ["CUS-000020"],
+                "person_id": "P-CUS-SYN010",
+                "record_ids": ["CUS-SYN010", "CUS-SYN020"],
+                "matched_records": ["CUS-SYN020"],
                 "why": {},
             }],
         }
-        good, reason = label_matches(resolved, ["CUS-000020", "CUS-000010"])
+        good, reason = label_matches(resolved, ["CUS-SYN020", "CUS-SYN010"])
         self.assertTrue(good, reason)
-        bad, reason = label_matches(resolved, ["CUS-000010"])
+        bad, reason = label_matches(resolved, ["CUS-SYN010"])
         self.assertFalse(bad)
         self.assertIn("records", reason)
         ambiguous = {
@@ -1060,8 +1060,8 @@ class Stage3Tests(unittest.TestCase):
         good, reason = label_matches(ambiguous, ["AMBIGUOUS"])
         self.assertTrue(good, reason)
         person_id = dict(resolved)
-        person_id["customer_record_id"] = "P-CUS-000010"
-        bad, _reason = label_matches(person_id, ["CUS-000010", "CUS-000020"])
+        person_id["customer_record_id"] = "P-CUS-SYN010"
+        bad, _reason = label_matches(person_id, ["CUS-SYN010", "CUS-SYN020"])
         self.assertFalse(bad)
 
     @unittest.skipUnless(_dev_folder(), "dev data is not on this machine")

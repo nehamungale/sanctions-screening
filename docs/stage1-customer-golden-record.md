@@ -402,13 +402,13 @@ One JSON object per person, keys sorted. The example below uses **invented value
 
 ```json
 {
-  "person_id": "P-CUS-000101",
-  "record_ids": ["CUS-000101", "CUS-000202"],
+  "person_id": "P-CUS-SYN101",
+  "record_ids": ["CUS-SYN101", "CUS-SYN202"],
   "cluster_edges": [
-    {"rule": "PHONE_DOB", "records": ["CUS-000101", "CUS-000202"],
+    {"rule": "PHONE_DOB", "records": ["CUS-SYN101", "CUS-SYN202"],
      "phone": "+440000000000", "dob": "1980-01-31"}
   ],
-  "entity_type": {"value": "Individual", "source_id": "CUS-000101"},
+  "entity_type": {"value": "Individual", "source_id": "CUS-SYN101"},
   "legal_name": {
     "value": "JANE QUINN EXAMPLE",
     "parts": ["jane", "quinn", "example"],
@@ -419,20 +419,20 @@ One JSON object per person, keys sorted. The example below uses **invented value
   },
   "dob": {"value": "1980-01-31", "precision": "day", "verified": true, "source_id": "NOTE-00A1B2"},
   "declared_dobs": [
-    {"value": "1980-01-31", "precision": "day", "source_id": "CUS-000101"},
-    {"value": "1980-01-31", "precision": "day", "source_id": "CUS-000202"}
+    {"value": "1980-01-31", "precision": "day", "source_id": "CUS-SYN101"},
+    {"value": "1980-01-31", "precision": "day", "source_id": "CUS-SYN202"}
   ],
   "incorporation_date": null,
   "countries": [
-    {"value": "Ireland",  "kind": "nationality",    "source_id": "CUS-000101"},
-    {"value": "Ireland",  "kind": "residence",      "source_id": "CUS-000101"},
-    {"value": "Portugal", "kind": "residence",      "source_id": "CUS-000202"},
+    {"value": "Ireland",  "kind": "nationality",    "source_id": "CUS-SYN101"},
+    {"value": "Ireland",  "kind": "residence",      "source_id": "CUS-SYN101"},
+    {"value": "Portugal", "kind": "residence",      "source_id": "CUS-SYN202"},
     {"value": "Ireland",  "kind": "doc_country",    "source_id": "NOTE-00A1B2"},
     {"value": "Canada",   "kind": "residence_note", "years": [2012, 2016], "source_id": "NOTE-00C3D4"}
   ],
   "names_all": [
-    {"value": "Jane Example", "kind": "full_name",      "source_id": "CUS-000101"},
-    {"value": "Janey",        "kind": "preferred_name", "source_id": "CUS-000202"}
+    {"value": "Jane Example", "kind": "full_name",      "source_id": "CUS-SYN101"},
+    {"value": "Janey",        "kind": "preferred_name", "source_id": "CUS-SYN202"}
   ],
   "verification_events": [
     {"source_id": "NOTE-00A1B2", "kind": "verification_note", "date": "2024-05-01",

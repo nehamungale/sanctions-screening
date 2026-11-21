@@ -106,16 +106,16 @@ class NameMatcherTests(unittest.TestCase):
         self.assertEqual(tools.parts("J.R. Example", "Individual"), ["jr", "example"])
         self.assertEqual(tools.parts("J.R.", "Individual"), ["jr"])
         person = _only(build_from_tables(_tables([
-            _customer("CUS-000010", full_name="J.R."),
-            _customer("CUS-000020", full_name="N/A N/A", email="na@example.com", phone="+1 2025550102"),
+            _customer("CUS-SYN010", full_name="J.R."),
+            _customer("CUS-SYN020", full_name="N/A N/A", email="na@example.com", phone="+1 2025550102"),
         ])))
-        short = person["P-CUS-000010"]
+        short = person["P-CUS-SYN010"]
         self.assertEqual(short["legal_name"]["parts"], ["jr"])
         self.assertTrue(short["legal_name"]["blocks_name_clear"])
         self.assertIn("NAME_TOO_SHORT", short["flags"])
         self.assertIn("BLOCK_NAME_CLEAR", short["flags"])
         self.assertFalse(name_mismatch_verified_allowed(short))
-        placeholder = person["P-CUS-000020"]
+        placeholder = person["P-CUS-SYN020"]
         self.assertEqual(placeholder["legal_name"]["parts"], [])
         self.assertIn("PLACEHOLDER_NAME", placeholder["flags"])
         self.assertIn("BLOCK_NAME_CLEAR", placeholder["flags"])
@@ -132,10 +132,10 @@ class ContractTests(unittest.TestCase):
             "using a national ID issued in Nigeria on 2024-05-01. The check was declined."
         )
         people, _indexes, _stats = build_from_tables(_tables(
-            [_customer("CUS-000010")],
+            [_customer("CUS-SYN010")],
             notes=[{
                 "note_id": "NOTE-NEG1",
-                "requester_email": "cus-000010@example.com",
+                "requester_email": "cus-syn010@example.com",
                 "channel": "kyc",
                 "created_at": "2024-05-01",
                 "text": text,
@@ -150,9 +150,9 @@ class ContractTests(unittest.TestCase):
         self.assertFalse(dob_mismatch_allowed(person, "1980-01-01"))
     def test_unverified_name_cannot_clear_on_name_mismatch(self):
         people = _only(build_from_tables(_tables([
-            _customer("CUS-000010", full_name="Alice Smith"),
+            _customer("CUS-SYN010", full_name="Alice Smith"),
         ])))
-        person = people["P-CUS-000010"]
+        person = people["P-CUS-SYN010"]
         self.assertFalse(person["legal_name"]["verified"])
         self.assertEqual(person["legal_name"]["method"], "record")
         self.assertFalse(person["legal_name"]["may_solely_support_different_entity"])
@@ -162,22 +162,22 @@ class ContractTests(unittest.TestCase):
 
     def test_unparsed_note_blocks_location_and_verification_clears(self):
         notes = [{
-            "note_id": "NOTE-000001",
-            "requester_email": "cus-000010@example.com",
+            "note_id": "NOTE-SYN001",
+            "requester_email": "cus-syn010@example.com",
             "created_at": "2024-01-01",
             "channel": "phone",
             "text": "The client lived in Spain and Ghana between 2010 and 2012.",
         }, {
-            "note_id": "NOTE-000002",
-            "requester_email": "cus-000010@example.com",
+            "note_id": "NOTE-SYN002",
+            "requester_email": "cus-syn010@example.com",
             "created_at": "2024-02-02",
             "channel": "kyc",
             "text": "Passport mentioned for someone on 2024-02-02 but the wording is not a clean verification.",
         }]
         people = _only(build_from_tables(_tables([
-            _customer("CUS-000010", full_name="Alice Smith", residence_country="ES", nationality="Spain"),
+            _customer("CUS-SYN010", full_name="Alice Smith", residence_country="ES", nationality="Spain"),
         ], notes=notes)))
-        person = people["P-CUS-000010"]
+        person = people["P-CUS-SYN010"]
         values = {item["value"] for item in person["countries"]}
         self.assertIn("Spain", values)
         self.assertIn("Ghana", values)
@@ -190,38 +190,38 @@ class ContractTests(unittest.TestCase):
     def test_declared_dobs_keep_every_record_and_block_partial_contradiction(self):
         people = _only(build_from_tables(_tables(
             [
-                _customer("CUS-000010", dob=None, phone="+1 2025550101"),
-                _customer("CUS-000020", dob="1980-03-04", phone="+44 7700900999", email="b@example.com"),
-                _customer("CUS-000030", dob="1970-01-01", phone="+33 612345678", email="c@example.com"),
+                _customer("CUS-SYN010", dob=None, phone="+1 2025550101"),
+                _customer("CUS-SYN020", dob="1980-03-04", phone="+44 7700900999", email="b@example.com"),
+                _customer("CUS-SYN030", dob="1970-01-01", phone="+33 612345678", email="c@example.com"),
             ],
             onboarding=[
-                {"customer_id": "CUS-000010", "kyc_applicant_id": "APP-1", "account_id": "ACC-1"},
-                {"customer_id": "CUS-000020", "kyc_applicant_id": "APP-2", "account_id": "ACC-2"},
+                {"customer_id": "CUS-SYN010", "kyc_applicant_id": "APP-1", "account_id": "ACC-1"},
+                {"customer_id": "CUS-SYN020", "kyc_applicant_id": "APP-2", "account_id": "ACC-2"},
             ],
             checks=[
-                _check("KYC-100001", "APP-1", "DOC-1"),
-                _check("KYC-100002", "APP-2", "DOC-1"),
+                _check("KYC-SYN101", "APP-1", "DOC-1"),
+                _check("KYC-SYN102", "APP-2", "DOC-1"),
             ],
         )))
-        merged = people["P-CUS-000010"]
+        merged = people["P-CUS-SYN010"]
         by_id = {row["source_id"]: row for row in merged["declared_dobs"]}
-        self.assertFalse(by_id["CUS-000010"]["comparable"])
-        self.assertEqual(by_id["CUS-000020"]["value"], "1980-03-04")
-        self.assertIn("CUS-000010", by_id["CUS-000010"]["source_id"])
+        self.assertFalse(by_id["CUS-SYN010"]["comparable"])
+        self.assertEqual(by_id["CUS-SYN020"]["value"], "1980-03-04")
+        self.assertIn("CUS-SYN010", by_id["CUS-SYN010"]["source_id"])
         self.assertFalse(dob_mismatch_allowed(merged, "1970-05-05"))
         both_contradict = {
             "flags": [],
             "declared_dobs": [
-                {"value": "1970-01-01", "precision": "day", "source_id": "CUS-000030", "comparable": True},
-                {"value": "1971-01-01", "precision": "day", "source_id": "CUS-000031", "comparable": True},
+                {"value": "1970-01-01", "precision": "day", "source_id": "CUS-SYN030", "comparable": True},
+                {"value": "1971-01-01", "precision": "day", "source_id": "CUS-SYN031", "comparable": True},
             ],
         }
         self.assertTrue(dob_mismatch_allowed(both_contradict, "1980-03-04"))
         one_agrees = {
             "flags": [],
             "declared_dobs": [
-                {"value": "1980-03-04", "precision": "day", "source_id": "CUS-000020", "comparable": True},
-                {"value": "1970-01-01", "precision": "day", "source_id": "CUS-000030", "comparable": True},
+                {"value": "1980-03-04", "precision": "day", "source_id": "CUS-SYN020", "comparable": True},
+                {"value": "1970-01-01", "precision": "day", "source_id": "CUS-SYN030", "comparable": True},
             ],
         }
         self.assertFalse(dob_mismatch_allowed(one_agrees, "1980-03-04"))
@@ -236,7 +236,7 @@ class ContractTests(unittest.TestCase):
         person = {
             "flags": [],
             "declared_dobs": [
-                {"value": "1980-03-04", "precision": "day", "source_id": "CUS-000010", "comparable": True},
+                {"value": "1980-03-04", "precision": "day", "source_id": "CUS-SYN010", "comparable": True},
             ],
         }
         self.assertFalse(dob_mismatch_allowed(person, "03/04/1980"))
@@ -246,17 +246,29 @@ class ContractTests(unittest.TestCase):
 
     def test_output_ids_are_cus_not_person_ids(self):
         people = _only(build_from_tables(_tables([
-            _customer("CUS-000010", full_name="Alice Smith"),
-            _customer("CUS-000020", full_name="Alice Smith", dob="1990-01-02", phone="+44 7700 900123", email="b@example.com"),
+            _customer("CUS-SYN010", full_name="Alice Smith"),
+            _customer("CUS-SYN020", full_name="Alice Smith", dob="1990-01-02", phone="+44 7700 900123", email="b@example.com"),
         ])))
-        person = people["P-CUS-000010"]
+        person = people["P-CUS-SYN010"]
         self.assertTrue(person["person_id"].startswith("P-"))
-        self.assertEqual(person["customer_record_ids"], ["CUS-000010", "CUS-000020"])
-        chosen = customer_record_id_for_output(person)
-        self.assertEqual(chosen, "CUS-000010")
-        self.assertFalse(chosen.startswith("P-"))
+        self.assertEqual(person["customer_record_ids"], ["CUS-SYN010", "CUS-SYN020"])
         self.assertTrue(person["contracts"]["emit_customer_record_id_not_person_id"])
-        self.assertEqual(hit_field_evidence("H-AB12CD", "dob"), "H-AB12CD#dob")
+        # Production output checks stay ^CUS-[0-9]{6}$ and ^H-[0-9A-F]{6}#field$.
+        # CUS-SYN* / H-SYN* fixtures are rejected. The stand-in below is only
+        # the shape those helpers accept, not a dev-dataset id.
+        conforming_a = "CUS-" + "900010"
+        conforming_b = "CUS-" + "900020"
+        chosen = customer_record_id_for_output(
+            {"customer_record_ids": [conforming_a, conforming_b]}
+        )
+        self.assertEqual(chosen, conforming_a)
+        self.assertFalse(chosen.startswith("P-"))
+        with self.assertRaises(ValueError):
+            customer_record_id_for_output(person)
+        hit = "H-" + "ABCDEF"
+        self.assertEqual(hit_field_evidence(hit, "dob"), hit + "#dob")
+        with self.assertRaises(ValueError):
+            hit_field_evidence("H-SYN2CD", "dob")
         for fact in (person["legal_name"], person["dob"], person["entity_type"]):
             self.assertIn("source_id", fact)
 

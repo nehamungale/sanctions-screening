@@ -30,9 +30,9 @@ def _header(index: int) -> dict:
 def _output(hit_id: str, decision: str, code: str, evidence: list[str] | None = None) -> dict:
     return {
         "alert_id": "A-" + hit_id.split("-", 1)[1],
-        "customer_record_id": "CUS-000001",
+        "customer_record_id": "CUS-SYN001",
         "decision": decision,
-        "evidence": ["KYC-000001"] if evidence is None else evidence,
+        "evidence": ["KYC-SYN001"] if evidence is None else evidence,
         "hit_id": hit_id,
         "reason": "Synthetic reason. Not copied into repro.json.",
         "reason_code": code,
@@ -72,45 +72,45 @@ def build_example_report(generated_at: str = EXAMPLE_STAMP) -> dict:
     specs = []
     for index in range(5):
         rows = {
-            "H-000001": _output("H-000001", "DIFFERENT_ENTITY", "DOB_MISMATCH"),
-            "H-000002": _output(
-                "H-000002",
+            "H-SYN001": _output("H-SYN001", "DIFFERENT_ENTITY", "DOB_MISMATCH"),
+            "H-SYN002": _output(
+                "H-SYN002",
                 "REVIEW" if index == 4 else "SAME_ENTITY",
                 "INSUFFICIENT_DATA" if index == 4 else "NAME_DOB_MATCH",
             ),
-            "H-000003": _output(
-                "H-000003",
+            "H-SYN003": _output(
+                "H-SYN003",
                 "REVIEW",
                 "AMBIGUOUS_CUSTOMER_RECORD" if index == 1 else "INSUFFICIENT_DATA",
             ),
-            "H-000004": _output(
-                "H-000004",
+            "H-SYN004": _output(
+                "H-SYN004",
                 "DIFFERENT_ENTITY",
                 "LOCATION_MISMATCH",
-                ["KYC-000002"] if index == 2 else ["KYC-000001"],
+                ["KYC-SYN002"] if index == 2 else ["KYC-SYN001"],
             ),
-            "H-000006": _output("H-000006", "DIFFERENT_ENTITY", "DOB_MISMATCH"),
+            "H-SYN006": _output("H-SYN006", "DIFFERENT_ENTITY", "DOB_MISMATCH"),
         }
         if index != 3:
-            rows["H-000005"] = _output("H-000005", "REVIEW", "INSUFFICIENT_DATA")
+            rows["H-SYN005"] = _output("H-SYN005", "REVIEW", "INSUFFICIENT_DATA")
         specs.append(rows)
 
     runs = []
     for index, rows in enumerate(specs):
         traces = {}
         for hit_id, output in rows.items():
-            if hit_id == "H-000006":
+            if hit_id == "H-SYN006":
                 steps = _policy_steps(
                     dob="not_fired" if index == 4 else "fired",
                     location="fired" if index == 4 else "not_fired",
                 )
             else:
                 steps = _policy_steps()
-            if hit_id == "H-000002":
+            if hit_id == "H-SYN002":
                 llm_used, fragility = True, "borderline"
-            elif hit_id == "H-000003":
+            elif hit_id == "H-SYN003":
                 llm_used, fragility = False, "thin"
-            elif hit_id == "H-000004":
+            elif hit_id == "H-SYN004":
                 llm_used, fragility = False, "thin"
             else:
                 llm_used, fragility = False, "solid"
@@ -118,7 +118,7 @@ def build_example_report(generated_at: str = EXAMPLE_STAMP) -> dict:
         runs.append(assemble_run(f"run-{index + 1:02d}", _header(index), rows, traces))
 
     off_rows = {hit_id: dict(specs[0][hit_id]) for hit_id in specs[0]}
-    off_rows["H-000002"] = _output("H-000002", "REVIEW", "INSUFFICIENT_DATA")
+    off_rows["H-SYN002"] = _output("H-SYN002", "REVIEW", "INSUFFICIENT_DATA")
     llm_off = assemble_run("llm-off", None, off_rows, {})
     return build_report(
         runs,

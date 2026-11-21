@@ -23,7 +23,7 @@ PHRASE = "a politically exposed person"
 
 def hit(**overrides):
     base = {
-        "hit_id": "H-0000AA",
+        "hit_id": "H-SYN0AA",
         "alert_id": "A-0000AA",
         "match_score": 95,
         "entity_type": "Individual",
@@ -77,7 +77,7 @@ class NameTests(unittest.TestCase):
         self.assertEqual([entry["tag"] for entry in aliases], ["AKA", "Nickname", "AKA", "Acronym"])
         self.assertEqual(aliases[1]["parts"], ["addie"])
         self.assertEqual(aliases[2]["parts"], ["cher"])
-        self.assertEqual(aliases[0]["source_id"], "H-0000AA#aliases")
+        self.assertEqual(aliases[0]["source_id"], "H-SYN0AA#aliases")
         self.assertEqual(aliases[0]["source_field"], "aliases[0]")
 
     def test_non_latin_alias_is_kept_without_parts(self):
@@ -110,7 +110,7 @@ class NameTests(unittest.TestCase):
         structured = [entry for entry in kept[0]["names"] if entry["kind"] == "structured"]
         self.assertEqual(len(structured), 1)
         self.assertEqual(structured[0]["parts"], ["ada", "belle", "quinn"])
-        self.assertEqual(structured[0]["source_id"], "H-0000AA#name")
+        self.assertEqual(structured[0]["source_id"], "H-SYN0AA#name")
         self.assertNotIn("#structured", structured[0]["source_id"])
 
 
@@ -120,7 +120,7 @@ class DateTests(unittest.TestCase):
         candidates = rows[0]["dob_candidates"]
         self.assertEqual([item["precision"] for item in candidates], ["year", "month", "day"])
         self.assertEqual(candidates[2]["day"], 4)
-        self.assertEqual(candidates[0]["source_id"], "H-0000AA#dobs")
+        self.assertEqual(candidates[0]["source_id"], "H-SYN0AA#dobs")
         self.assertIn("DOBS_UNPARSED", rows[0]["flags"])
         self.assertFalse(rows[0]["search_results"]["consulted"])
         self.assertEqual(rows[0]["dob_tier"], "tier1")
@@ -137,12 +137,12 @@ class DateTests(unittest.TestCase):
         self.assertEqual(rows[0]["dob_tier"], "tier1")
 
     def test_born_full_date_and_year(self):
-        full = parse_note_dob("She was born on 17 July 1939 in the city.", "H-0000AA#profile_notes")
+        full = parse_note_dob("She was born on 17 July 1939 in the city.", "H-SYN0AA#profile_notes")
         self.assertEqual(full["candidates"][0]["precision"], "day")
         self.assertEqual(full["candidates"][0]["years"], [1939])
         self.assertEqual(full["candidates"][0]["month"], 7)
         self.assertEqual(full["candidates"][0]["day"], 17)
-        year = parse_note_dob("born in 1952.", "H-0000AA#profile_notes")
+        year = parse_note_dob("born in 1952.", "H-SYN0AA#profile_notes")
         self.assertEqual(year["candidates"][0]["precision"], "year")
         self.assertEqual(year["candidates"][0]["years"], [1952])
 
@@ -156,7 +156,7 @@ class DateTests(unittest.TestCase):
             "Age: 40\nas of May 15, 2010 the record was current.": [1969, 1970],
         }
         for text, years in samples.items():
-            parsed = parse_note_dob(text, "H-0000AA#profile_notes")
+            parsed = parse_note_dob(text, "H-SYN0AA#profile_notes")
             self.assertEqual(parsed["candidates"][0]["years"], years, text)
             self.assertEqual(parsed["candidates"][0]["precision"], "year")
             self.assertIsNone(parsed["candidates"][0]["month"])
@@ -164,28 +164,28 @@ class DateTests(unittest.TestCase):
             self.assertEqual(parsed["candidates"][0]["may_solely_support_different_entity"], not weak)
 
     def test_later_paragraph_is_ignored(self):
-        parsed = parse_note_dob("Nothing about a date here.\n\nShe was born in 1952.", "H-0000AA#profile_notes")
+        parsed = parse_note_dob("Nothing about a date here.\n\nShe was born in 1952.", "H-SYN0AA#profile_notes")
         self.assertEqual(parsed["candidates"], [])
         self.assertFalse(parsed["unresolved"])
-        spaced = parse_note_dob("Nothing about a date here.\n \nShe was born in 1952.", "H-0000AA#profile_notes")
+        spaced = parse_note_dob("Nothing about a date here.\n \nShe was born in 1952.", "H-SYN0AA#profile_notes")
         self.assertEqual(spaced["candidates"], [])
-        windows = parse_note_dob("Nothing about a date here.\r\n\r\nShe was born in 1952.", "H-0000AA#profile_notes")
+        windows = parse_note_dob("Nothing about a date here.\r\n\r\nShe was born in 1952.", "H-SYN0AA#profile_notes")
         self.assertEqual(windows["candidates"], [])
 
     def test_birth_cues_are_case_insensitive_and_block_when_unparsed(self):
-        born = parse_note_dob("Born on 12 March 1970 in the city.", "H-0000AA#profile_notes")
+        born = parse_note_dob("Born on 12 March 1970 in the city.", "H-SYN0AA#profile_notes")
         self.assertEqual(born["candidates"][0]["years"], [1970])
         self.assertEqual(born["candidates"][0]["precision"], "day")
         self.assertEqual(born["candidates"][0]["day"], 12)
-        city = parse_note_dob("She was born in Paris in 1970.", "H-0000AA#profile_notes")
+        city = parse_note_dob("She was born in Paris in 1970.", "H-SYN0AA#profile_notes")
         self.assertEqual(city["candidates"][0]["years"], [1970])
         self.assertEqual(city["candidates"][0]["precision"], "year")
-        ordinal = parse_note_dob("born on 5th March 1970.", "H-0000AA#profile_notes")
+        ordinal = parse_note_dob("born on 5th March 1970.", "H-SYN0AA#profile_notes")
         self.assertEqual((ordinal["candidates"][0]["day"], ordinal["candidates"][0]["month"]), (5, 3))
-        ambiguous = parse_note_dob("Date of birth: 12/03/1970.", "H-0000AA#profile_notes")
+        ambiguous = parse_note_dob("Date of birth: 12/03/1970.", "H-SYN0AA#profile_notes")
         self.assertTrue(ambiguous["unresolved"])
         self.assertEqual(ambiguous["candidates"], [])
-        clear = parse_note_dob("Date of birth: 15/03/1970.", "H-0000AA#profile_notes")
+        clear = parse_note_dob("Date of birth: 15/03/1970.", "H-SYN0AA#profile_notes")
         self.assertEqual(clear["candidates"][0]["years"], [1970])
         self.assertEqual(clear["candidates"][0]["day"], 15)
         rows, _fallback = profiles([hit(profile_notes="Place of birth: Madrid, and nothing more.")], [
@@ -285,7 +285,7 @@ class SearchTests(unittest.TestCase):
         self.assertFalse(rows[0]["search_results"]["consulted"])
         self.assertEqual(rows[0]["dob_candidates"][0]["source"], "dobs")
         company, _fallback = profiles([
-            hit(hit_id="H-0000BB", entity_type="Company", name="Northwind Trading Ltd", dobs=[], countries=["Spain"]),
+            hit(hit_id="H-SYN0BB", entity_type="Company", name="Northwind Trading Ltd", dobs=[], countries=["Spain"]),
         ], [{
             "result_id": "SR-000011",
             "query": search_key("Northwind Trading Ltd"),
@@ -334,16 +334,16 @@ class ReportAndCountryTests(unittest.TestCase):
             "Según el informe; April 19, 2013: not English.",
             "According to Example News; as of April 19, 2012: as of.",
         ])
-        reports, earliest = parse_dated_reports(notes, "H-0000AA")
+        reports, earliest = parse_dated_reports(notes, "H-SYN0AA")
         self.assertEqual([item["date"] for item in reports], ["2019-04-19", "2018-04-19"])
         self.assertEqual(earliest["date"], "2018-04-19")
         self.assertEqual(earliest["line_index"], 1)
-        self.assertEqual(earliest["source_id"], "H-0000AA#profile_notes")
+        self.assertEqual(earliest["source_id"], "H-SYN0AA#profile_notes")
         self.assertEqual(earliest["precision"], "day")
 
     def test_earliest_of_several(self):
         notes = "According to A; November 2, 2020: later.\nAccording to B; January 8, 2015: earlier."
-        _reports, earliest = parse_dated_reports(notes, "H-0000AA")
+        _reports, earliest = parse_dated_reports(notes, "H-SYN0AA")
         self.assertEqual(earliest["date"], "2015-01-08")
 
     def test_death_fields_only(self):
@@ -351,7 +351,7 @@ class ReportAndCountryTests(unittest.TestCase):
         self.assertEqual(dated[0]["deceased"]["date"], "2021-08-02")
         self.assertEqual(dated[0]["deceased"]["precision"], "day")
         self.assertNotIn("DECEASED_NO_DATE", dated[0]["flags"])
-        undated, _fallback = profiles([hit(hit_id="H-0000CC", life_status="Deceased", deceased_date=None)])
+        undated, _fallback = profiles([hit(hit_id="H-SYN0CC", life_status="Deceased", deceased_date=None)])
         self.assertIsNone(undated[0]["deceased"]["date"])
         self.assertIn("DECEASED_NO_DATE", undated[0]["flags"])
         self.assertEqual(undated[0]["dob_candidates"], [])
@@ -376,7 +376,7 @@ class ReportAndCountryTests(unittest.TestCase):
         self.assertIn("UNMAPPED_COUNTRY", rows[0]["flags"])
         self.assertTrue(rows[0]["countries"][-1]["unmapped"])
         self.assertNotIn("NO_COUNTRY", rows[0]["flags"])
-        empty, _fallback = profiles([hit(hit_id="H-0000DD", countries=[], nationality=[], citizenship=[])])
+        empty, _fallback = profiles([hit(hit_id="H-SYN0DD", countries=[], nationality=[], citizenship=[])])
         self.assertIn("NO_COUNTRY", empty[0]["flags"])
 
 
@@ -389,7 +389,7 @@ class LlmTests(unittest.TestCase):
             "age": None,
             "reference_date": None,
             "quote": "born in 1800",
-        }, "H-0000AA#profile_notes")
+        }, "H-SYN0AA#profile_notes")
         self.assertIsNone(missing)
         derived = candidate_from_model(paragraph, {
             "statement": "age_at_date",
@@ -397,7 +397,7 @@ class LlmTests(unittest.TestCase):
             "age": 30,
             "reference_date": "March 2019",
             "quote": "aged 30 in March 2019",
-        }, "H-0000AA#profile_notes")
+        }, "H-SYN0AA#profile_notes")
         self.assertEqual(derived["years"], [1988, 1989])
         self.assertEqual(derived["method"], "llm")
         self.assertFalse(derived["may_solely_support_different_entity"])
@@ -480,10 +480,10 @@ class LlmTests(unittest.TestCase):
         paragraph = "A note with no birth fact and the words no birth."
         with tempfile.TemporaryDirectory() as cache:
             fallback = NoteFallback(cache, True, transport=transport)
-            first = fallback.resolve("H-0000AA", "Ada Quinn", paragraph)
+            first = fallback.resolve("H-SYN0AA", "Ada Quinn", paragraph)
             fallback.save()
             second = NoteFallback(cache, True, transport=transport)
-            again = second.resolve("H-0000AA", "Ada Quinn", paragraph)
+            again = second.resolve("H-SYN0AA", "Ada Quinn", paragraph)
         self.assertEqual(calls["n"], 3)
         self.assertIsNone(first["candidate"])
         self.assertIn("NOTE_DOB_UNRESOLVED", first["flags"])
@@ -495,7 +495,7 @@ class LlmTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as cache:
             blank = NoteFallback(cache, True, transport=empty_quote)
-            refused = blank.resolve("H-0000AA", "Ada Quinn", "A paragraph with a birth cue and no date.")
+            refused = blank.resolve("H-SYN0AA", "Ada Quinn", "A paragraph with a birth cue and no date.")
         self.assertIsNone(refused["candidate"])
         self.assertIn("NOTE_DOB_UNRESOLVED", refused["flags"])
 
@@ -505,13 +505,13 @@ class LlmTests(unittest.TestCase):
         client = OpenRouterClient(model="openai/gpt-4o", api_key="not-used", urlopen=explode)
         with tempfile.TemporaryDirectory() as cache:
             paid = NoteFallback(cache, True, client=client)
-            result = paid.resolve("H-0000AA", "Ada Quinn", "aged 30 in March 1990 and aged 40 in June 2000.")
+            result = paid.resolve("H-SYN0AA", "Ada Quinn", "aged 30 in March 1990 and aged 40 in June 2000.")
         self.assertIn("LLM_UNKNOWN", result["flags"])
         self.assertEqual(client.calls, 0)
 
     def test_profiles_are_byte_identical(self):
         rows = [
-            hit(hit_id="H-0000BB", name="Zed Example"),
+            hit(hit_id="H-SYN0BB", name="Zed Example"),
             hit(profile_notes="born on 2 May 1980.\n\nAccording to Desk; May 2, 2020: report."),
         ]
         first, _fallback = profiles(rows)
@@ -520,7 +520,7 @@ class LlmTests(unittest.TestCase):
             json.dumps(first, sort_keys=True, ensure_ascii=False),
             json.dumps(second, sort_keys=True, ensure_ascii=False),
         )
-        self.assertEqual([row["hit_id"] for row in first], ["H-0000AA", "H-0000BB"])
+        self.assertEqual([row["hit_id"] for row in first], ["H-SYN0AA", "H-SYN0BB"])
 
 
 class PracticeTests(unittest.TestCase):

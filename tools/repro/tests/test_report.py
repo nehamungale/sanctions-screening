@@ -23,12 +23,12 @@ EXAMPLE_PATH = ROOT / "tools" / "repro" / "repro.example.json"
 STAMP = "2026-01-01T00:00:00+00:00"
 
 
-def output(hit_id, decision="REVIEW", code="INSUFFICIENT_DATA", evidence=None, customer="CUS-000001", alert=None, reason="UNIQUE_REASON_SENTINEL"):
+def output(hit_id, decision="REVIEW", code="INSUFFICIENT_DATA", evidence=None, customer="CUS-SYN001", alert=None, reason="UNIQUE_REASON_SENTINEL"):
     return {
         "alert_id": alert or "A-" + hit_id.split("-", 1)[1],
         "customer_record_id": customer,
         "decision": decision,
-        "evidence": ["KYC-000001"] if evidence is None else evidence,
+        "evidence": ["KYC-SYN001"] if evidence is None else evidence,
         "hit_id": hit_id,
         "reason": reason,
         "reason_code": code,
@@ -119,9 +119,9 @@ def policy_steps(dob="fired", location="not_fired"):
 class ReportTests(unittest.TestCase):
     def test_five_identical_runs_metric_one(self):
         rows = [
-            output("H-00000A", "DIFFERENT_ENTITY", "DOB_MISMATCH"),
-            output("H-000001", "SAME_ENTITY", "NAME_DOB_MATCH"),
-            output("H-000002", "REVIEW", "INSUFFICIENT_DATA"),
+            output("H-SYN00A", "DIFFERENT_ENTITY", "DOB_MISMATCH"),
+            output("H-SYN001", "SAME_ENTITY", "NAME_DOB_MATCH"),
+            output("H-SYN002", "REVIEW", "INSUFFICIENT_DATA"),
         ]
         report = report_from_rows([rows, rows, rows, rows, rows])
         self.assertEqual(report["summary"]["n_runs"], 5)
@@ -134,7 +134,7 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(report["summary"]["missing_hits"], 0)
         self.assertEqual([hit["flip_type"] for hit in report["hits"]], ["none", "none", "none"])
         self.assertTrue(all(hit["stable"] for hit in report["hits"]))
-        self.assertEqual([hit["hit_id"] for hit in report["hits"]], ["H-000001", "H-000002", "H-00000A"])
+        self.assertEqual([hit["hit_id"] for hit in report["hits"]], ["H-SYN001", "H-SYN002", "H-SYN00A"])
         self.assertEqual(len(report["heatmap"]["decisions"]), 3)
         self.assertEqual(len(report["heatmap"]["decisions"][0]), 5)
         self.assertEqual(
@@ -152,27 +152,27 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(blob, dump_report(json.loads(blob)))
 
     def test_decision_flip(self):
-        stable = output("H-000001", "REVIEW", "INSUFFICIENT_DATA")
-        left = output("H-000002", "DIFFERENT_ENTITY", "DOB_MISMATCH")
-        right = output("H-000002", "REVIEW", "INSUFFICIENT_DATA")
+        stable = output("H-SYN001", "REVIEW", "INSUFFICIENT_DATA")
+        left = output("H-SYN002", "DIFFERENT_ENTITY", "DOB_MISMATCH")
+        right = output("H-SYN002", "REVIEW", "INSUFFICIENT_DATA")
         report = report_from_rows([[stable, left], [stable, right]])
         flips = {hit["hit_id"]: hit for hit in report["hits"]}
-        self.assertEqual(flips["H-000002"]["flip_type"], "decision")
-        self.assertEqual(flips["H-000002"]["per_run"], [
+        self.assertEqual(flips["H-SYN002"]["flip_type"], "decision")
+        self.assertEqual(flips["H-SYN002"]["per_run"], [
             ["DIFFERENT_ENTITY", "DOB_MISMATCH"],
             ["REVIEW", "INSUFFICIENT_DATA"],
         ])
-        self.assertFalse(flips["H-000002"]["judges_stable"])
-        self.assertEqual(flips["H-000002"]["modal_decision"], "REVIEW")
+        self.assertFalse(flips["H-SYN002"]["judges_stable"])
+        self.assertEqual(flips["H-SYN002"]["modal_decision"], "REVIEW")
         self.assertEqual(report["summary"]["decision_flip_hits"], 1)
         self.assertEqual(report["summary"]["code_only_flip_hits"], 0)
         self.assertEqual(report["summary"]["judges_metric"], 0.5)
-        self.assertEqual(report["ui"]["filters"]["flipped_only"], ["H-000002"])
-        self.assertEqual(report["ui"]["filters"]["decision_flip"], ["H-000002"])
+        self.assertEqual(report["ui"]["filters"]["flipped_only"], ["H-SYN002"])
+        self.assertEqual(report["ui"]["filters"]["decision_flip"], ["H-SYN002"])
 
     def test_code_only_flip(self):
-        left = output("H-000010", "REVIEW", "INSUFFICIENT_DATA")
-        right = output("H-000010", "REVIEW", "AMBIGUOUS_CUSTOMER_RECORD")
+        left = output("H-SYN010", "REVIEW", "INSUFFICIENT_DATA")
+        right = output("H-SYN010", "REVIEW", "AMBIGUOUS_CUSTOMER_RECORD")
         report = report_from_rows([[left], [right], [left]])
         hit = report["hits"][0]
         self.assertEqual(hit["flip_type"], "code")
@@ -185,10 +185,10 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(hit["modal_reason_code"], "INSUFFICIENT_DATA")
 
     def test_evidence_and_customer_only_changes_keep_judges_metric(self):
-        evidence_a = output("H-000001", "DIFFERENT_ENTITY", "LOCATION_MISMATCH", ["KYC-000001"])
-        evidence_b = output("H-000001", "DIFFERENT_ENTITY", "LOCATION_MISMATCH", ["KYC-000002", "KYC-000001"])
-        customer_a = output("H-000002", "SAME_ENTITY", "NAME_DOB_MATCH", customer="CUS-000001")
-        customer_b = output("H-000002", "SAME_ENTITY", "NAME_DOB_MATCH", customer="CUS-000002")
+        evidence_a = output("H-SYN001", "DIFFERENT_ENTITY", "LOCATION_MISMATCH", ["KYC-SYN001"])
+        evidence_b = output("H-SYN001", "DIFFERENT_ENTITY", "LOCATION_MISMATCH", ["KYC-SYN002", "KYC-SYN001"])
+        customer_a = output("H-SYN002", "SAME_ENTITY", "NAME_DOB_MATCH", customer="CUS-SYN001")
+        customer_b = output("H-SYN002", "SAME_ENTITY", "NAME_DOB_MATCH", customer="CUS-SYN002")
         report = report_from_rows(
             [[evidence_a, customer_a], [evidence_a, customer_a], [evidence_b, customer_b]]
         )
@@ -197,36 +197,36 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(report["summary"]["decision_flip_hits"], 0)
         self.assertEqual(report["summary"]["code_only_flip_hits"], 0)
         self.assertEqual(report["summary"]["strict_change_hits"], 2)
-        self.assertEqual(report["summary"]["strict_change_hit_ids"], ["H-000001", "H-000002"])
-        self.assertEqual(by_id["H-000001"]["flip_type"], "evidence")
-        self.assertTrue(by_id["H-000001"]["judges_stable"])
-        self.assertEqual(by_id["H-000001"]["evidence_per_run"][2], ["KYC-000001", "KYC-000002"])
-        self.assertEqual(by_id["H-000002"]["flip_type"], "evidence")
-        self.assertTrue(by_id["H-000002"]["changes"]["customer_record_id"])
-        self.assertIsNone(by_id["H-000001"]["first_divergent_step"])
+        self.assertEqual(report["summary"]["strict_change_hit_ids"], ["H-SYN001", "H-SYN002"])
+        self.assertEqual(by_id["H-SYN001"]["flip_type"], "evidence")
+        self.assertTrue(by_id["H-SYN001"]["judges_stable"])
+        self.assertEqual(by_id["H-SYN001"]["evidence_per_run"][2], ["KYC-SYN001", "KYC-SYN002"])
+        self.assertEqual(by_id["H-SYN002"]["flip_type"], "evidence")
+        self.assertTrue(by_id["H-SYN002"]["changes"]["customer_record_id"])
+        self.assertIsNone(by_id["H-SYN001"]["first_divergent_step"])
 
     def test_hit_missing_in_one_run(self):
-        keep = output("H-000001", "REVIEW", "INSUFFICIENT_DATA")
-        gone = output("H-000002", "DIFFERENT_ENTITY", "DECEASED")
+        keep = output("H-SYN001", "REVIEW", "INSUFFICIENT_DATA")
+        gone = output("H-SYN002", "DIFFERENT_ENTITY", "DECEASED")
         report = report_from_rows([[keep, gone], [keep]])
         by_id = {hit["hit_id"]: hit for hit in report["hits"]}
-        self.assertEqual(by_id["H-000002"]["flip_type"], "other")
-        self.assertEqual(by_id["H-000002"]["missing_from_runs"], [1])
-        self.assertIsNone(by_id["H-000002"]["per_run"][1])
-        self.assertFalse(by_id["H-000002"]["judges_stable"])
-        self.assertTrue(by_id["H-000001"]["stable"])
+        self.assertEqual(by_id["H-SYN002"]["flip_type"], "other")
+        self.assertEqual(by_id["H-SYN002"]["missing_from_runs"], [1])
+        self.assertIsNone(by_id["H-SYN002"]["per_run"][1])
+        self.assertFalse(by_id["H-SYN002"]["judges_stable"])
+        self.assertTrue(by_id["H-SYN001"]["stable"])
         self.assertEqual(report["summary"]["missing_hits"], 1)
-        self.assertEqual(report["summary"]["hits_missing_from_some_runs"], ["H-000002"])
+        self.assertEqual(report["summary"]["hits_missing_from_some_runs"], ["H-SYN002"])
         self.assertEqual(report["summary"]["decision_flip_hits"], 0)
         self.assertEqual(report["summary"]["strict_change_hits"], 0)
         self.assertEqual(report["summary"]["judges_metric"], 0.5)
         self.assertEqual(report["summary"]["decision_counts_per_run"][0]["DIFFERENT_ENTITY"], 1)
         self.assertEqual(report["summary"]["decision_counts_per_run"][1]["DIFFERENT_ENTITY"], 0)
         self.assertIsNone(report["heatmap"]["decisions"][1][1])
-        self.assertIn("H-000002", report["ui"]["filters"]["flipped_only"])
+        self.assertIn("H-SYN002", report["ui"]["filters"]["flipped_only"])
 
     def test_config_check_flags_different_git_sha(self):
-        row = output("H-000001", "REVIEW", "INSUFFICIENT_DATA")
+        row = output("H-SYN001", "REVIEW", "INSUFFICIENT_DATA")
         traced = trace_for(row)
         headers = [header("a" * 40) for _ in range(5)]
         headers[2] = header("b" * 40, prompts={"read": "e2", "extract": "e1"})
@@ -255,7 +255,7 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(report["summary"]["judges_metric"], 1.0)
 
     def test_trace_divergence_at_known_step(self):
-        row = output("H-000001", "DIFFERENT_ENTITY", "DOB_MISMATCH")
+        row = output("H-SYN001", "DIFFERENT_ENTITY", "DOB_MISMATCH")
         left = trace_for(row, policy_steps("fired", "not_fired"))
         right = trace_for(row, policy_steps("not_fired", "fired"))
         # Input order is scrambled; stable order still puts DOB_MISMATCH at index 3.
@@ -278,7 +278,7 @@ class ReportTests(unittest.TestCase):
         self.assertNotIn("QUOTE_SENTINEL_SHOULD_NOT_LEAK", blob)
 
     def test_reordered_steps_and_quote_text_are_stable(self):
-        row = output("H-000001", "DIFFERENT_ENTITY", "DOB_MISMATCH")
+        row = output("H-SYN001", "DIFFERENT_ENTITY", "DOB_MISMATCH")
         steps_a = [
             {"result": "not_fired", "rule": "ZULU", "why": "later"},
             {"result": "fired", "rule": "DOB_MISMATCH", "why": "dob rule"},
@@ -289,8 +289,8 @@ class ReportTests(unittest.TestCase):
             {"quote": "other span", "result": "fired", "rule": "DOB_MISMATCH", "why": "dob rule"},
             {"result": "not_fired", "rule": "ZULU", "why": "later"},
         ]
-        facts = {"dob": {"quote": "QUOTE_SENTINEL_SHOULD_NOT_LEAK", "source_id": "KYC-000001", "value": "cafe\u0301"}}
-        facts_folded = {"dob": {"quote": "different words", "source_id": "KYC-000001", "value": "caf\u00e9"}}
+        facts = {"dob": {"quote": "QUOTE_SENTINEL_SHOULD_NOT_LEAK", "source_id": "KYC-SYN001", "value": "cafe\u0301"}}
+        facts_folded = {"dob": {"quote": "different words", "source_id": "KYC-SYN001", "value": "caf\u00e9"}}
         left = trace_for(row, steps_a, facts=facts, llm_calls=[{"quote": "QUOTE_SENTINEL_SHOULD_NOT_LEAK", "response_id": "1"}])
         right = trace_for(row, steps_b, facts=facts_folded, llm_calls=[{"quote": "else", "response_id": "2"}])
         report = report_from_rows([[row], [row]], traces=[[left], [right]])
@@ -302,16 +302,16 @@ class ReportTests(unittest.TestCase):
         self.assertNotIn("QUOTE_SENTINEL_SHOULD_NOT_LEAK", dump_report(report))
 
     def test_canonical_fact_change_is_strict(self):
-        row = output("H-000001", "REVIEW", "INSUFFICIENT_DATA")
+        row = output("H-SYN001", "REVIEW", "INSUFFICIENT_DATA")
         left = trace_for(
             row,
-            facts={"dob": {"source_id": "KYC-000001", "value": "year-a"}},
-            comparison=[{"customer": "year-a", "dim": "dob", "hit": "year-b", "src": ["H-000001#dobs", "KYC-000001"]}],
+            facts={"dob": {"source_id": "KYC-SYN001", "value": "year-a"}},
+            comparison=[{"customer": "year-a", "dim": "dob", "hit": "year-b", "src": ["H-SYN001#dobs", "KYC-SYN001"]}],
         )
         right = trace_for(
             row,
-            facts={"dob": {"source_id": "KYC-000001", "value": "year-b"}},
-            comparison=[{"customer": "year-a", "dim": "dob", "hit": "year-b", "src": ["KYC-000001", "H-000001#dobs"]}],
+            facts={"dob": {"source_id": "KYC-SYN001", "value": "year-b"}},
+            comparison=[{"customer": "year-a", "dim": "dob", "hit": "year-b", "src": ["KYC-SYN001", "H-SYN001#dobs"]}],
         )
         report = report_from_rows([[row], [row]], traces=[[left], [right]])
         hit = report["hits"][0]
@@ -323,31 +323,31 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(hit["first_divergent_fact"]["values_per_run"][1]["value"], "year-b")
 
     def test_llm_sensitivity_against_modal(self):
-        same = output("H-000001", "SAME_ENTITY", "NAME_DOB_MATCH")
-        review = output("H-000001", "REVIEW", "INSUFFICIENT_DATA")
-        steady = output("H-000002", "DIFFERENT_ENTITY", "DOB_MISMATCH")
-        off_only = output("H-000003", "REVIEW", "INSUFFICIENT_DATA")
+        same = output("H-SYN001", "SAME_ENTITY", "NAME_DOB_MATCH")
+        review = output("H-SYN001", "REVIEW", "INSUFFICIENT_DATA")
+        steady = output("H-SYN002", "DIFFERENT_ENTITY", "DOB_MISMATCH")
+        off_only = output("H-SYN003", "REVIEW", "INSUFFICIENT_DATA")
         report = report_from_rows(
             [[same, steady], [same, steady], [same, steady], [review, steady]],
             llm_off=[review, steady, off_only],
         )
         sensitivity = report["llm_sensitivity"]
         self.assertEqual(sensitivity["n_sensitive"], 2)
-        self.assertEqual(sensitivity["hit_ids"], ["H-000001", "H-000003"])
+        self.assertEqual(sensitivity["hit_ids"], ["H-SYN001", "H-SYN003"])
         first = sensitivity["hits"][0]
         self.assertEqual(first["llm_on_modal_decision"], "SAME_ENTITY")
         self.assertEqual(first["llm_on_modal_reason_code"], "NAME_DOB_MATCH")
         self.assertEqual(first["llm_off_decision"], "REVIEW")
         self.assertIsNone(sensitivity["hits"][1]["llm_on_modal_decision"])
-        self.assertEqual(report["ui"]["filters"]["llm_sensitive"], ["H-000001", "H-000003"])
+        self.assertEqual(report["ui"]["filters"]["llm_sensitive"], ["H-SYN001", "H-SYN003"])
 
     def test_flips_split_by_llm_used(self):
-        decision_row = output("H-000001", "SAME_ENTITY", "NAME_DOB_MATCH")
-        decision_other = output("H-000001", "REVIEW", "INSUFFICIENT_DATA")
-        code_row = output("H-000002", "REVIEW", "INSUFFICIENT_DATA")
-        code_other = output("H-000002", "REVIEW", "AMBIGUOUS_CUSTOMER_RECORD")
-        evidence_row = output("H-000003", "DIFFERENT_ENTITY", "DOB_MISMATCH", ["KYC-000001"])
-        evidence_other = output("H-000003", "DIFFERENT_ENTITY", "DOB_MISMATCH", ["KYC-000002"])
+        decision_row = output("H-SYN001", "SAME_ENTITY", "NAME_DOB_MATCH")
+        decision_other = output("H-SYN001", "REVIEW", "INSUFFICIENT_DATA")
+        code_row = output("H-SYN002", "REVIEW", "INSUFFICIENT_DATA")
+        code_other = output("H-SYN002", "REVIEW", "AMBIGUOUS_CUSTOMER_RECORD")
+        evidence_row = output("H-SYN003", "DIFFERENT_ENTITY", "DOB_MISMATCH", ["KYC-SYN001"])
+        evidence_other = output("H-SYN003", "DIFFERENT_ENTITY", "DOB_MISMATCH", ["KYC-SYN002"])
         traces = [
             [
                 trace_for(decision_row, llm_used=True),
@@ -374,8 +374,8 @@ class ReportTests(unittest.TestCase):
         self.assertFalse(report["summary"]["judges_flips_all_llm_used"])
 
     def test_output_trace_mismatch_is_other(self):
-        row = output("H-000001", "DIFFERENT_ENTITY", "DOB_MISMATCH")
-        drifted = trace_for(output("H-000001", "REVIEW", "INSUFFICIENT_DATA"))
+        row = output("H-SYN001", "DIFFERENT_ENTITY", "DOB_MISMATCH")
+        drifted = trace_for(output("H-SYN001", "REVIEW", "INSUFFICIENT_DATA"))
         agreed = trace_for(row)
         report = report_from_rows([[row], [row]], traces=[[agreed], [drifted]])
         hit = report["hits"][0]
@@ -387,8 +387,8 @@ class ReportTests(unittest.TestCase):
     def test_modal_decision_tie_breaks_toward_review(self):
         report = report_from_rows(
             [
-                [output("H-000001", "DIFFERENT_ENTITY", "DOB_MISMATCH")],
-                [output("H-000001", "REVIEW", "INSUFFICIENT_DATA")],
+                [output("H-SYN001", "DIFFERENT_ENTITY", "DOB_MISMATCH")],
+                [output("H-SYN001", "REVIEW", "INSUFFICIENT_DATA")],
             ]
         )
         self.assertEqual(report["hits"][0]["modal_decision"], "REVIEW")
@@ -399,13 +399,13 @@ class ReportTests(unittest.TestCase):
             left = folder / "left.jsonl"
             right = folder / "right.jsonl"
             out = folder / "repro.json"
-            write_jsonl(left, [output("H-000002", "REVIEW", "INSUFFICIENT_DATA"), output("H-000001", "REVIEW", "INSUFFICIENT_DATA")])
-            write_jsonl(right, [output("H-000001", "REVIEW", "INSUFFICIENT_DATA"), output("H-000002", "SAME_ENTITY", "NAME_DOB_MATCH")])
+            write_jsonl(left, [output("H-SYN002", "REVIEW", "INSUFFICIENT_DATA"), output("H-SYN001", "REVIEW", "INSUFFICIENT_DATA")])
+            write_jsonl(right, [output("H-SYN001", "REVIEW", "INSUFFICIENT_DATA"), output("H-SYN002", "SAME_ENTITY", "NAME_DOB_MATCH")])
             code = main(["--outputs", str(left), str(right), "--out", str(out), "--generated-at", STAMP])
             self.assertEqual(code, 0)
             text = out.read_text(encoding="utf-8")
             report = json.loads(text)
-            self.assertEqual([hit["hit_id"] for hit in report["hits"]], ["H-000001", "H-000002"])
+            self.assertEqual([hit["hit_id"] for hit in report["hits"]], ["H-SYN001", "H-SYN002"])
             self.assertEqual(report["hits"][1]["flip_type"], "decision")
             self.assertEqual(text, dump_report(report))
             self.assertTrue(text.endswith("\n"))
@@ -414,7 +414,7 @@ class ReportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)
             one = folder / "one.jsonl"
-            write_jsonl(one, [output("H-000001")])
+            write_jsonl(one, [output("H-SYN001")])
             code = main(["--outputs", str(one), "--out", str(folder / "repro.json")])
             self.assertEqual(code, 1)
 
@@ -443,7 +443,7 @@ class ReportTests(unittest.TestCase):
                         '    "customer_record_id": None,',
                         '    "decision": "REVIEW",',
                         '    "evidence": [],',
-                        '    "hit_id": "H-000001",',
+                        '    "hit_id": "H-SYN001",',
                         '    "reason": "stub",',
                         '    "reason_code": "INSUFFICIENT_DATA",',
                         "}",
@@ -452,7 +452,7 @@ class ReportTests(unittest.TestCase):
                         'trace_path = os.environ.get("TRACE_PATH")',
                         "if trace_path:",
                         '    header = {"record_type": "run_header", "git_sha": "abc", "rules_version": "r1.0", "model": "none", "provider": "none"}',
-                        '    traced = {"hit_id": "H-000001", "alert_id": "A-000001", "verdict": hit, "badges": {"llm_used": False, "fragility": "solid"}, "steps": []}',
+                        '    traced = {"hit_id": "H-SYN001", "alert_id": "A-000001", "verdict": hit, "badges": {"llm_used": False, "fragility": "solid"}, "steps": []}',
                         '    with open(trace_path, "w", encoding="utf-8") as handle:',
                         "        handle.write(json.dumps(header) + chr(10))",
                         "        handle.write(json.dumps(traced) + chr(10))",
@@ -541,14 +541,14 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(report, on_disk)
         self.assertEqual(EXAMPLE_PATH.read_text(encoding="utf-8"), dump_report(report))
         by_id = {hit["hit_id"]: hit for hit in report["hits"]}
-        self.assertEqual(by_id["H-000001"]["flip_type"], "none")
-        self.assertEqual(by_id["H-000002"]["flip_type"], "decision")
-        self.assertEqual(by_id["H-000003"]["flip_type"], "code")
-        self.assertEqual(by_id["H-000004"]["flip_type"], "evidence")
-        self.assertEqual(by_id["H-000005"]["flip_type"], "other")
-        self.assertEqual(by_id["H-000005"]["missing_from_runs"], [3])
-        self.assertEqual(by_id["H-000006"]["first_divergent_step"]["rule"], "DOB_MISMATCH")
-        self.assertEqual(by_id["H-000006"]["first_divergent_step"]["order_index"], 3)
+        self.assertEqual(by_id["H-SYN001"]["flip_type"], "none")
+        self.assertEqual(by_id["H-SYN002"]["flip_type"], "decision")
+        self.assertEqual(by_id["H-SYN003"]["flip_type"], "code")
+        self.assertEqual(by_id["H-SYN004"]["flip_type"], "evidence")
+        self.assertEqual(by_id["H-SYN005"]["flip_type"], "other")
+        self.assertEqual(by_id["H-SYN005"]["missing_from_runs"], [3])
+        self.assertEqual(by_id["H-SYN006"]["first_divergent_step"]["rule"], "DOB_MISMATCH")
+        self.assertEqual(by_id["H-SYN006"]["first_divergent_step"]["order_index"], 3)
         self.assertEqual(report["summary"]["judges_metric"], 0.5)
         self.assertEqual(report["summary"]["judges_stable_hits"], 3)
         self.assertEqual(report["summary"]["decision_flip_hits"], 1)
@@ -557,10 +557,10 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(report["summary"]["missing_hits"], 1)
         self.assertFalse(report["config_check"]["all_identical"]["git_sha"])
         self.assertTrue(report["config_check"]["all_identical"]["rules_version"])
-        self.assertEqual(report["llm_sensitivity"]["hit_ids"], ["H-000002"])
-        self.assertEqual(report["ui"]["filters"]["thin_clearances"], ["H-000004"])
-        self.assertEqual(report["ui"]["filters"]["thin_or_borderline_and_llm"], ["H-000002"])
-        self.assertEqual(len(by_id["H-000001"]["per_run"]), 5)
+        self.assertEqual(report["llm_sensitivity"]["hit_ids"], ["H-SYN002"])
+        self.assertEqual(report["ui"]["filters"]["thin_clearances"], ["H-SYN004"])
+        self.assertEqual(report["ui"]["filters"]["thin_or_borderline_and_llm"], ["H-SYN002"])
+        self.assertEqual(len(by_id["H-SYN001"]["per_run"]), 5)
         blob = dump_report({"hits": report["hits"], "heatmap": report["heatmap"]})
         self.assertNotIn("UNIQUE", blob)
         self.assertNotRegex(blob, r"\d{4}-\d{2}-\d{2}")
