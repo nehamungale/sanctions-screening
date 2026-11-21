@@ -47,10 +47,10 @@ Every decision leaves a structured trace. The UI, the evals, the replay script a
     "flags": [], "ignored_checks": []
   },
   "steps": [
-    {"rule": "ENTITY_TYPE_MISMATCH",   "result": "not_fired", "why": "both Individual"},
-    {"rule": "DECEASED",               "result": "not_fired", "why": "no date of death on hit"},
-    {"rule": "TEMPORAL_IMPOSSIBILITY", "result": "not_fired", "why": "customer 25 at earliest report"},
-    {"rule": "DOB_MISMATCH",           "result": "fired"}
+    {"rule": "ENTITY_TYPE_MISMATCH",   "result": "not_fired", "llm_used": false, "why": "both Individual"},
+    {"rule": "DECEASED",               "result": "not_fired", "llm_used": false, "why": "no date of death on hit"},
+    {"rule": "TEMPORAL_IMPOSSIBILITY", "result": "not_fired", "llm_used": false, "why": "customer 25 at earliest report"},
+    {"rule": "DOB_MISMATCH",           "result": "fired",     "llm_used": false}
   ],
   "llm_calls": []
 }
@@ -75,6 +75,7 @@ Hit side, `comparison`, `steps`, `tipping_point` and `badges` come from the matc
 - **Tipping point ("what would change it").** Re-run the rules with the deciding fact removed, or a missing fact supplied. Computed after the verdict, from already-extracted facts, with no LLM calls. It never changes the verdict.
 - **Fragility badge**, from the same re-run: `solid` (2+ independent facts, removing one doesn't flip it), `thin` (rests on one fact or record), `borderline` (at a rule edge: exactly 2 edits, partial date, or an LLM-read value).
 - **`steps` lists every rule evaluated**, including ones that didn't fire and why. For REVIEW it names exactly which fact was missing.
+- **Each step carries `llm_used`** (true if any input fact to that rule has `method: "llm"`). The repro report uses it to split flips into LLM steps and rule steps, and the eval gate uses it to check that no `DIFFERENT_ENTITY` step that fired used an LLM-read fact.
 - Counterfactuals are reviewer-only and stay in the local trace, never in public output. In a real deployment they would be limited to compliance staff.
 
 ## 3. Reasons and citations
