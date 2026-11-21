@@ -18,6 +18,58 @@ Each decision comes with one reason code, the IDs of the records it rests on, an
 
 The hard part is that the customer's identity is spread over five systems that share no common key, and the hit's facts can be hidden in free text.
 
+## Open the reviewer UI
+
+The reviewer UI is a page in your browser. It shows each hit, the alert it belongs to, and whether repeated runs stayed the same. It reads files on your computer. It never makes a network call.
+
+### Quickest: the built page
+
+The built page is already in the repository (`ui/dist/`), so you do not install anything.
+
+1. Clone this repository.
+2. Open `ui/dist/index.html`. Double-clicking the file opens it in your browser.
+3. Add `?sample=1` to the end of the address and press Enter. The page reads that query string and shows synthetic sample data (invented customers).
+
+On the Overview screen, **Load sample** loads that same sample.
+
+### Dev mode
+
+With Node.js installed, from the repository root:
+
+```bash
+cd ui && npm ci && npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
+```
+
+Then open http://127.0.0.1:5173/?sample=1.
+
+### Demo links
+
+Append one of these to either address above (`ui/dist/index.html` or `http://127.0.0.1:5173/`).
+
+| What you see | Append |
+|---|---|
+| Overview, full sample | `?sample=1` |
+| Full sample, reproducibility report with a flipped run | `?sample=1&repro=flipped` |
+| Sample without the alert list, so clears show as Not verified | `?sample=summaries` |
+| Analyst queue | `?sample=1&screen=queue` |
+| Audit, REVIEW only | `?sample=1&screen=audit&verdict=REVIEW` |
+| SAME_ENTITY hit `H-SYN003` on alert `A-SYN002` | `?sample=1&alert=A-SYN002&hit=H-SYN003` |
+| REVIEW hit `H-SYN006` on alert `A-SYN003` | `?sample=1&alert=A-SYN003&hit=H-SYN006` |
+
+`H-SYN003` is `SAME_ENTITY` and `H-SYN006` is `REVIEW` in `ui/fixtures`.
+
+### Load real pipeline output
+
+On Overview, the three **Open …** buttons each open a file picker. The page reads the file you choose in the browser. It does not upload the file.
+
+- **Open trace…** reads a trace file: one JSON object per line, one hit per line (`trace.jsonl`).
+- **Open alerts…** reads the alert list (`alerts.jsonl`: `alert_id` and `hit_ids`). That file is what lets an alert show as Cleared. Choose **Open alerts…** again for the pipeline alert summaries (`alerts.trace.jsonl`, lines with `alert_status`). The page uses those only to cross-check its own totals. It tells the two files apart from their contents.
+- **Open repro…** reads a `repro.json` from `tools/repro`.
+
+Sample data is compiled into the page, and the built page blocks network connections. Real traces, real alert files, and a `repro.json` built from real traces hold customer facts and must not be committed. Git ignores `output/trace.jsonl`, other `trace.jsonl` and `alerts*.jsonl` files, and `repro-work/`. The synthetic `ui/fixtures/*.sample.*` files are the exception.
+
+Field-by-field developer notes: [ui/README.md](ui/README.md).
+
 ## Architecture
 
 Four stages. Stages 1–3 are in `system/` and are deterministic. They do not decide hits. Stage 4 will apply the SOP and write one line per hit. `system/run` today runs stages 1–3 and writes a summary JSON, not `output/dev.jsonl`.
