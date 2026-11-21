@@ -1,4 +1,4 @@
-"""Run Stage 1, then Stage 2, then Stage 3. Decisions are not produced here."""
+"""Run Stages 1 to 4. The output file is one JSON line per hit."""
 
 from __future__ import annotations
 
@@ -7,12 +7,14 @@ import os
 import sys
 
 from shared.llm_client import OpenRouterClient
+from shared.time_budget import SHARED_TIME_CAP_SECONDS, arm_run_deadline, deadline_fired
 from stage1.build import run_stage1
 from stage1.cli import ARTEFACTS as STAGE1_ARTEFACTS
 from stage1.llm import llm_enabled as notes_llm_enabled
 from stage2.build import run_stage2
 from stage2.llm import llm_enabled as hits_llm_enabled
 from stage3.cli import run_stage3
+from stage4.build import run_stage4
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -23,6 +25,9 @@ def main(argv: list[str] | None = None) -> int:
     data_folder, output_file = args
     cache_dir = os.environ.get("SANCTIONS_CACHE", "working")
     # One client, one clock, and one run budget for every stage that calls out.
+    # The shared cap is 1,200s (20 minutes). The run deadline at 25 minutes
+    # is the last stop before the brief's 30 minutes.
+    arm_run_deadline()
     client = OpenRouterClient() if notes_llm_enabled() or hits_llm_enabled() else None
     try:
         stage1 = run_stage1(data_folder, cache_dir, client=client)
@@ -32,6 +37,7 @@ def main(argv: list[str] | None = None) -> int:
             os.path.join(cache_dir, "alert_resolution.jsonl"),
             cache_dir,
         )
+        stage4 = run_stage4(data_folder, cache_dir, output_file, client=client)
     except FileNotFoundError as error:
         print(f"missing input: {error}", file=sys.stderr)
         return 2
@@ -58,13 +64,20 @@ def main(argv: list[str] | None = None) -> int:
         "phone_dob_edges": stage1["phone_dob_edges"],
         "practice": stage2.get("practice"),
         "records": stage1["records"],
-        "stage": 3,
-        "stages": [1, 2, 3],
+        "deadline_fired": deadline_fired(),
+        "decisions": stage4["decisions"],
+        "practice_score": stage4.get("practice"),
+        "review_rate": stage4["review_rate"],
+        "rules_version": stage4["rules_version"],
+        "shared_time_cap_seconds": SHARED_TIME_CAP_SECONDS,
+        "stage": 4,
+        "stage4_seconds": stage4["elapsed_seconds"],
+        "stages": [1, 2, 3, 4],
+        "veto": stage4["llm_veto"],
     }
-    parent = os.path.dirname(output_file)
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-    with open(output_file, "w", encoding="utf-8") as handle:
+    os.makedirs(cache_dir, exist_ok=True)
+    summary_path = os.path.join(cache_dir, "run_summary.json")
+    with open(summary_path, "w", encoding="utf-8") as handle:
         json.dump(summary, handle, ensure_ascii=False, indent=2, sort_keys=True)
         handle.write("\n")
     notes = stage1["notes"]
@@ -103,8 +116,22 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"stage 3 practice: {alert_practice['matched']}/{alert_practice['labels']}"
         )
+    decisions = stage4["decisions"]
+    print(
+        f"stage 4: {stage4['hits']} hits; "
+        + ", ".join(f"{key} {decisions[key]}" for key in sorted(decisions))
+        + f"; review rate {stage4['review_rate']}; {stage4['elapsed_seconds']}s"
+    )
+    scored = stage4.get("practice")
+    if scored:
+        print(
+            f"stage 4 practice: {scored['right']}/{scored['labels']} decisions; "
+            f"reason codes {scored['reason_codes_on_right']}/{scored['right'] or 0} on right; "
+            f"unsafe {scored['unsafe']}; score {scored['decision_score']}"
+        )
     print(f"artefacts: {cache_dir}")
-    print(f"summary: {output_file}")
+    print(f"output: {output_file}")
+    print(f"summary: {summary_path}")
     print(
         f"notes flagged {notes['flagged']}/{notes['notes']}"
     )

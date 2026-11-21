@@ -504,10 +504,22 @@ class RunTests(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(cache, "hit_golden.jsonl")))
             self.assertTrue(os.path.isfile(os.path.join(cache, "alert_resolution.jsonl")))
             self.assertFalse(os.path.exists(os.path.join(folder, "output", "dev.jsonl")))
-            with open(output, encoding="utf-8") as handle:
+            with open(os.path.join(cache, "run_summary.json"), encoding="utf-8") as handle:
                 summary = json.loads(handle.read())
-            self.assertEqual(summary["stage"], 3)
-            self.assertEqual(summary["stages"], [1, 2, 3])
+            self.assertEqual(summary["stage"], 4)
+            self.assertEqual(summary["stages"], [1, 2, 3, 4])
+            with open(output, encoding="utf-8") as handle:
+                outputted = [json.loads(line) for line in handle if line.strip()]
+            self.assertEqual(len(outputted), 1)
+            self.assertEqual(list(outputted[0]), [
+                "hit_id", "alert_id", "decision", "reason_code", "customer_record_id", "reason", "evidence",
+            ])
+            self.assertEqual(outputted[0]["hit_id"], "H-000010")
+            self.assertEqual(outputted[0]["decision"], "DIFFERENT_ENTITY")
+            self.assertIn(outputted[0]["reason_code"], {
+                "DOB_MISMATCH", "LOCATION_MISMATCH", "NAME_MISMATCH_VERIFIED",
+                "ENTITY_TYPE_MISMATCH", "DECEASED", "TEMPORAL_IMPOSSIBILITY",
+            })
             self.assertEqual(summary["records"], 1)
             self.assertEqual(summary["persons"], 1)
             self.assertEqual(summary["hits"], 1)

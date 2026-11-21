@@ -83,7 +83,7 @@ Hit side, `comparison`, `steps`, `tipping_point` and `badges` come from Stage 4 
 
 - **Templated reasons**, one template per reason code. The LLM never writes the reason sentence.
 - **Lean public reasons:** cite record IDs and the deciding facts at minimum precision (years, countries). No verbatim note text, full DOBs or document numbers in `dev.jsonl`. Full values live in the local trace. (Judges score that the reason states the real grounds with this hit's own facts, so don't strip facts entirely.)
-- **Reason-code priority:** when several codes apply, pick the first in POLICY table order. Tested, so the code can't flip between runs.
+- **Reason-code priority:** when several codes apply, Stage 4 picks the most robust one that passed the gate (type, death, time, date of birth, verified name, location). The order is fixed, so the code cannot flip between runs.
 - **Citation gate (grounding), a hard eval gate:**
   1. Exists: every evidence ID is in the input files.
   2. Belongs: it belongs to this hit or to the resolved person's own merged records. Never another customer, a rejected or expired check, or a namesake search result as evidence for a clear.
@@ -96,8 +96,8 @@ Hit side, `comparison`, `steps`, `tipping_point` and `badges` come from Stage 4 
 - Temperature 0, seed, pinned provider, no fallbacks. Those are in `shared/llm_client.py`. `data_collection: deny` is not sent. **Status:** Open, Stage 4 if the trace header must record it; the request flag itself is not on main.
 - The quote must be verbatim in the source, and regex must parse the value from it.
 - Any failure (timeout, bad JSON, quote not found, budget used up) gives UNKNOWN, which leads to REVIEW.
-- **Decision (Neha): a fact the LLM read can never be the reason we clear a hit.** It can only push a hit to REVIEW or support SAME. **Status:** Open, Stage 4. The code on main still carries `may_solely_support_different_entity: false`, which only blocks an LLM fact that is the sole ground. **Status:** Open, fix pending in PR #10 for the wording on the Stage 2 design doc and the shared client. The gate itself is still Stage 4.
-- **Fixed budget, not a wall-clock cap:** max calls per hit and per run, fixed per-call timeout, fixed retries, hits processed in sorted order. A wall-clock limit stays only as an emergency backstop and is logged in the header if it fires. **Status:** Open, fix pending in PR #10. On main the shared client still uses a 90 second cap (`DEFAULT_TIME_CAP_SECONDS`), and Stage 1 does not honour `SANCTIONS_LLM=0`. Stage 2 does honour `SANCTIONS_LLM=0` and, when it builds its own client, uses a 1,200 second cap. Hits are processed in `hit_id` order, and a skipped Stage 2 call is flagged `LLM_SKIPPED_BUDGET`.
+- **Decision (Neha): a fact the LLM read can never be the reason we clear a hit.** It can only push a hit to REVIEW or support SAME. **Status:** Stage 4 enforces this in the gate (`LLM_FACT`), including when an upstream flag says the fact may solely support a clearance. `may_solely_support_different_entity` stays false on model facts.
+- **Fixed budget, not a wall-clock cap:** max calls per hit and per run, fixed per-call timeout, fixed retries, hits processed in sorted order. A wall-clock limit stays only as an emergency backstop. **Status:** PR #10 shares one client across stages with `DEFAULT_TIME_CAP_SECONDS = 1200` (20 minutes, under the 30-minute brief) plus a per-extraction call cap. `system/run` also arms a 25-minute run deadline so a second client cannot use another 1,200 seconds. The default path does not call a model. Hits are processed in `hit_id` order, and a skipped Stage 2 call is flagged `LLM_SKIPPED_BUDGET`.
 - Votes: measure per-fact agreement over 15 calls (5 runs x 3 calls) on dev before keeping 3 unanimous votes. 1 call plus the verbatim and regex checks may be enough. **Status:** Open (FDE owns these). The client still requires 3 unanimous calls. The 15-call check and the LLM-on delta test have not been run.
 - `llm_calls` logs prompt hash, model, served provider, OpenRouter response ID, quote and parsed value. Never the API key or request headers.
 - LLM-off switch, to measure how much the LLM moves results.
@@ -113,7 +113,7 @@ Hit side, `comparison`, `steps`, `tipping_point` and `badges` come from Stage 4 
 
 ### Determinism by construction
 
-- `PYTHONHASHSEED=0` is set by `tools/repro` when it launches `system/run`. `system/run` itself does not set it yet. **Status:** Open, fix pending in PR #10.
+- `PYTHONHASHSEED=0` is set by `system/run` (it re-execs if the variable is unset) and by `tools/repro`.
 - Stable sorts everywhere; sort every directory listing; never depend on set or dict iteration order.
 - Name and country folding uses NFKD, then drops combining marks (`system/stage1/normalise_text.py`). Not NFKC.
 - No concurrency whose completion order can reach output order.
