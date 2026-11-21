@@ -9,12 +9,15 @@ export const DECISION_TONE: Record<Decision, { dot: string; pill: string }> = {
   REVIEW: { dot: 'bg-amber-500', pill: 'border-amber-200 bg-amber-50 text-amber-900' },
 }
 
-export const STATUS_TONE: Record<RollupStatus, { border: string; pill: string }> = {
-  CLEARED: { border: 'border-l-emerald-600', pill: 'border-emerald-200 bg-emerald-50 text-emerald-800' },
-  NOT_VERIFIED: { border: 'border-l-slate-400', pill: 'border-slate-200 bg-slate-50 text-slate-700' },
-  ESCALATED: { border: 'border-l-red-600', pill: 'border-red-200 bg-red-50 text-red-800' },
-  NEEDS_REVIEW: { border: 'border-l-amber-500', pill: 'border-amber-200 bg-amber-50 text-amber-900' },
+export const STATUS_TONE: Record<RollupStatus, { border: string; pill: string; bar: string; stroke: string }> = {
+  CLEARED: { border: 'border-l-emerald-600', pill: 'border-emerald-200 bg-emerald-50 text-emerald-800', bar: 'bg-emerald-600', stroke: 'stroke-emerald-600' },
+  NOT_VERIFIED: { border: 'border-l-slate-400', pill: 'border-slate-200 bg-slate-50 text-slate-700', bar: 'bg-slate-400', stroke: 'stroke-slate-400' },
+  ESCALATED: { border: 'border-l-red-600', pill: 'border-red-200 bg-red-50 text-red-800', bar: 'bg-red-600', stroke: 'stroke-red-600' },
+  NEEDS_REVIEW: { border: 'border-l-amber-500', pill: 'border-amber-200 bg-amber-50 text-amber-900', bar: 'bg-amber-500', stroke: 'stroke-amber-500' },
 }
+
+/** On-screen order of alert statuses, most urgent first. */
+export const DISPLAY_STATUSES = (verified: boolean): RollupStatus[] => ['ESCALATED', 'NEEDS_REVIEW', verified ? 'CLEARED' : 'NOT_VERIFIED']
 
 /** Verdict exactly as the brief writes it. */
 export function DecisionBadge({ decision, className }: { decision: Decision | null; className?: string }) {

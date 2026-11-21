@@ -48,6 +48,7 @@ Append one of these to either address above (`ui/dist/index.html` or `http://127
 
 | What you see | Append |
 |---|---|
+| Our own dev run (dev server only: `output/dev.jsonl`, or `working/trace.jsonl` if present, plus `dev/alerts.jsonl` if present) | `?run=local` |
 | Overview, full sample | `?sample=1` |
 | Full sample, reproducibility report with a flipped run | `?sample=1&repro=flipped` |
 | Sample without the alert list, so clears show as Not verified | `?sample=summaries` |

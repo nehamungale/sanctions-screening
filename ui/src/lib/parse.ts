@@ -16,6 +16,8 @@ export interface TraceParseResult {
    * parsed like a summaries file: a cross-check only, never a source of Cleared. Null if none.
    */
   summaries: AlertsParseResult | null
+  /** 'output': every hit line is a submission output line (decisions only, no comparison). */
+  format: 'trace' | 'output' | 'mixed' | 'empty'
 }
 
 const isObj = (x: unknown): x is Record<string, unknown> =>
@@ -43,7 +45,17 @@ export function isAlertSummaryRecord(rec: Record<string, unknown>): boolean {
   return 'alert_status' in rec && !('hit_id' in rec)
 }
 
+/** A line of the submission output (output/dev.jsonl): decision fields at the top level, no trace. */
+export function isOutputRecord(rec: Record<string, unknown>): boolean {
+  return rec.trace_schema === undefined && !('verdict' in rec) && 'decision' in rec
+}
+
 function validateHit(rec: Record<string, unknown>): string | TraceHit {
+  if (isOutputRecord(rec)) {
+    // Read it as a trace record with only a verdict: no comparison, steps or identity.
+    const { decision, reason_code, reason, evidence, customer_record_id } = rec
+    return validateHit({ trace_schema: 1, hit_id: rec.hit_id, alert_id: rec.alert_id, output_only: true, verdict: { decision, reason_code, reason, evidence, customer_record_id } })
+  }
   if (rec.trace_schema !== 1) {
     return `unsupported trace_schema ${JSON.stringify(rec.trace_schema) ?? 'missing'} (expected 1)`
   }
@@ -89,6 +101,8 @@ export function parseTraceJsonl(text: string): TraceParseResult {
   // Summary lines keep their line numbers: every other line is blanked before parsing them.
   const summaryText: string[] = all.map(() => '')
   let summaryLines = 0
+  let outputLines = 0
+  let traceLines = 0
 
   all.forEach((rawLine, i) => {
     const line = i + 1
@@ -121,6 +135,8 @@ export function parseTraceJsonl(text: string): TraceParseResult {
     }
     const g = groups.get(rec.hit_id) ?? { firstLine: line, valid: [], invalid: 0 }
     groups.set(rec.hit_id, g)
+    if (isOutputRecord(rec)) outputLines++
+    else traceLines++
     const res = validateHit(rec)
     if (typeof res === 'string') {
       g.invalid++
@@ -149,7 +165,8 @@ export function parseTraceJsonl(text: string): TraceParseResult {
     hits.push(g.valid[0])
   }
   const summaries = summaryLines ? parseAlerts(summaryText.join('\n')) : null
-  return { hits, issues, rejected, skipped, lines, summaries }
+  const format = outputLines && traceLines ? 'mixed' : outputLines ? 'output' : traceLines ? 'trace' : 'empty'
+  return { hits, issues, rejected, skipped, lines, summaries, format }
 }
 
 interface Group {

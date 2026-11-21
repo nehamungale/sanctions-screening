@@ -76,9 +76,11 @@ export function AlertView({ model, summary, hitId, onHit, onBack, onStatus }: Pr
                 aria-current={active ? 'true' : undefined}
                 className={cn(
                   'flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-lg border bg-card p-3 text-left transition-colors hover:border-foreground/30',
+                  h.decision === 'REVIEW' && 'halo border-amber-300 bg-amber-50/40',
                   active && 'border-foreground/60 ring-1 ring-foreground/20',
                 )}
               >
+                {h.decision === 'REVIEW' ? <span className="text-[11px] font-semibold text-amber-800">Analyst action: decide this hit</span> : null}
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono text-sm whitespace-nowrap">{h.hit_id}</span>
                   <DecisionBadge decision={h.decision} />

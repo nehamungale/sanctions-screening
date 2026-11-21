@@ -26,15 +26,18 @@ export function Queue({ model, alertId, hitId, onOpen }: Props) {
         const meta = QUEUE_GROUPS.find((q) => q.id === g.id)!
         return (
           <section key={g.id} className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <h2 className={cn('text-base font-semibold', g.id !== 'undecided' && 'font-mono text-sm')}>{meta.title}</h2>
               <span className="text-sm tabular-nums text-muted-foreground">{g.rows.length}</span>
+              {g.id === 'review' && g.rows.length > 0 ? (
+                <span className="halo inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">Analyst action</span>
+              ) : null}
               {!compact ? <span className="text-xs text-muted-foreground">{meta.note}</span> : null}
             </div>
             {g.rows.length === 0 ? (
               <p className="text-sm text-muted-foreground">None.</p>
             ) : (
-              <ul className="flex flex-col divide-y rounded-xl border bg-card">
+              <ul className={cn('flex flex-col divide-y rounded-xl border bg-card', g.id === 'review' && 'border-l-4 border-l-amber-500', g.id === 'same' && 'border-l-4 border-l-red-600')}>
                 {g.rows.map((r) => {
                   const active = selected && rowKey(selected) === rowKey(r)
                   return (

@@ -4,7 +4,7 @@ import { HitWorkspace, rowKey } from '@/HitWorkspace'
 import { DecisionBadge, ReasonCode, RunStrip } from '@/components/verdict'
 import type { buildRepro, Model } from '@/lib/data'
 import { reasonLabel } from '@/lib/labels'
-import { DECISIONS, HIT_NOT_DECIDED, REASON_CODES } from '@/lib/policy'
+import { DISPLAY_DECISIONS, HIT_NOT_DECIDED, REASON_CODES } from '@/lib/policy'
 import { useUnstableFilter } from '@/lib/useUnstableFilter'
 import { cn } from '@/lib/utils'
 import { allHitRows, filterRows, NO_FILTERS, type AuditFilters, type HitRow } from '@/lib/worklist'
@@ -114,7 +114,7 @@ export function Audit({ model, repro, filters, alertId, hitId, onFilters, onOpen
         <Filter label="Verdict">
           <select className={SELECT} value={filters.verdict ?? ''} onChange={(e) => set({ verdict: (e.target.value || null) as AuditFilters['verdict'] })}>
             <option value="">All</option>
-            {DECISIONS.map((d) => (
+            {DISPLAY_DECISIONS.map((d) => (
               <option key={d} value={d}>
                 {d}
               </option>

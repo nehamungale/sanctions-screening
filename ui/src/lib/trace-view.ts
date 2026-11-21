@@ -157,6 +157,7 @@ export function readLlmCalls(raw: Record<string, unknown>): Record<string, unkno
 export function noComparisonReason(raw: Record<string, unknown>, customerRecordId: string | null): string | null {
   if (Array.isArray(raw.comparison) && raw.comparison.some(isObj)) return null
   if (raw.not_decided === true) return 'the hit has no decision, so it was never compared with a customer'
+  if (raw.output_only === true) return 'this file is the submission output, which carries only the decision. Load trace.jsonl from the same run to see the comparison'
   if (!customerRecordId) return 'no matching customer record, so there is nothing to compare the hit with'
   if (customerRecordId === 'AMBIGUOUS') return 'more than one customer fits this alert and the trace has no comparison rows'
   return 'the trace has no comparison rows for this hit'

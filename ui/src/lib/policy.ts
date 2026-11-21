@@ -4,6 +4,9 @@
 export const DECISIONS = ['DIFFERENT_ENTITY', 'SAME_ENTITY', 'REVIEW'] as const
 export type Decision = (typeof DECISIONS)[number]
 
+/** On-screen order, most urgent first: confirmed matches (to compliance), then analyst review, then clears. */
+export const DISPLAY_DECISIONS: readonly Decision[] = ['SAME_ENTITY', 'REVIEW', 'DIFFERENT_ENTITY']
+
 export const REASON_CODES: Record<Decision, readonly string[]> = {
   DIFFERENT_ENTITY: [
     'TEMPORAL_IMPOSSIBILITY',

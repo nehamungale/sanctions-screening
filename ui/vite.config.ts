@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
@@ -39,9 +40,41 @@ function fileSafeHtml(): Plugin {
   }
 }
 
+/**
+ * "Our run": the dev server (npm run dev) reads this repository's own run from disk, so the
+ * reviewer can open it with one click. Local only: in a build the module is null, so no real
+ * customer data can end up in dist/ (tests/check-ids.sh guards that too).
+ *   trace:  $UI_TRACE, else $SANCTIONS_CACHE/trace.jsonl, else working/trace.jsonl, else output/dev.jsonl
+ *   alerts: $UI_ALERTS, else dev/alerts.jsonl (lets alerts show as Cleared)
+ */
+function localRun(): Plugin {
+  const id = 'virtual:local-run'
+  const root = path.resolve(import.meta.dirname, '..')
+  const first = (cands: (string | undefined)[]) => cands.filter((c): c is string => !!c).map((c) => path.resolve(root, c)).find((c) => existsSync(c)) ?? null
+  let serve = false
+  return {
+    name: 'local-run',
+    configResolved(c) {
+      serve = c.command === 'serve'
+    },
+    resolveId(x) {
+      return x === id ? `\0${id}` : null
+    },
+    load(x) {
+      if (x !== `\0${id}`) return null
+      if (!serve) return 'export default null'
+      const cache = process.env.SANCTIONS_CACHE ?? 'working'
+      const trace = first([process.env.UI_TRACE, path.join(cache, 'trace.jsonl'), 'output/dev.jsonl'])
+      const alerts = first([process.env.UI_ALERTS, 'dev/alerts.jsonl'])
+      const file = (f: string | null) => (f ? { name: path.relative(root, f), text: readFileSync(f, 'utf8') } : null)
+      return `export default ${JSON.stringify({ trace: file(trace), alerts: file(alerts) })}`
+    },
+  }
+}
+
 export default defineConfig({
   base: './',
-  plugins: [react(), tailwindcss(), fileSafeHtml()],
+  plugins: [react(), tailwindcss(), fileSafeHtml(), localRun()],
   resolve: {
     alias: { '@': path.resolve(import.meta.dirname, './src') },
   },

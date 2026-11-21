@@ -7,6 +7,7 @@ import samplePipelineTraceText from '../../fixtures/trace-pipeline.sample.jsonl?
 import sampleTraceText from '../../fixtures/trace.sample.jsonl?raw'
 import { parseAlerts, parseTraceJsonl } from './parse.ts'
 import { parseRepro } from './repro.ts'
+import localRun from 'virtual:local-run'
 import { EMPTY, type Loaded } from './model.ts'
 
 export * from './model.ts'
@@ -39,4 +40,21 @@ export function loadSample(mode: SampleKind = 'full', repro: 'stable' | 'flipped
       ? { name: 'repro-flipped.sample.json (bundled)', result: parseRepro(sampleReproFlippedText) }
       : { name: 'repro.sample.json (bundled)', result: parseRepro(sampleReproText) }
   return { ...EMPTY, trace, alerts: { name: 'alerts.sample.jsonl (bundled)', result: parseAlerts(sampleAlertsText) }, repro: reproFile }
+}
+
+/** True when the dev server found this repository's own run on disk (never in a build). */
+export const LOCAL_RUN_AVAILABLE = !!localRun?.trace
+
+/** This repository's own run: output/dev.jsonl (or the trace), plus dev/alerts.jsonl when present. Dev server only. */
+export function loadLocalRun(): { loaded: Loaded; label: string } | null {
+  if (!localRun?.trace) return null
+  const { trace, alerts } = localRun
+  return {
+    loaded: {
+      ...EMPTY,
+      trace: { name: trace.name, result: parseTraceJsonl(trace.text) },
+      alerts: alerts ? { name: alerts.name, result: parseAlerts(alerts.text) } : null,
+    },
+    label: [trace.name, alerts?.name].filter(Boolean).join(' + '),
+  }
 }

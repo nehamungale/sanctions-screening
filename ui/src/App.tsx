@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { AlertView } from '@/AlertView'
 import { Audit } from '@/Audit'
-import { Overview } from '@/Overview'
+import { Overview, type Origin } from '@/Overview'
 import { Queue } from '@/Queue'
 import { Card, CardContent } from '@/components/ui/card'
-import { buildModel, buildRepro, EMPTY, loadSample, type Loaded, type SampleKind } from '@/lib/data'
+import { buildModel, buildRepro, EMPTY, loadLocalRun, loadSample, LOCAL_RUN_AVAILABLE, type Loaded, type SampleKind } from '@/lib/data'
 import { STATUS_LABELS, statusFromSlug } from '@/lib/labels'
 import { isDecision, type RollupStatus } from '@/lib/policy'
 import { cn } from '@/lib/utils'
@@ -33,7 +33,7 @@ interface Nav {
 }
 
 /** ?sample=1 (everything), ?sample=trace (trace only; alias summaries), ?sample=pipeline (real stage4 trace), ?sample=crosscheck (a wrong pipeline summary); &repro=flipped. */
-type SampleMode = { mode: SampleKind; repro: 'stable' | 'flipped' } | null
+type SampleMode = { mode: SampleKind | 'local'; repro: 'stable' | 'flipped' } | null
 
 function readNav(): Nav {
   const q = new URLSearchParams(window.location.search)
@@ -57,6 +57,7 @@ function readNav(): Nav {
 
 function readSample(): SampleMode {
   const q = new URLSearchParams(window.location.search)
+  if (q.get('run') === 'local' && LOCAL_RUN_AVAILABLE) return { mode: 'local', repro: 'stable' }
   const v = q.get('sample')
   const mode = v === '1' ? 'full' : v === 'trace' || v === 'summaries' || v === 'pipeline' || v === 'crosscheck' ? v : null
   return mode ? { mode, repro: q.get('repro') === 'flipped' ? 'flipped' : 'stable' } : null
@@ -64,7 +65,8 @@ function readSample(): SampleMode {
 
 function writeUrl(nav: Nav, sample: SampleMode) {
   const q = new URLSearchParams()
-  if (sample) {
+  if (sample?.mode === 'local') q.set('run', 'local')
+  else if (sample) {
     q.set('sample', sample.mode === 'full' ? '1' : sample.mode)
     if (sample.repro === 'flipped') q.set('repro', 'flipped')
   }
@@ -91,7 +93,9 @@ function writeUrl(nav: Nav, sample: SampleMode) {
 export default function App() {
   const [nav, setNav] = useState<Nav>(readNav)
   const [sample, setSample] = useState<SampleMode>(readSample)
-  const [loaded, setLoaded] = useState<Loaded>(() => (sample ? loadSample(sample.mode, sample.repro) : EMPTY))
+  const [initial] = useState(() => initialData(sample))
+  const [loaded, setLoaded] = useState<Loaded>(initial.loaded)
+  const [origin, setOrigin] = useState<Origin>(initial.origin)
 
   const model = useMemo(() => buildModel(loaded), [loaded])
   const repro = useMemo(() => buildRepro(loaded.repro), [loaded.repro])
@@ -109,6 +113,19 @@ export default function App() {
   }
   const openRow = (r: HitRow | null) => go({ alert: r?.alert_id ?? null, hit: r?.hit_id ?? null })
   const reset = { status: null, alert: null, hit: null }
+
+  const needPerson = model ? model.counts.hitsByDecision.REVIEW + model.counts.hitsUndecided : 0
+  const openLocal = LOCAL_RUN_AVAILABLE
+    ? () => {
+        const r = loadLocalRun()
+        if (!r) return
+        const s: SampleMode = { mode: 'local', repro: 'stable' }
+        setLoaded(r.loaded)
+        setOrigin({ kind: 'local', label: r.label })
+        setSample(s)
+        go(reset, s)
+      }
+    : null
 
   const summary = model && nav.alert ? (model.summariesById.get(nav.alert) ?? null) : null
   const noData = (
@@ -138,6 +155,14 @@ export default function App() {
                 )}
               >
                 {s.label}
+                {s.id === 'queue' && needPerson > 0 ? (
+                  <span
+                    className={cn('halo ml-2 inline-flex min-w-5 justify-center rounded-full bg-amber-500 px-1.5 text-[11px] font-semibold text-white tabular-nums')}
+                    title={`${needPerson} hits need an analyst decision`}
+                  >
+                    {needPerson}
+                  </span>
+                ) : null}
               </button>
             ))}
           </nav>
@@ -178,22 +203,32 @@ export default function App() {
               model={model}
               repro={repro}
               status={nav.status}
+              origin={origin}
+              onLocalRun={openLocal}
               onLoad={(patch) => {
-                setLoaded((l) => ({ ...l, ...patch }))
+                const next = { ...loaded, ...patch }
+                setLoaded(next)
+                // Adding the alerts file to our dev run keeps it "our dev run"; anything else is opened files.
+                const keep = origin?.kind === 'local' && !patch.trace
+                setOrigin({ kind: keep ? 'local' : 'files', label: [next.trace?.name, next.alerts?.name, next.repro?.name].filter(Boolean).join(' + ') })
                 setSample(null)
                 go(reset, null)
               }}
               onSample={() => {
                 const s: SampleMode = { mode: 'full', repro: 'stable' }
                 setLoaded(loadSample())
+                setOrigin({ kind: 'sample', label: 'bundled synthetic fixtures (invented customers)' })
                 setSample(s)
                 go(reset, s)
               }}
               onClear={() => {
                 setLoaded(EMPTY)
+                setOrigin(null)
                 setSample(null)
                 go(reset, null)
               }}
+              onQueue={() => go({ screen: 'queue', ...reset, filters: NO_FILTERS })}
+              onAudit={(filters) => go({ screen: 'audit', ...reset, filters })}
               onStatus={(status) => go({ status })}
               onAlert={(alert) => go({ alert, hit: null })}
               onReproHit={(hit, alert) => go({ screen: 'audit', filters: { ...NO_FILTERS, unstable: true }, status: null, alert, hit })}
@@ -203,4 +238,14 @@ export default function App() {
       </main>
     </div>
   )
+}
+
+function initialData(sample: SampleMode): { loaded: Loaded; origin: Origin } {
+  if (sample?.mode === 'local') {
+    const r = loadLocalRun()
+    if (r) return { loaded: r.loaded, origin: { kind: 'local', label: r.label } }
+    return { loaded: EMPTY, origin: null }
+  }
+  if (sample) return { loaded: loadSample(sample.mode, sample.repro), origin: { kind: 'sample', label: 'bundled synthetic fixtures (invented customers)' } }
+  return { loaded: EMPTY, origin: null }
 }

@@ -55,3 +55,23 @@
     @apply bg-background text-foreground antialiased;
   }
 }
+
+/* "Needs a person" halo: a soft pulsing amber ring on anything the analyst has to act on. */
+@keyframes halo {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(245 158 11 / 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgb(245 158 11 / 0);
+  }
+}
+.halo {
+  animation: halo 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .halo {
+    animation: none;
+    box-shadow: 0 0 0 3px rgb(245 158 11 / 0.35);
+  }
+}
