@@ -18,6 +18,7 @@ from stage1.normalise import (
     norm_phone,
     parse_date,
 )
+from stage1.normalise_text import norm_text
 from stage1.notes import parse_note
 
 _PRECISION_RANK = {"day": 3, "month": 2, "year": 1}
@@ -169,6 +170,19 @@ def build_from_tables(tables: dict, use_llm: bool | None = None) -> tuple[list[d
         )
 
     indexes = _indexes(people)
+    record_indexes = _record_indexes(accounts)
+    indexes["account_record_id"] = record_indexes["account_id"]
+    indexes["login_record_id"] = record_indexes["login_handle"]
+    indexes["record_views"] = _record_views(
+        customers_by_id,
+        indexes["record_id"],
+        accounts_by_customer,
+        applicants_by_customer,
+        checks_by_applicant,
+        names,
+    )
+    indexes["email_record_id"] = _email_record_index(customers_by_id)
+    indexes["name_part_record_id"] = _name_part_record_index(indexes["record_views"])
     multi = sum(1 for person in people if len(person["record_ids"]) > 1)
     stats = {
         "records": len(record_ids),
@@ -195,6 +209,11 @@ def run_stage1(data_folder: str, cache_dir: str, use_llm: bool | None = None) ->
     _write_json(os.path.join(cache_dir, "index_login_handle.json"), indexes["login_handle"])
     _write_json(os.path.join(cache_dir, "index_email.json"), indexes["email"])
     _write_json(os.path.join(cache_dir, "index_name.json"), indexes["name"])
+    _write_jsonl(os.path.join(cache_dir, "record_view.jsonl"), indexes["record_views"])
+    _write_json(os.path.join(cache_dir, "index_account_record_id.json"), indexes["account_record_id"])
+    _write_json(os.path.join(cache_dir, "index_login_record_id.json"), indexes["login_record_id"])
+    _write_json(os.path.join(cache_dir, "index_email_record_id.json"), indexes["email_record_id"])
+    _write_json(os.path.join(cache_dir, "index_name_part_record_id.json"), indexes["name_part_record_id"])
     stats["elapsed_seconds"] = round(time.perf_counter() - started, 3)
     stats["cache_dir"] = cache_dir
     return stats
@@ -719,6 +738,197 @@ def _contracts(customer_record_ids: list[str], flags: list[str]) -> dict:
         "emit_customer_record_id_not_person_id": True,
         "llm_method_cannot_solely_support_different_entity": True,
     }
+
+
+_POSTCODE_FIELDS = ("postcode", "postal_code", "zip", "zip_code")
+
+
+def _record_indexes(accounts: list[dict]) -> dict:
+    """account_id and login_handle to the customer record ids that hold them."""
+    by_account: dict[str, set[str]] = defaultdict(set)
+    by_login: dict[str, set[str]] = defaultdict(set)
+    for row in accounts:
+        record_id = row.get("customer_id")
+        if not record_id:
+            continue
+        account_id = row.get("account_id")
+        if account_id:
+            by_account[account_id].add(record_id)
+        handle = row.get("login_handle")
+        if handle:
+            by_login[str(handle).strip()].add(record_id)
+    return {
+        "account_id": {key: sorted(by_account[key]) for key in sorted(by_account)},
+        "login_handle": {key: sorted(by_login[key]) for key in sorted(by_login)},
+    }
+
+
+def _record_views(
+    customers_by_id,
+    person_of,
+    accounts_by_customer,
+    applicants_by_customer,
+    checks_by_applicant,
+    names: NameTools,
+) -> list[dict]:
+    """One deterministic row per customer record. See SCHEMA.md."""
+    rows = []
+    for record_id in sorted(customers_by_id):
+        row = customers_by_id[record_id]
+        account_rows = sorted(
+            accounts_by_customer.get(record_id, []),
+            key=lambda item: (item.get("account_id") or "", item.get("login_handle") or ""),
+        )
+        account_ids = []
+        login_handles = []
+        accounts_out = []
+        seen_accounts = set()
+        for account in account_rows:
+            account_id = account.get("account_id")
+            handle = account.get("login_handle")
+            handle = str(handle).strip() if handle else None
+            key = (account_id, handle)
+            if key in seen_accounts:
+                continue
+            seen_accounts.add(key)
+            if account_id and account_id not in account_ids:
+                account_ids.append(account_id)
+            if handle and handle not in login_handles:
+                login_handles.append(handle)
+            accounts_out.append({
+                "account_id": account_id,
+                "login_handle": handle,
+                "source_id": account_id,
+            })
+        account_ids.sort()
+        login_handles.sort()
+        accounts_out.sort(key=lambda item: (item.get("account_id") or "", item.get("login_handle") or ""))
+        rows.append({
+            "record_id": record_id,
+            "person_id": person_of.get(record_id),
+            "entity_type": {"source_id": record_id, "value": row.get("entity_type")},
+            "full_name": _name_field(row, "full_name", names),
+            "preferred_name": _name_field(row, "preferred_name", names),
+            "login_name": _name_field(row, "login_name", names),
+            "dob": _record_dob(row, applicants_by_customer, checks_by_applicant),
+            "city": _place_fact(row, "city"),
+            "address": _place_fact(row, "address"),
+            "postcode": _postcode_fact(row),
+            "nationality": _country_field(row, "nationality"),
+            "residence_country": _country_field(row, "residence_country"),
+            "phone": {"source_id": record_id, "value": norm_phone(row.get("phone"))},
+            "email": {"source_id": record_id, "value": norm_email(row.get("email"))},
+            "account_ids": account_ids,
+            "login_handles": login_handles,
+            "accounts": accounts_out,
+        })
+    return rows
+
+
+def _name_field(row: dict, field: str, names: NameTools) -> dict:
+    """Record name only. The verified legal name is not included."""
+    raw = row.get(field)
+    if raw is None or str(raw).strip() == "":
+        return {"parts": [], "real_part_count": 0, "source_id": row["record_id"], "value": None}
+    parts, _placeholder = names.split(raw, row.get("entity_type"))
+    return {
+        "parts": parts,
+        "real_part_count": len(parts),
+        "source_id": row["record_id"],
+        "value": str(raw),
+    }
+
+
+def _record_dob(row: dict, applicants_by_customer, checks_by_applicant) -> dict:
+    """Declared birth date, or a company's incorporation date in the same slot."""
+    record_id = row["record_id"]
+    if row.get("entity_type") == "Company":
+        registry = _registry_incorporation(record_id, applicants_by_customer, checks_by_applicant)
+        if registry is not None:
+            return registry
+        return _parsed_date_fact(row.get("dob"), record_id, "record", "incorporation")
+    return _parsed_date_fact(row.get("dob"), record_id, "record", "declared")
+
+
+def _registry_incorporation(record_id, applicants_by_customer, checks_by_applicant):
+    chosen = []
+    for applicant_id in applicants_by_customer.get(record_id, []):
+        for check in checks_by_applicant.get(applicant_id, []):
+            if check.get("result") != "approved":
+                continue
+            if (check.get("document_type") or "").lower() != "registry extract":
+                continue
+            parsed, date_flags = parse_date(check.get("verified_dob"))
+            if parsed is None and "UNPARSED_DATE" not in date_flags:
+                continue
+            chosen.append(check)
+    if not chosen:
+        return None
+    check = max(chosen, key=lambda item: (
+        item.get("checked_at") or "",
+        tuple(-ord(ch) for ch in (item.get("check_id") or "")),
+    ))
+    return _parsed_date_fact(check.get("verified_dob"), check.get("check_id"), "registry_extract", "incorporation")
+
+
+def _parsed_date_fact(raw, source_id, source_kind: str, role: str) -> dict:
+    parsed, date_flags = parse_date(raw)
+    return {
+        "comparable": parsed is not None,
+        "precision": parsed["precision"] if parsed else None,
+        "role": role,
+        "source_id": source_id,
+        "source_kind": source_kind,
+        "unparsed": "UNPARSED_DATE" in date_flags,
+        "value": parsed["value"] if parsed else None,
+    }
+
+
+def _country_field(row: dict, field: str) -> dict:
+    value, country_flags = norm_country(row.get(field))
+    if not value:
+        return {"source_id": row["record_id"], "unmapped": False, "value": None}
+    return {
+        "source_id": row["record_id"],
+        "unmapped": "UNMAPPED_COUNTRY" in country_flags,
+        "value": value,
+    }
+
+
+def _place_fact(row: dict, field: str) -> dict:
+    raw = row.get(field)
+    if raw is None or str(raw).strip() == "":
+        return {"normalised": None, "raw": None, "source_id": row["record_id"]}
+    text = str(raw).strip()
+    return {"normalised": norm_text(text) or None, "raw": text, "source_id": row["record_id"]}
+
+
+def _postcode_fact(row: dict):
+    for field in _POSTCODE_FIELDS:
+        raw = row.get(field)
+        if raw is None or str(raw).strip() == "":
+            continue
+        return {"source_field": field, "source_id": row["record_id"], "value": str(raw).strip()}
+    return None
+
+
+def _email_record_index(customers_by_id) -> dict:
+    by_email: dict[str, set[str]] = defaultdict(set)
+    for record_id, row in customers_by_id.items():
+        email = norm_email(row.get("email"))
+        if email:
+            by_email[email].add(record_id)
+    return {key: sorted(by_email[key]) for key in sorted(by_email)}
+
+
+def _name_part_record_index(record_views: list[dict]) -> dict:
+    """Exact normalised parts of the three record names. No variant expansion."""
+    by_part: dict[str, set[str]] = defaultdict(set)
+    for view in record_views:
+        for field in ("full_name", "preferred_name", "login_name"):
+            for part in view[field]["parts"]:
+                by_part[part].add(view["record_id"])
+    return {key: sorted(by_part[key]) for key in sorted(by_part)}
 
 
 def _indexes(people: list[dict]) -> dict:

@@ -18,9 +18,14 @@ from stage1.load import DataStore
 DEV = os.environ.get("SANCTIONS_DEV", "/cursor/stores/bot/hackathon/dev")
 ARTEFACTS = (
     "person_golden.jsonl",
+    "record_view.jsonl",
     "index_record_id.json",
     "index_account_id.json",
+    "index_account_record_id.json",
     "index_login_handle.json",
+    "index_login_record_id.json",
+    "index_email_record_id.json",
+    "index_name_part_record_id.json",
     "index_email.json",
     "index_name.json",
 )

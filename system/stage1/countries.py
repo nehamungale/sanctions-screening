@@ -256,6 +256,7 @@ VN Vietnam
 VU Vanuatu
 WF Wallis and Futuna
 WS Samoa
+XK Kosovo
 YE Yemen
 YT Mayotte
 ZA South Africa
@@ -429,6 +430,10 @@ ALIASES: dict[str, str] = {
     "Palestinian Territories": "Palestine",
     "Macao Special Administrative Region of China": "Macao",
     "Macau Special Administrative Region of China": "Macao",
+    "Macao SAR of China": "Macao",
+    "Macau SAR of China": "Macao",
+    "Macao SAR": "Macao",
+    "Macau SAR": "Macao",
     "Macau": "Macao",
     "Hong Kong Special Administrative Region of China": "Hong Kong",
     "Holland": "Netherlands",
