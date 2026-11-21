@@ -4,6 +4,8 @@ Review of `docs/stage2-hit-golden-profile.md` and `docs/stage3-alert-resolution.
 
 ## 1. LLM facts and clearing a hit
 
+**Fixed (PR #10).** The Stage 2 design now says an LLM fact can never contribute to a `DIFFERENT_ENTITY` clearance, not only that it cannot be the sole ground.
+
 **Stage 2 says:** "An LLM-only fact can never be the sole ground for `DIFFERENT_ENTITY`."
 
 **Agreed team rule (stricter):** a fact the LLM read can never be the reason we clear a hit. It can only push a hit to `REVIEW` or support a `SAME_ENTITY` confirmation.
@@ -13,6 +15,8 @@ The gap: "sole ground" still allows a clear where an LLM-read fact is one of sev
 **Suggested change:** reword the Stage 2 guardrail to "A fact with `method: "llm"` can never contribute to a `DIFFERENT_ENTITY` decision. It can only push a hit to `REVIEW` or support `SAME_ENTITY`." Stage 4 enforces this, and the eval gate counts 0 clears whose deciding facts include an LLM-read fact.
 
 ## 2. One LLM on/off switch
+
+**Fixed (PR #10).** `SANCTIONS_LLM=0` turns Stage 1 and Stage 2 off; `USE_LLM_NOTES` and `USE_LLM_HITS` only narrow that.
 
 There are currently three switches:
 
@@ -27,6 +31,8 @@ The repro tool's LLM-off run would not switch Stage 2 off. The LLM-sensitivity m
 **Suggested change:** pick one master switch (for example `SANCTIONS_LLM`, default off) that turns every LLM step off. Per-stage switches may stay, but only to narrow what the master switch turns on. Record the effective setting in the trace run header.
 
 ## 3. Call budget across stages
+
+**Fixed (PR #10).** Stages share one client: run budget 48, 12 calls per extraction, a 20 minute backstop, and sorted id order so a skipped call is the same hit every run.
 
 Stage 1's client caps the whole run at 48 LLM calls (`llm_client.py`, line 47) and 90 seconds (line 48). Stage 2 needs 3 agreeing calls per unresolved birth sentence.
 

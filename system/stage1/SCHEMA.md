@@ -30,7 +30,7 @@ One JSON object per customer `record_id`, sorted by `record_id`. Facts are this 
 | `login_handles` | Sorted login handles on those accounts. |
 | `accounts` | Sorted `{account_id, login_handle, source_id}`. `source_id` is the account id. |
 
-Name parts follow the shared normaliser: case, accents, brackets, punctuation (dots removed with no extra space, so `J.R.` is `jr`), initials, placeholders, and company legal forms. No variant expansion and no edit distance.
+Name parts follow the shared normaliser: case, accents, brackets, punctuation (dots removed with no extra space, so `J.R.` is `jr`), initials, placeholders, and company legal forms. No variant expansion and no edit distance. `shared.names.agree_parts` agrees on equal part counts when either side is fully covered, so the result does not depend on argument order.
 
 ## `index_account_record_id.json`
 
@@ -47,3 +47,5 @@ Key: customer email, trimmed and lowercased. Value: sorted `record_id`s. This is
 ## `index_name_part_record_id.json`
 
 Key: one exact normalised part from `full_name.parts`, `preferred_name.parts`, or `login_name.parts`. Value: sorted `record_id`s that contain that part on any of those three names. Parts are not expanded through `name_variants.json` or edit distance. The verified legal name is not indexed. Variant and fuzzy matching is the consumer's job, using these keys.
+
+A `kyc`-channel note with a negative or pending outcome (rejected, failed, expired, pending, declined, unable to verify, and the same family of phrases) is not a verification event. The person is flagged `BLOCK_DOB_AGE_NAME_CLEAR`.
