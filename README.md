@@ -51,7 +51,7 @@ flowchart LR
 
 | Stage | What it does | Status |
 |---|---|---|
-| **1. Customer golden record** | Normalises customer data, groups records that are the same person into a `person_id`, and picks each fact (legal name, date of birth, countries, …) with its source record ID. | 📐 Designed: [docs/stage1-customer-golden-record.md](docs/stage1-customer-golden-record.md) |
+| **1. Customer golden record** | Normalises customer data, groups records that are the same person into a `person_id`, and picks each fact (legal name, date of birth, countries, …) with its source record ID. | 📐 Designed: [docs/stage1-customer-golden-record.md](docs/stage1-customer-golden-record.md) · [docs/stage2-hit-golden-profile.md](docs/stage2-hit-golden-profile.md) · [docs/stage3-alert-resolution.md](docs/stage3-alert-resolution.md) |
 | **2. Alert → person resolution** | Follows the alert's link (account, login, email) or searches by the screened details to find the person(s) behind each alert. | Next |
 | **Hit profile + matching** | Collects each hit's facts (names, aliases, birth dates, countries, dated reports), then applies the screening SOP to produce the decision. | Planned |
 
@@ -69,7 +69,9 @@ flowchart LR
 .
 ├── README.md                  ← you are here
 ├── docs/
-│   └── stage1-customer-golden-record.md
+│   ├── stage1-customer-golden-record.md
+│   ├── stage2-hit-golden-profile.md
+│   └── stage3-alert-resolution.md
 ├── system/
 │   ├── README.md              ← how to run the system
 │   └── run                    ← entry point: reads a data folder, writes decisions
