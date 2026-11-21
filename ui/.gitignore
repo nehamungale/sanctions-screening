@@ -1,0 +1,9 @@
+node_modules/
+dev.log
+*.log
+.DS_Store
+
+# The repo root ignores *.trace.jsonl (real traces hold identity facts).
+# These two files are synthetic sample fixtures (invented IDs and names), so they are re-included by name.
+!fixtures/sample.trace.jsonl
+!fixtures/sample.alerts.trace.jsonl
